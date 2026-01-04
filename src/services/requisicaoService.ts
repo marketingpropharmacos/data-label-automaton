@@ -7,6 +7,25 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// Mapeia resposta da API para o formato da interface Requisicao
+const mapearRequisicao = (data: any, index: number): Requisicao => ({
+  id: data.id || data.nrRequisicao || String(index + 1),
+  nrRequisicao: data.nrRequisicao || "",
+  nomePaciente: data.nomePaciente || "",
+  prefixoCRM: data.prefixoCRM || "",
+  numeroCRM: data.numeroCRM || "",
+  ufCRM: data.ufCRM || "",
+  formula: data.formula || "",
+  dataFabricacao: data.dataFabricacao || "",
+  dataValidade: data.dataValidade || "",
+  numeroRegistro: data.numeroRegistro || "",
+  posologia: data.posologia || "",
+  tipoUso: data.tipoUso || "",
+  volume: data.volume || "",
+  unidadeVolume: data.unidadeVolume || "",
+  observacoes: data.observacoes || "",
+});
+
 export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiResponse<Requisicao[]>> => {
   const config = getApiConfig();
   
@@ -24,7 +43,12 @@ export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiRes
     }
 
     const data = await response.json();
-    return { success: true, data };
+    
+    // API pode retornar array ou objeto único
+    const requisicoes = Array.isArray(data) ? data : [data];
+    const mappedData = requisicoes.map((item, index) => mapearRequisicao(item, index));
+    
+    return { success: true, data: mappedData };
   } catch (error) {
     console.error("Erro ao buscar requisição:", error);
     return { 
