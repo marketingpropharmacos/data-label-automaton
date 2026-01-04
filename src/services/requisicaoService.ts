@@ -15,6 +15,7 @@ export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiRes
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
       },
     });
 
@@ -39,6 +40,9 @@ export const verificarConexao = async (): Promise<boolean> => {
   try {
     const response = await fetch(`${config.serverUrl}/api/health`, {
       method: "GET",
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
