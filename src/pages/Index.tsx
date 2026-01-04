@@ -10,43 +10,6 @@ import { getPharmacyConfig, getLabelConfig } from "@/config/api";
 import { buscarRequisicao } from "@/services/requisicaoService";
 import { Requisicao, PharmacyConfig, LabelConfig } from "@/types/requisicao";
 
-// Dados mockados para demonstração (usado quando servidor não disponível)
-const mockRequisicoes: Requisicao[] = [
-  {
-    id: "1",
-    nrRequisicao: "12345",
-    nomePaciente: "Maria Silva Santos",
-    prefixoCRM: "Dr.",
-    numeroCRM: "12345",
-    ufCRM: "SP",
-    formula: "Cápsula Vitamina D3 5000UI + Vitamina K2 100mcg",
-    dataFabricacao: "04/01/2026",
-    dataValidade: "04/07/2026",
-    numeroRegistro: "REG001",
-    posologia: "Tomar 1 cápsula ao dia com as refeições",
-    tipoUso: "USO ORAL",
-    volume: "60",
-    unidadeVolume: " caps",
-    observacoes: "",
-  },
-  {
-    id: "2",
-    nrRequisicao: "12345",
-    nomePaciente: "Maria Silva Santos",
-    prefixoCRM: "Dr.",
-    numeroCRM: "12345",
-    ufCRM: "SP",
-    formula: "Creme Hidratante Facial com Ácido Hialurônico 1%",
-    dataFabricacao: "04/01/2026",
-    dataValidade: "04/04/2026",
-    numeroRegistro: "REG002",
-    posologia: "Aplicar 2x ao dia no rosto limpo",
-    tipoUso: "USO TÓPICO",
-    volume: "30",
-    unidadeVolume: "g",
-    observacoes: "",
-  },
-];
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -73,7 +36,7 @@ const Index = () => {
     
     const result = await buscarRequisicao(requisitionNumber);
     
-    if (result.success && result.data) {
+    if (result.success && result.data && result.data.length > 0) {
       setRequisicoes(result.data);
       setSelectedLabels(new Set(result.data.map(r => r.id)));
       toast({
@@ -81,14 +44,11 @@ const Index = () => {
         description: `${result.data.length} rótulo(s) pronto(s) para impressão.`,
       });
     } else {
-      // Fallback para dados mockados se o servidor não estiver disponível
-      console.warn("Servidor indisponível, usando dados de demonstração");
-      const mockData = mockRequisicoes.map(r => ({ ...r, nrRequisicao: requisitionNumber }));
-      setRequisicoes(mockData);
-      setSelectedLabels(new Set(mockData.map(r => r.id)));
+      setRequisicoes([]);
+      setSelectedLabels(new Set());
       toast({
-        title: "Modo demonstração",
-        description: "Servidor indisponível. Exibindo dados de exemplo.",
+        title: "Requisição não encontrada",
+        description: result.error || "Verifique o número e tente novamente.",
         variant: "destructive",
       });
     }
