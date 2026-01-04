@@ -1,45 +1,96 @@
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-
-interface LabelData {
-  id: string;
-  productName: string;
-  patientName: string;
-  requisitionNumber: string;
-  date: string;
-  quantity?: string;
-  doctor?: string;
-}
+import { Requisicao, PharmacyConfig, LabelConfig } from "@/types/requisicao";
+import PharmacyHeader from "./PharmacyHeader";
 
 interface LabelPreviewProps {
-  label: LabelData;
+  requisicao: Requisicao;
+  pharmacyConfig: PharmacyConfig;
+  labelConfig: LabelConfig;
   selected: boolean;
   onToggle: (id: string) => void;
 }
 
-const LabelPreview = ({ label, selected, onToggle }: LabelPreviewProps) => {
+const LabelPreview = ({ requisicao, pharmacyConfig, labelConfig, selected, onToggle }: LabelPreviewProps) => {
+  // Converter mm para pixels aproximados (96 DPI / 25.4mm)
+  const mmToPx = (mm: number) => Math.round(mm * 3.78);
+  
+  const labelStyle = {
+    width: `${mmToPx(labelConfig.larguraMM)}px`,
+    minHeight: `${mmToPx(labelConfig.alturaMM)}px`,
+  };
+
+  const formatarMedico = () => {
+    if (!requisicao.numeroCRM) return null;
+    return `${requisicao.prefixoCRM || 'Dr.'} CRM/${requisicao.ufCRM} ${requisicao.numeroCRM}`;
+  };
+
   return (
-    <Card className="p-4 border-2 border-dashed border-primary/30 bg-card hover:border-primary/50 transition-colors">
+    <Card className="p-3 border-2 border-dashed border-primary/30 bg-card hover:border-primary/50 transition-colors">
       <div className="flex items-start gap-3">
         <Checkbox
           checked={selected}
-          onCheckedChange={() => onToggle(label.id)}
+          onCheckedChange={() => onToggle(requisicao.id)}
           className="mt-1"
         />
-        <div className="flex-1 font-mono text-sm space-y-1">
-          <div className="flex justify-between items-start">
-            <span className="font-bold text-primary text-base">{label.productName}</span>
-            <span className="text-xs text-muted-foreground">#{label.requisitionNumber}</span>
-          </div>
-          <div className="border-t border-dashed border-border pt-2 mt-2">
-            <p className="text-foreground"><span className="text-muted-foreground">Paciente:</span> {label.patientName}</p>
-            {label.doctor && (
-              <p className="text-foreground"><span className="text-muted-foreground">Médico:</span> {label.doctor}</p>
+        
+        {/* Preview do Rótulo */}
+        <div 
+          className="flex-1 bg-white border border-border rounded p-2 font-mono text-foreground overflow-hidden"
+          style={labelStyle}
+        >
+          {/* Cabeçalho da Farmácia */}
+          <PharmacyHeader config={pharmacyConfig} compact />
+          
+          {/* Dados do Produto */}
+          <div className="space-y-0.5">
+            {/* Fórmula/Produto */}
+            <p className="font-bold text-[9px] leading-tight text-primary line-clamp-2">
+              {requisicao.formula}
+            </p>
+            
+            {/* Paciente */}
+            <p className="text-[7px] leading-tight">
+              <span className="text-muted-foreground">Pac:</span> {requisicao.nomePaciente}
+            </p>
+            
+            {/* Médico */}
+            {formatarMedico() && (
+              <p className="text-[7px] leading-tight">
+                <span className="text-muted-foreground">Méd:</span> {formatarMedico()}
+              </p>
             )}
-            <p className="text-foreground"><span className="text-muted-foreground">Data:</span> {label.date}</p>
-            {label.quantity && (
-              <p className="text-foreground"><span className="text-muted-foreground">Qtd:</span> {label.quantity}</p>
+            
+            {/* Datas e Volume */}
+            <div className="flex justify-between text-[6px] leading-tight">
+              <span><span className="text-muted-foreground">F:</span> {requisicao.dataFabricacao}</span>
+              <span><span className="text-muted-foreground">V:</span> {requisicao.dataValidade}</span>
+              {requisicao.volume && (
+                <span>{requisicao.volume}{requisicao.unidadeVolume}</span>
+              )}
+            </div>
+            
+            {/* Posologia */}
+            {requisicao.posologia && (
+              <p className="text-[6px] leading-tight border-t border-dashed border-foreground/20 pt-0.5 mt-0.5">
+                <span className="text-muted-foreground">Uso:</span> {requisicao.posologia}
+              </p>
             )}
+            
+            {/* Tipo de Uso */}
+            {requisicao.tipoUso && (
+              <p className="text-[6px] leading-tight font-medium">
+                {requisicao.tipoUso}
+              </p>
+            )}
+            
+            {/* Requisição e Registro */}
+            <div className="flex justify-between text-[6px] leading-tight border-t border-dashed border-foreground/20 pt-0.5 mt-0.5">
+              <span><span className="text-muted-foreground">REQ:</span> {requisicao.nrRequisicao}</span>
+              {requisicao.numeroRegistro && (
+                <span><span className="text-muted-foreground">REG:</span> {requisicao.numeroRegistro}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>
