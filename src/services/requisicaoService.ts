@@ -15,6 +15,7 @@ const mapearRequisicao = (data: any, index: number): Requisicao => ({
   prefixoCRM: data.prefixoCRM || "",
   numeroCRM: data.numeroCRM || "",
   ufCRM: data.ufCRM || "",
+  nomeMedico: data.nomeMedico || "",
   formula: data.formula || "",
   dataFabricacao: data.dataFabricacao || "",
   dataValidade: data.dataValidade || "",

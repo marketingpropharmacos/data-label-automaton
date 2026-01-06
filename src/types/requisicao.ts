@@ -5,6 +5,7 @@ export interface Requisicao {
   prefixoCRM: string;
   numeroCRM: string;
   ufCRM: string;
+  nomeMedico: string;
   formula: string;
   dataFabricacao: string;
   dataValidade: string;

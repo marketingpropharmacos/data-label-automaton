@@ -22,6 +22,9 @@ const LabelPreview = ({ requisicao, pharmacyConfig, labelConfig, selected, onTog
 
   const formatarMedico = () => {
     if (!requisicao.numeroCRM) return null;
+    if (requisicao.nomeMedico) {
+      return `${requisicao.prefixoCRM || 'Dr.'} ${requisicao.nomeMedico} - CRM ${requisicao.numeroCRM}/${requisicao.ufCRM}`;
+    }
     return `${requisicao.prefixoCRM || 'Dr.'} CRM/${requisicao.ufCRM} ${requisicao.numeroCRM}`;
   };
 
