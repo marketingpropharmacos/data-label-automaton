@@ -1,3 +1,11 @@
+export interface Produto {
+  itemId: string;
+  codigoProduto: string;
+  descricao: string;
+  quantidade: string;
+  tipoComponente: string;
+}
+
 export interface Requisicao {
   id: string;
   nrRequisicao: string;
@@ -15,6 +23,8 @@ export interface Requisicao {
   volume: string;
   unidadeVolume: string;
   observacoes: string;
+  codigoFilial: string;
+  produtos: Produto[];
 }
 
 export interface PharmacyConfig {
@@ -33,4 +43,5 @@ export interface LabelConfig {
 
 export interface ApiConfig {
   serverUrl: string;
+  codigoFilial: string;
 }

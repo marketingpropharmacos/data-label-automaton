@@ -45,12 +45,30 @@ const LabelPreview = ({ requisicao, pharmacyConfig, labelConfig, selected, onTog
           {/* Cabeçalho da Farmácia */}
           <PharmacyHeader config={pharmacyConfig} compact />
           
-          {/* Dados do Produto */}
-          <div className="space-y-0.5">
-            {/* Fórmula/Produto */}
-            <p className="font-bold text-[9px] leading-tight text-primary line-clamp-2">
-              {requisicao.formula}
-            </p>
+{/* Dados do Produto */}
+            <div className="space-y-0.5">
+              {/* Fórmula/Produto - ou lista de produtos */}
+              {requisicao.produtos && requisicao.produtos.length > 0 ? (
+                <div className="space-y-0.5">
+                  {requisicao.produtos
+                    .filter(p => p.tipoComponente === 'R') // Apenas matérias-primas
+                    .slice(0, 3) // Limitar a 3 produtos no preview
+                    .map((produto, idx) => (
+                      <p key={idx} className="font-bold text-[8px] leading-tight text-primary truncate">
+                        {produto.descricao}
+                      </p>
+                    ))}
+                  {requisicao.produtos.filter(p => p.tipoComponente === 'R').length > 3 && (
+                    <p className="text-[6px] text-muted-foreground">
+                      +{requisicao.produtos.filter(p => p.tipoComponente === 'R').length - 3} itens...
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="font-bold text-[9px] leading-tight text-primary line-clamp-2">
+                  {requisicao.formula}
+                </p>
+              )}
             
             {/* Paciente */}
             <p className="text-[7px] leading-tight">

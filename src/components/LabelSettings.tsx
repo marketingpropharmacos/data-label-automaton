@@ -99,6 +99,19 @@ const LabelSettings = () => {
                 </p>
               </div>
               
+              <div className="space-y-2">
+                <Label htmlFor="codigoFilial">Código da Filial</Label>
+                <Input
+                  id="codigoFilial"
+                  placeholder="279"
+                  value={apiConfig.codigoFilial}
+                  onChange={(e) => setApiConfigState({ ...apiConfig, codigoFilial: e.target.value })}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Código da filial no sistema (ex: 279 para PROPHARMACOS)
+                </p>
+              </div>
+              
               <div className="flex gap-2">
                 <Button onClick={handleSaveApi}>
                   <Save className="h-4 w-4 mr-2" />

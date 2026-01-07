@@ -1,11 +1,20 @@
 import { getApiConfig } from "@/config/api";
-import { Requisicao } from "@/types/requisicao";
+import { Requisicao, Produto } from "@/types/requisicao";
 
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
+
+// Mapeia produto da API
+const mapearProduto = (data: any): Produto => ({
+  itemId: data.itemId || "",
+  codigoProduto: data.codigoProduto || "",
+  descricao: data.descricao || "",
+  quantidade: data.quantidade || "",
+  tipoComponente: data.tipoComponente || "",
+});
 
 // Mapeia resposta da API para o formato da interface Requisicao
 const mapearRequisicao = (data: any, index: number): Requisicao => ({
@@ -25,19 +34,24 @@ const mapearRequisicao = (data: any, index: number): Requisicao => ({
   volume: data.volume || "",
   unidadeVolume: data.unidadeVolume || "",
   observacoes: data.observacoes || "",
+  codigoFilial: data.codigoFilial || "",
+  produtos: Array.isArray(data.produtos) ? data.produtos.map(mapearProduto) : [],
 });
 
 export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiResponse<Requisicao[]>> => {
   const config = getApiConfig();
   
   try {
-    const response = await fetch(`${config.serverUrl}/api/requisicao/${numeroRequisicao}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        "ngrok-skip-browser-warning": "true",
-      },
-    });
+    const response = await fetch(
+      `${config.serverUrl}/api/requisicao/${numeroRequisicao}?filial=${config.codigoFilial}`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
