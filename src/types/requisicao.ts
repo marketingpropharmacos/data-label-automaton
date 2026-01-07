@@ -18,6 +18,8 @@ export interface RotuloItem {
   unidadeVolume: string;
   observacoes: string;
   lote: string;              // NRLOT - número do lote
+  aplicacao: string;         // Campo manual - ex: ID/SC, EV, IM, VO
+  contem: string;            // Campo manual - ex: 5 FR. DE 2ML
 }
 
 export interface PharmacyConfig {

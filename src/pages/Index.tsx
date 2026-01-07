@@ -67,6 +67,12 @@ const Index = () => {
     });
   };
 
+  const updateRotulo = (id: string, field: string, value: string) => {
+    setRotulos(prev => prev.map(r => 
+      r.id === id ? { ...r, [field]: value } : r
+    ));
+  };
+
   const selectAll = () => {
     setSelectedLabels(new Set(rotulos.map(r => r.id)));
   };
@@ -180,6 +186,7 @@ const Index = () => {
                       labelConfig={labelConfig}
                       selected={selectedLabels.has(rotulo.id)}
                       onToggle={toggleLabel}
+                      onUpdate={updateRotulo}
                     />
                   ))}
                 </div>
