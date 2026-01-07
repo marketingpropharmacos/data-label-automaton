@@ -94,6 +94,13 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, selected, onToggle }: 
               </p>
             )}
             
+            {/* Lote */}
+            {rotulo.lote && (
+              <p className="text-[6px] leading-tight">
+                <span className="text-muted-foreground">Lote:</span> {rotulo.lote}
+              </p>
+            )}
+            
             {/* Requisição e Registro */}
             <div className="flex justify-between text-[6px] leading-tight border-t border-dashed border-foreground/20 pt-0.5 mt-0.5">
               <span><span className="text-muted-foreground">REQ:</span> {rotulo.nrRequisicao}</span>

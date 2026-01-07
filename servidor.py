@@ -103,11 +103,11 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca produtos da FC12110
+        # Busca produtos da FC12110 (TPCMP = 'C' são os componentes principais)
         cursor.execute("""
-            SELECT DESCR, QUANT, UNIDA
+            SELECT DESCR, QUANT, UNIDA, NRLOT
             FROM FC12110
-            WHERE NRRQU = ? AND CDFIL = ? AND TPCMP = 'R'
+            WHERE NRRQU = ? AND CDFIL = ? AND TPCMP = 'C'
             ORDER BY ITEMID
         """, (nr_requisicao, filial))
         
@@ -127,6 +127,7 @@ def buscar_requisicao(nr_requisicao):
                 "formula": formula[0] or "",
                 "volume": str(formula[1]) if formula[1] else dados_base["volume"],
                 "unidadeVolume": formula[2] or dados_base["unidadeVolume"],
+                "lote": (formula[3] or "").strip(),
             }
             data.append(rotulo)
         

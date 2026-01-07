@@ -17,6 +17,7 @@ export interface RotuloItem {
   volume: string;
   unidadeVolume: string;
   observacoes: string;
+  lote: string;              // NRLOT - número do lote
 }
 
 export interface PharmacyConfig {
