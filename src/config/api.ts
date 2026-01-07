@@ -30,7 +30,12 @@ const DEFAULT_LABEL_CONFIG: LabelConfig = {
 export const getApiConfig = (): ApiConfig => {
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.API_CONFIG);
-    return stored ? JSON.parse(stored) : DEFAULT_API_CONFIG;
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Merge com defaults para garantir novos campos
+      return { ...DEFAULT_API_CONFIG, ...parsed };
+    }
+    return DEFAULT_API_CONFIG;
   } catch {
     return DEFAULT_API_CONFIG;
   }
