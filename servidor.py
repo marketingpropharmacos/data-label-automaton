@@ -60,6 +60,28 @@ def listar_colunas(tabela):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: busca tabelas relacionadas a observações
+@app.route('/api/debug/tabelas-obs', methods=['GET'])
+def debug_tabelas_obs():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0 
+            AND (RDB$RELATION_NAME LIKE '%OBS%' 
+                 OR RDB$RELATION_NAME LIKE '%FIC%'
+                 OR RDB$RELATION_NAME LIKE '%033%'
+                 OR RDB$RELATION_NAME LIKE '%ROT%')
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        conn.close()
+        return jsonify({"success": True, "tabelas": tabelas})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # Debug: lista últimas requisições
 @app.route('/api/debug/ultimas-requisicoes', methods=['GET'])
 def debug_ultimas_requisicoes():
@@ -68,22 +90,54 @@ def debug_ultimas_requisicoes():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT FIRST {limite} NRRQU, CDFIL, NOMEPA, DTCAD
+            SELECT FIRST {limite} NRRQU, CDFIL, NOMEPA, DTCAD, TPFORMAFARMA
             FROM FC12100
             ORDER BY NRRQU DESC
         """)
-        
         requisicoes = []
         for row in cursor.fetchall():
             requisicoes.append({
                 "nrRequisicao": str(row[0]),
                 "filial": str(row[1]),
                 "paciente": row[2],
-                "dataCad": row[3].strftime('%d/%m/%Y') if row[3] else None
+                "dataCad": row[3].strftime('%d/%m/%Y') if row[3] else None,
+                "tipoFormaFarma": row[4]
             })
-        
         conn.close()
         return jsonify({"success": True, "requisicoes": requisicoes})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: lista produtos que têm observações cadastradas
+@app.route('/api/debug/produtos-com-observacoes', methods=['GET'])
+def debug_produtos_com_observacoes():
+    limite = request.args.get('limite', '20')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(f"""
+            SELECT FIRST {limite} O.CDPRO, O.TPFORMAFARMA, O.CDICP, O.GRICP, P.DESCR, O.OBSER 
+            FROM FC03300 O
+            LEFT JOIN FC03000 P ON O.CDPRO = P.CDPRO
+            WHERE O.OBSER IS NOT NULL
+            ORDER BY O.CDPRO, O.GRICP, O.CDICP
+        """)
+        produtos = []
+        for row in cursor.fetchall():
+            obser = row[5]
+            if obser:
+                obser = obser.read().decode('latin-1') if hasattr(obser, 'read') else str(obser)
+            if obser and obser.strip():
+                produtos.append({
+                    "cdpro": row[0],
+                    "tipoFormaFarma": row[1],
+                    "codigoObs": row[2],
+                    "gricp": row[3],
+                    "descricao": row[4],
+                    "observacoes": obser[:300] if obser else None
+                })
+        conn.close()
+        return jsonify({"success": True, "total": len(produtos), "produtos": produtos})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -97,7 +151,6 @@ def debug_formulas(nr_requisicao):
             SELECT * FROM FC12100
             WHERE NRRQU = ? AND CDFIL = ?
         """, (nr_requisicao, filial))
-        
         colunas = [desc[0].strip() for desc in cursor.description]
         registros = []
         for row in cursor.fetchall():
@@ -108,7 +161,6 @@ def debug_formulas(nr_requisicao):
                     val = val.strftime('%d/%m/%Y')
                 registro[col] = str(val) if val is not None else None
             registros.append(registro)
-        
         conn.close()
         return jsonify({
             "success": True,
@@ -119,22 +171,18 @@ def debug_formulas(nr_requisicao):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: lista produtos de uma requisição com seus CDPROs
 @app.route('/api/debug/produtos-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_produtos_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Lista todos os itens da FC12110 com CDPRO
         cursor.execute("""
             SELECT ITEMID, CDPRO, DESCR, QUANT, UNIDA, TPCMP
             FROM FC12110
             WHERE NRRQU = ? AND CDFIL = ?
             ORDER BY ITEMID
         """, (nr_requisicao, filial))
-        
         produtos = []
         for row in cursor.fetchall():
             produtos.append({
@@ -145,43 +193,51 @@ def debug_produtos_requisicao(nr_requisicao):
                 "unidade": row[4],
                 "tipoCmp": row[5]
             })
-        
         conn.close()
         return jsonify({"success": True, "produtos": produtos})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: busca observações por CDPRO
+# Debug: observações por CDPRO - COM GRICP
 @app.route('/api/debug/observacoes/<cdpro>', methods=['GET'])
 def debug_observacoes(cdpro):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
         cursor.execute("""
-            SELECT CDPRO, OBSER FROM FC03300 WHERE CDPRO = ?
+            SELECT CDPRO, TPFORMAFARMA, CDICP, GRICP, OBSER 
+            FROM FC03300 
+            WHERE CDPRO = ?
+            ORDER BY GRICP, CDICP
         """, (cdpro,))
         
-        row = cursor.fetchone()
+        observacoes = []
+        for row in cursor.fetchall():
+            obser = row[4]
+            if obser:
+                obser = obser.read().decode('latin-1') if hasattr(obser, 'read') else str(obser)
+            observacoes.append({
+                "cdpro": row[0],
+                "tipoFormaFarma": row[1],
+                "codigoObs": row[2],
+                "gricp": row[3],
+                "observacoes": obser
+            })
+        
         conn.close()
         
-        if not row:
+        if not observacoes:
             return jsonify({"success": False, "error": "Produto não encontrado na FC03300"}), 404
-        
-        # BLOB para string
-        obser = row[1]
-        if obser:
-            obser = obser.read().decode('latin-1') if hasattr(obser, 'read') else str(obser)
         
         return jsonify({
             "success": True,
-            "cdpro": row[0],
-            "observacoes": obser
+            "cdpro": cdpro,
+            "totalObservacoes": len(observacoes),
+            "observacoes": observacoes
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: busca observações de todos os produtos de uma requisição
 @app.route('/api/debug/observacoes-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_observacoes_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
@@ -189,13 +245,21 @@ def debug_observacoes_requisicao(nr_requisicao):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Busca produtos da requisição com suas observações
+        # Busca o TPFORMAFARMA da requisição
         cursor.execute("""
-            SELECT I.ITEMID, I.CDPRO, I.DESCR, I.TPCMP, O.OBSER
+            SELECT TPFORMAFARMA FROM FC12100
+            WHERE NRRQU = ? AND CDFIL = ?
+        """, (nr_requisicao, filial))
+        req_row = cursor.fetchone()
+        tipo_forma = req_row[0] if req_row else None
+        
+        # Busca produtos com observações
+        cursor.execute("""
+            SELECT I.ITEMID, I.CDPRO, I.DESCR, I.TPCMP, O.OBSER, O.GRICP, O.CDICP
             FROM FC12110 I
             LEFT JOIN FC03300 O ON I.CDPRO = O.CDPRO
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
-            ORDER BY I.ITEMID
+            ORDER BY I.ITEMID, O.GRICP, O.CDICP
         """, (nr_requisicao, filial))
         
         produtos = []
@@ -209,11 +273,17 @@ def debug_observacoes_requisicao(nr_requisicao):
                 "cdpro": row[1],
                 "descricao": row[2],
                 "tipoCmp": row[3],
-                "observacoes": obser
+                "observacoes": obser,
+                "gricp": row[5],
+                "codigoObs": row[6]
             })
         
         conn.close()
-        return jsonify({"success": True, "produtos": produtos})
+        return jsonify({
+            "success": True, 
+            "tipoFormaFarmaRequisicao": tipo_forma,
+            "produtos": produtos
+        })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -228,7 +298,7 @@ def buscar_requisicao(nr_requisicao):
         cursor.execute("""
             SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
                    R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
-                   R.VOLUME, R.UNIVOL, M.NOMEMED
+                   R.VOLUME, R.UNIVOL, M.NOMEMED, R.TPFORMAFARMA
             FROM FC12100 R
             LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
             WHERE R.NRRQU = ? AND R.CDFIL = ?
@@ -239,6 +309,8 @@ def buscar_requisicao(nr_requisicao):
         if not row:
             conn.close()
             return jsonify({"success": False, "error": "Requisição não encontrada"}), 404
+        
+        tipo_forma = row[15]
         
         dados_base = {
             "nrRequisicao": str(row[0]),
@@ -253,17 +325,18 @@ def buscar_requisicao(nr_requisicao):
             "numeroRegistro": row[8] or "",
             "posologia": row[9] or "",
             "tipoUso": row[10] or "",
-            "observacoes": row[11] or "",
+            "observacoesFicha": row[11] or "",
             "volume": str(row[12]) if row[12] else "",
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca produtos - TPCMP IN ('C', 'S')
+        # Busca produtos COM observações
         cursor.execute("""
-            SELECT DESCR, QUANT, UNIDA, NRLOT
-            FROM FC12110
-            WHERE NRRQU = ? AND CDFIL = ? AND TPCMP IN ('C', 'S')
-            ORDER BY ITEMID
+            SELECT I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, O.OBSER, O.GRICP
+            FROM FC12110 I
+            LEFT JOIN FC03300 O ON I.CDPRO = O.CDPRO
+            WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
+            ORDER BY I.ITEMID
         """, (nr_requisicao, filial))
         
         formulas = cursor.fetchall()
@@ -271,6 +344,10 @@ def buscar_requisicao(nr_requisicao):
         
         data = []
         for idx, formula in enumerate(formulas):
+            obser = formula[5]
+            if obser:
+                obser = obser.read().decode('latin-1') if hasattr(obser, 'read') else str(obser)
+            
             rotulo = {
                 **dados_base,
                 "nrItem": str(idx + 1),
@@ -279,11 +356,12 @@ def buscar_requisicao(nr_requisicao):
                 "unidadeVolume": formula[2] or dados_base["unidadeVolume"],
                 "lote": (formula[3] or "").strip(),
                 "quantidade": str(int(formula[1])) if formula[1] else "",
+                "observacoes": obser or "",
             }
             data.append(rotulo)
         
         if not data:
-            data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": ""}]
+            data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": "", "observacoes": ""}]
         
         return jsonify({"success": True, "data": data})
         
