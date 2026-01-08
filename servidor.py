@@ -1,16 +1,9 @@
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import fdb
-import sys
-
-# Força output imediato
-sys.stdout.flush()
 
 app = Flask(__name__)
 CORS(app)
-
-# Desabilita buffering
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 DB_PATH = '192.168.6.46/3050:C:\\Fcerta\\DB\\ALTERDB.IB'
 DB_USER = 'SYSDBA'
@@ -27,11 +20,6 @@ def get_db_connection():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok"})
-
-# Teste ULTRA simples - texto puro, sem JSON
-@app.route('/api/ping', methods=['GET'])
-def ping():
-    return Response("pong", mimetype='text/plain')
 
 @app.route('/api/tabelas', methods=['GET'])
 def listar_tabelas():
@@ -506,6 +494,9 @@ def debug_observacoes_requisicao(nr_requisicao):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ============================================
+# ENDPOINT PRINCIPAL - BUSCAR REQUISIÇÃO
+# ============================================
 @app.route('/api/requisicao/<nr_requisicao>', methods=['GET'])
 def buscar_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
@@ -514,6 +505,7 @@ def buscar_requisicao(nr_requisicao):
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Busca dados da requisição
         cursor.execute("""
             SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
                    R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
@@ -616,7 +608,7 @@ def buscar_requisicao(nr_requisicao):
         conn.close()
         
         if not data:
-            data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": "", "observacoes": ""}]
+            data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": "", "observacoes": "", "composicao": "", "aplicacao": "", "descricaoProduto": ""}]
         
         return jsonify({"success": True, "data": data})
         
@@ -627,8 +619,6 @@ def buscar_requisicao(nr_requisicao):
 if __name__ == '__main__':
     print("=" * 50)
     print("Servidor iniciando na porta 5000...")
-    print("Teste: http://localhost:5000/api/ping")
-    print("Health: http://localhost:5000/api/health")
+    print("Teste: http://localhost:5000/api/health")
     print("=" * 50)
-    sys.stdout.flush()
-    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
