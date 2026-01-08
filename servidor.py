@@ -494,6 +494,71 @@ def debug_observacoes_requisicao(nr_requisicao):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: verifica observações de produtos de uma requisição com detalhes
+@app.route('/api/debug/verificar-obs-requisicao/<nr_requisicao>', methods=['GET'])
+def debug_verificar_obs_requisicao(nr_requisicao):
+    filial = request.args.get('filial', '1')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Busca TPFORMAFARMA da requisição
+        cursor.execute("""
+            SELECT TPFORMAFARMA FROM FC12100
+            WHERE NRRQU = ? AND CDFIL = ?
+        """, (nr_requisicao, filial))
+        req_row = cursor.fetchone()
+        tipo_forma_requisicao = req_row[0] if req_row else None
+        
+        # Busca produtos da requisição
+        cursor.execute("""
+            SELECT I.ITEMID, I.CDPRO, I.DESCR
+            FROM FC12110 I
+            WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
+            ORDER BY I.ITEMID
+        """, (nr_requisicao, filial))
+        
+        itens = cursor.fetchall()
+        
+        resultado = {
+            "tipoFormaFarmaRequisicao": tipo_forma_requisicao,
+            "produtos": []
+        }
+        
+        for item in itens:
+            cdpro = item[1]
+            
+            # Busca TODAS as observações deste produto (sem filtro de TPFORMAFARMA)
+            cursor.execute("""
+                SELECT TPFORMAFARMA, CDICP, OBSER 
+                FROM FC03300 
+                WHERE CDPRO = ?
+                ORDER BY TPFORMAFARMA, CDICP
+            """, (cdpro,))
+            
+            obs_list = []
+            for obs in cursor.fetchall():
+                texto = obs[2]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                obs_list.append({
+                    "tpFormaFarma": obs[0],
+                    "cdicp": obs[1],
+                    "texto": texto[:200] if texto else None
+                })
+            
+            resultado["produtos"].append({
+                "cdpro": cdpro,
+                "descricao": item[2],
+                "totalObservacoes": len(obs_list),
+                "observacoes": obs_list
+            })
+        
+        conn.close()
+        return jsonify({"success": True, **resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ============================================
 # ENDPOINT PRINCIPAL - BUSCAR REQUISIÇÃO
 # ============================================
