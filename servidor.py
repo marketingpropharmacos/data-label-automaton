@@ -62,6 +62,39 @@ def listar_colunas(tabela):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Rota de diagnóstico: lista todas as fórmulas de uma requisição
+@app.route('/api/debug/formulas/<nr_requisicao>', methods=['GET'])
+def debug_formulas(nr_requisicao):
+    filial = request.args.get('filial', '1')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM FC12100
+            WHERE NRRQU = ? AND CDFIL = ?
+        """, (nr_requisicao, filial))
+        
+        colunas = [desc[0].strip() for desc in cursor.description]
+        registros = []
+        for row in cursor.fetchall():
+            registro = {}
+            for i, col in enumerate(colunas):
+                val = row[i]
+                if hasattr(val, 'strftime'):
+                    val = val.strftime('%d/%m/%Y')
+                registro[col] = str(val) if val is not None else None
+            registros.append(registro)
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "colunas": colunas,
+            "total_registros": len(registros),
+            "registros": registros
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/requisicao/<nr_requisicao>', methods=['GET'])
 def buscar_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
