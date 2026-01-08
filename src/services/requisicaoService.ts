@@ -29,6 +29,8 @@ const mapearRotulo = (data: any): RotuloItem => ({
   lote: data.lote || "",
   aplicacao: data.aplicacao || "",
   contem: data.contem || "",
+  ph: data.ph || "",
+  quantidade: data.quantidade || "",
 });
 
 export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiResponse<RotuloItem[]>> => {
