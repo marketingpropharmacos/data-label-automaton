@@ -82,6 +82,201 @@ def debug_tabelas_obs():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: busca observações de ficha na FC03310 (tabela correta)
+@app.route('/api/debug/obs-ficha/<cdpro>', methods=['GET'])
+def debug_obs_ficha(cdpro):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultados = {}
+        
+        # Tenta FC03310 - possível tabela de observações de ficha
+        try:
+            cursor.execute("""
+                SELECT * FROM FC03310 WHERE CDPRO = ? ORDER BY 1, 2, 3
+            """, (cdpro,))
+            colunas = [desc[0].strip() for desc in cursor.description]
+            registros = []
+            for row in cursor.fetchall():
+                registro = {}
+                for i, col in enumerate(colunas):
+                    val = row[i]
+                    if hasattr(val, 'read'):
+                        val = val.read().decode('latin-1')
+                    elif hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    registro[col] = str(val) if val is not None else None
+                registros.append(registro)
+            resultados["FC03310"] = {"colunas": colunas, "registros": registros}
+        except Exception as e:
+            resultados["FC03310"] = {"erro": str(e)}
+        
+        # Tenta FC03320
+        try:
+            cursor.execute("""
+                SELECT * FROM FC03320 WHERE CDPRO = ? ORDER BY 1, 2, 3
+            """, (cdpro,))
+            colunas = [desc[0].strip() for desc in cursor.description]
+            registros = []
+            for row in cursor.fetchall():
+                registro = {}
+                for i, col in enumerate(colunas):
+                    val = row[i]
+                    if hasattr(val, 'read'):
+                        val = val.read().decode('latin-1')
+                    elif hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    registro[col] = str(val) if val is not None else None
+                registros.append(registro)
+            resultados["FC03320"] = {"colunas": colunas, "registros": registros}
+        except Exception as e:
+            resultados["FC03320"] = {"erro": str(e)}
+        
+        # Busca tabela FC06300 - observações de ficha
+        try:
+            cursor.execute("""
+                SELECT * FROM FC06300 WHERE CDPRO = ? ORDER BY 1, 2, 3
+            """, (cdpro,))
+            colunas = [desc[0].strip() for desc in cursor.description]
+            registros = []
+            for row in cursor.fetchall():
+                registro = {}
+                for i, col in enumerate(colunas):
+                    val = row[i]
+                    if hasattr(val, 'read'):
+                        val = val.read().decode('latin-1')
+                    elif hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    registro[col] = str(val) if val is not None else None
+                registros.append(registro)
+            resultados["FC06300"] = {"colunas": colunas, "registros": registros}
+        except Exception as e:
+            resultados["FC06300"] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "cdpro": cdpro,
+            "resultados": resultados
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca texto específico em todas tabelas com OBS
+@app.route('/api/debug/buscar-texto', methods=['GET'])
+def debug_buscar_texto():
+    texto = request.args.get('texto', 'FLUCONAZOL')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Lista tabelas que podem ter observações
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        
+        encontrados = []
+        
+        for tabela in tabelas:
+            try:
+                # Busca colunas BLOB ou VARCHAR grandes
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE
+                    FROM RDB$RELATION_FIELDS RF
+                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    AND (F.RDB$FIELD_TYPE = 261 OR (F.RDB$FIELD_TYPE = 37 AND F.RDB$FIELD_LENGTH > 50))
+                """, (tabela,))
+                
+                colunas_texto = [row[0].strip() for row in cursor.fetchall()]
+                
+                for coluna in colunas_texto:
+                    try:
+                        cursor.execute(f"""
+                            SELECT FIRST 5 * FROM {tabela} 
+                            WHERE UPPER(CAST({coluna} AS VARCHAR(1000))) LIKE UPPER('%{texto}%')
+                        """)
+                        rows = cursor.fetchall()
+                        if rows:
+                            cols = [desc[0].strip() for desc in cursor.description]
+                            for row in rows:
+                                registro = {}
+                                for i, col in enumerate(cols):
+                                    val = row[i]
+                                    if hasattr(val, 'read'):
+                                        val = val.read().decode('latin-1')[:200]
+                                    elif hasattr(val, 'strftime'):
+                                        val = val.strftime('%d/%m/%Y')
+                                    registro[col] = str(val)[:200] if val is not None else None
+                                encontrados.append({
+                                    "tabela": tabela,
+                                    "coluna": coluna,
+                                    "registro": registro
+                                })
+                    except:
+                        pass
+            except:
+                pass
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "texto": texto,
+            "total": len(encontrados),
+            "encontrados": encontrados
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: lista todas colunas da FC03300
+@app.route('/api/debug/estrutura-fc03300', methods=['GET'])
+def debug_estrutura_fc03300():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Lista todas as colunas
+        cursor.execute("""
+            SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
+            FROM RDB$RELATION_FIELDS RF
+            JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+            WHERE RF.RDB$RELATION_NAME = 'FC03300'
+            ORDER BY RF.RDB$FIELD_POSITION
+        """)
+        colunas = [{
+            "nome": row[0].strip(),
+            "tipo": row[1],
+            "tamanho": row[2]
+        } for row in cursor.fetchall()]
+        
+        # Busca um registro de exemplo
+        cursor.execute("SELECT FIRST 1 * FROM FC03300 WHERE CDPRO = 3348")
+        exemplo = None
+        if cursor.description:
+            cols = [desc[0].strip() for desc in cursor.description]
+            row = cursor.fetchone()
+            if row:
+                exemplo = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'read'):
+                        val = val.read().decode('latin-1')[:100]
+                    exemplo[col] = str(val) if val is not None else None
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "colunas": colunas,
+            "exemplo": exemplo
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # Debug: lista últimas requisições
 @app.route('/api/debug/ultimas-requisicoes', methods=['GET'])
 def debug_ultimas_requisicoes():
