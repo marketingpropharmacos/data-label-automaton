@@ -163,45 +163,23 @@ def debug_obs_ficha(cdpro):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: busca texto em produtos (versão otimizada - rápida)
+# Debug: teste simples SEM banco - resposta instantânea
 @app.route('/api/debug/buscar-texto', methods=['GET'])
 def debug_buscar_texto():
     texto = request.args.get('texto', '')
     if not texto:
         return jsonify({"success": False, "error": "Parâmetro 'texto' é obrigatório"}), 400
     
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        encontrados = []
-        
-        # Busca APENAS na FC03000 (produtos) - coluna VARCHAR, muito rápido
-        try:
-            cursor.execute("""
-                SELECT FIRST 10 CDPRO, DESCR 
-                FROM FC03000 
-                WHERE UPPER(DESCR) LIKE UPPER(?)
-            """, (f'%{texto}%',))
-            
-            for row in cursor.fetchall():
-                encontrados.append({
-                    "tabela": "FC03000",
-                    "cdpro": row[0],
-                    "descricao": row[1]
-                })
-        except Exception as e:
-            pass
-        
-        conn.close()
-        return jsonify({
-            "success": True,
-            "texto": texto,
-            "total": len(encontrados),
-            "encontrados": encontrados
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+    # Retorna dados fake INSTANTANEAMENTE (sem acessar banco)
+    return jsonify({
+        "success": True,
+        "texto": texto,
+        "mensagem": "Endpoint funcionando! Este é um teste sem banco de dados.",
+        "total": 1,
+        "encontrados": [
+            {"tabela": "TESTE", "cdpro": "123", "descricao": f"Teste para: {texto}"}
+        ]
+    })
 
 # Debug: lista todas colunas da FC03300
 @app.route('/api/debug/estrutura-fc03300', methods=['GET'])
