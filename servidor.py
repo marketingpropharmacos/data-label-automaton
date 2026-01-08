@@ -94,7 +94,7 @@ def debug_tabelas_obs():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: busca observações de ficha na FC03310 (tabela correta)
+# Debug: busca observações de ficha em tabelas alternativas
 @app.route('/api/debug/obs-ficha/<cdpro>', methods=['GET'])
 def debug_obs_ficha(cdpro):
     try:
@@ -103,7 +103,7 @@ def debug_obs_ficha(cdpro):
         
         resultados = {}
         
-        # Tenta FC03310 - possível tabela de observações de ficha
+        # Tenta FC03310
         try:
             cursor.execute("""
                 SELECT * FROM FC03310 WHERE CDPRO = ? ORDER BY 1, 2, 3
@@ -145,7 +145,7 @@ def debug_obs_ficha(cdpro):
         except Exception as e:
             resultados["FC03320"] = {"erro": str(e)}
         
-        # Busca tabela FC06300 - observações de ficha
+        # Tenta FC06300
         try:
             cursor.execute("""
                 SELECT * FROM FC06300 WHERE CDPRO = ? ORDER BY 1, 2, 3
@@ -175,32 +175,99 @@ def debug_obs_ficha(cdpro):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: teste simples SEM banco - resposta instantânea
+# Debug: busca texto específico em TODAS tabelas (corrigido)
 @app.route('/api/debug/buscar-texto', methods=['GET'])
 def debug_buscar_texto():
     texto = request.args.get('texto', '')
     if not texto:
         return jsonify({"success": False, "error": "Parâmetro 'texto' é obrigatório"}), 400
     
-    # Retorna dados fake INSTANTANEAMENTE (sem acessar banco)
-    return jsonify({
-        "success": True,
-        "texto": texto,
-        "mensagem": "Endpoint funcionando! Este é um teste sem banco de dados.",
-        "total": 1,
-        "encontrados": [
-            {"tabela": "TESTE", "cdpro": "123", "descricao": f"Teste para: {texto}"}
-        ]
-    })
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Lista todas as tabelas do usuário
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        
+        encontrados = []
+        erros = []
+        
+        for tabela in tabelas:
+            try:
+                # Busca colunas VARCHAR (tipo 37) ou BLOB (tipo 261)
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
+                    FROM RDB$RELATION_FIELDS RF
+                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    AND (F.RDB$FIELD_TYPE = 261 OR (F.RDB$FIELD_TYPE = 37 AND F.RDB$FIELD_LENGTH > 20))
+                """, (tabela,))
+                
+                colunas_info = [(row[0].strip(), row[1]) for row in cursor.fetchall()]
+                
+                for coluna, tipo in colunas_info:
+                    try:
+                        # Para VARCHAR usa LIKE direto, para BLOB precisa de CAST
+                        if tipo == 37:  # VARCHAR
+                            sql = f"SELECT FIRST 3 * FROM {tabela} WHERE UPPER({coluna}) LIKE UPPER('%{texto}%')"
+                        else:  # BLOB
+                            sql = f"SELECT FIRST 3 * FROM {tabela} WHERE UPPER(CAST({coluna} AS VARCHAR(2000))) LIKE UPPER('%{texto}%')"
+                        
+                        cursor.execute(sql)
+                        rows = cursor.fetchall()
+                        
+                        if rows:
+                            cols = [desc[0].strip() for desc in cursor.description]
+                            for row in rows:
+                                registro = {}
+                                for i, col in enumerate(cols):
+                                    val = row[i]
+                                    if hasattr(val, 'read'):
+                                        try:
+                                            val = val.read().decode('latin-1')[:300]
+                                        except:
+                                            val = "[BLOB]"
+                                    elif hasattr(val, 'strftime'):
+                                        val = val.strftime('%d/%m/%Y')
+                                    elif val is not None:
+                                        val = str(val)[:300]
+                                    registro[col] = val
+                                encontrados.append({
+                                    "tabela": tabela,
+                                    "coluna": coluna,
+                                    "tipo": "BLOB" if tipo == 261 else "VARCHAR",
+                                    "registro": registro
+                                })
+                    except Exception as e:
+                        pass  # Ignora erros de colunas individuais
+            except Exception as e:
+                erros.append(f"{tabela}: {str(e)}")
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "texto": texto,
+            "totalTabelas": len(tabelas),
+            "totalEncontrados": len(encontrados),
+            "encontrados": encontrados,
+            "erros": erros if erros else None
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: lista todas colunas da FC03300
+# Debug: estrutura completa da FC03300
 @app.route('/api/debug/estrutura-fc03300', methods=['GET'])
 def debug_estrutura_fc03300():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Lista todas as colunas
         cursor.execute("""
             SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
             FROM RDB$RELATION_FIELDS RF
@@ -214,7 +281,6 @@ def debug_estrutura_fc03300():
             "tamanho": row[2]
         } for row in cursor.fetchall()]
         
-        # Busca um registro de exemplo
         cursor.execute("SELECT FIRST 1 * FROM FC03300 WHERE CDPRO = 3348")
         exemplo = None
         if cursor.description:
@@ -263,7 +329,7 @@ def debug_ultimas_requisicoes():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: lista produtos que têm observações cadastradas
+# Debug: lista produtos com observações
 @app.route('/api/debug/produtos-com-observacoes', methods=['GET'])
 def debug_produtos_com_observacoes():
     limite = request.args.get('limite', '20')
@@ -353,7 +419,7 @@ def debug_produtos_requisicao(nr_requisicao):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: observações por CDPRO - COM GRICP
+# Debug: observações por CDPRO com GRICP
 @app.route('/api/debug/observacoes/<cdpro>', methods=['GET'])
 def debug_observacoes(cdpro):
     try:
@@ -400,7 +466,6 @@ def debug_observacoes_requisicao(nr_requisicao):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Busca o TPFORMAFARMA da requisição
         cursor.execute("""
             SELECT TPFORMAFARMA FROM FC12100
             WHERE NRRQU = ? AND CDFIL = ?
@@ -408,7 +473,6 @@ def debug_observacoes_requisicao(nr_requisicao):
         req_row = cursor.fetchone()
         tipo_forma = req_row[0] if req_row else None
         
-        # Busca produtos com observações
         cursor.execute("""
             SELECT I.ITEMID, I.CDPRO, I.DESCR, I.TPCMP, O.OBSER, O.GRICP, O.CDICP
             FROM FC12110 I
@@ -485,7 +549,6 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca produtos COM observações
         cursor.execute("""
             SELECT I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, O.OBSER, O.GRICP
             FROM FC12110 I
@@ -525,8 +588,10 @@ def buscar_requisicao(nr_requisicao):
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
+    print("=" * 50)
     print("Servidor iniciando na porta 5000...")
-    print("Acesse: http://localhost:5000/api/health")
+    print("Teste: http://localhost:5000/api/ping")
+    print("Health: http://localhost:5000/api/health")
+    print("=" * 50)
     sys.stdout.flush()
-    # threaded=True permite múltiplas conexões simultâneas
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
