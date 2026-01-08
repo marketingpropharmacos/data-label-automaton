@@ -163,65 +163,35 @@ def debug_obs_ficha(cdpro):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# Debug: busca texto específico em todas tabelas com OBS
+# Debug: busca texto em produtos (versão otimizada - rápida)
 @app.route('/api/debug/buscar-texto', methods=['GET'])
 def debug_buscar_texto():
-    texto = request.args.get('texto', 'FLUCONAZOL')
+    texto = request.args.get('texto', '')
+    if not texto:
+        return jsonify({"success": False, "error": "Parâmetro 'texto' é obrigatório"}), 400
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Lista tabelas que podem ter observações
-        cursor.execute("""
-            SELECT RDB$RELATION_NAME 
-            FROM RDB$RELATIONS 
-            WHERE RDB$SYSTEM_FLAG = 0
-            ORDER BY RDB$RELATION_NAME
-        """)
-        tabelas = [row[0].strip() for row in cursor.fetchall()]
-        
         encontrados = []
         
-        for tabela in tabelas:
-            try:
-                # Busca colunas BLOB ou VARCHAR grandes
-                cursor.execute("""
-                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE
-                    FROM RDB$RELATION_FIELDS RF
-                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
-                    WHERE RF.RDB$RELATION_NAME = ?
-                    AND (F.RDB$FIELD_TYPE = 261 OR (F.RDB$FIELD_TYPE = 37 AND F.RDB$FIELD_LENGTH > 50))
-                """, (tabela,))
-                
-                colunas_texto = [row[0].strip() for row in cursor.fetchall()]
-                
-                for coluna in colunas_texto:
-                    try:
-                        cursor.execute(f"""
-                            SELECT FIRST 5 * FROM {tabela} 
-                            WHERE UPPER(CAST({coluna} AS VARCHAR(1000))) LIKE UPPER('%{texto}%')
-                        """)
-                        rows = cursor.fetchall()
-                        if rows:
-                            cols = [desc[0].strip() for desc in cursor.description]
-                            for row in rows:
-                                registro = {}
-                                for i, col in enumerate(cols):
-                                    val = row[i]
-                                    if hasattr(val, 'read'):
-                                        val = val.read().decode('latin-1')[:200]
-                                    elif hasattr(val, 'strftime'):
-                                        val = val.strftime('%d/%m/%Y')
-                                    registro[col] = str(val)[:200] if val is not None else None
-                                encontrados.append({
-                                    "tabela": tabela,
-                                    "coluna": coluna,
-                                    "registro": registro
-                                })
-                    except:
-                        pass
-            except:
-                pass
+        # Busca APENAS na FC03000 (produtos) - coluna VARCHAR, muito rápido
+        try:
+            cursor.execute("""
+                SELECT FIRST 10 CDPRO, DESCR 
+                FROM FC03000 
+                WHERE UPPER(DESCR) LIKE UPPER(?)
+            """, (f'%{texto}%',))
+            
+            for row in cursor.fetchall():
+                encontrados.append({
+                    "tabela": "FC03000",
+                    "cdpro": row[0],
+                    "descricao": row[1]
+                })
+        except Exception as e:
+            pass
         
         conn.close()
         return jsonify({
