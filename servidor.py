@@ -549,34 +549,71 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
+        # Busca itens da requisição
         cursor.execute("""
-            SELECT I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, O.OBSER, O.GRICP
+            SELECT I.ITEMID, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO
             FROM FC12110 I
-            LEFT JOIN FC03300 O ON I.CDPRO = O.CDPRO
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
             ORDER BY I.ITEMID
         """, (nr_requisicao, filial))
         
-        formulas = cursor.fetchall()
-        conn.close()
+        itens = cursor.fetchall()
         
         data = []
-        for idx, formula in enumerate(formulas):
-            obser = formula[5]
-            if obser:
-                obser = obser.read().decode('latin-1') if hasattr(obser, 'read') else str(obser)
+        for idx, item in enumerate(itens):
+            cdpro = item[5]
+            
+            # Busca TODAS as observações deste produto para o TPFORMAFARMA da requisição
+            cursor.execute("""
+                SELECT CDICP, OBSER 
+                FROM FC03300 
+                WHERE CDPRO = ? AND TPFORMAFARMA = ?
+                ORDER BY CDICP
+            """, (cdpro, tipo_forma))
+            
+            observacoes = cursor.fetchall()
+            
+            # Processa observações por tipo
+            composicao_lista = []
+            aplicacao = ""
+            descricao_produto = ""
+            
+            for obs in observacoes:
+                cdicp = str(obs[0]).strip().zfill(5)  # Padroniza para 00001, 00002, etc.
+                texto = obs[1]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                
+                if cdicp in ['00001', '00002']:  # Composição/Ativos
+                    if texto:
+                        composicao_lista.append(texto.strip())
+                elif cdicp == '00003':  # Aplicação
+                    aplicacao = texto.strip() if texto else ""
+                elif cdicp == '00004':  # Descrição do produto
+                    descricao_produto = texto.strip() if texto else ""
+            
+            # Limpa prefixo "APLICAÇÃO:" se existir
+            if aplicacao.upper().startswith("APLICAÇÃO:"):
+                aplicacao = aplicacao[10:].strip()
+            elif aplicacao.upper().startswith("APLICACAO:"):
+                aplicacao = aplicacao[10:].strip()
             
             rotulo = {
                 **dados_base,
                 "nrItem": str(idx + 1),
-                "formula": formula[0] or "",
-                "volume": str(formula[1]) if formula[1] else dados_base["volume"],
-                "unidadeVolume": formula[2] or dados_base["unidadeVolume"],
-                "lote": (formula[3] or "").strip(),
-                "quantidade": str(int(formula[1])) if formula[1] else "",
-                "observacoes": obser or "",
+                "formula": item[1] or "",
+                "volume": str(item[2]) if item[2] else dados_base["volume"],
+                "unidadeVolume": item[3] or dados_base["unidadeVolume"],
+                "lote": (item[4] or "").strip(),
+                "quantidade": str(int(item[2])) if item[2] else "",
+                "composicao": " | ".join(composicao_lista),  # Ativos combinados
+                "aplicacao": aplicacao,  # Vem do banco (ID, SC, EV, IM)
+                "descricaoProduto": descricao_produto,
+                "observacoes": "\n".join(composicao_lista) if composicao_lista else "",
             }
             data.append(rotulo)
+        
+        conn.close()
         
         if not data:
             data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": "", "observacoes": ""}]

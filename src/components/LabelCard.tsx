@@ -116,14 +116,18 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, selected, onToggle, on
             <span className="uppercase">{rotulo.tipoUso || "USO"}</span>
             <span className="font-medium">
               APLICAÇÃO:
-              <input
-                type="text"
-                value={rotulo.aplicacao || ""}
-                onChange={(e) => onUpdate?.(rotulo.id, 'aplicacao', e.target.value)}
-                placeholder="ID/SC"
-                className="ml-1 w-16 bg-muted/50 border-b border-dashed border-foreground/30 text-[10px] px-1 focus:outline-none focus:border-primary uppercase"
-                onClick={(e) => e.stopPropagation()}
-              />
+              {rotulo.aplicacao ? (
+                <span className="ml-1 uppercase">{rotulo.aplicacao}</span>
+              ) : (
+                <input
+                  type="text"
+                  value={rotulo.aplicacao || ""}
+                  onChange={(e) => onUpdate?.(rotulo.id, 'aplicacao', e.target.value)}
+                  placeholder="ID/SC"
+                  className="ml-1 w-16 bg-muted/50 border-b border-dashed border-foreground/30 text-[10px] px-1 focus:outline-none focus:border-primary uppercase"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              )}
             </span>
           </div>
           
