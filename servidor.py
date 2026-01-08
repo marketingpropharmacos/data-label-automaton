@@ -1,9 +1,16 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 import fdb
+import sys
+
+# Força output imediato
+sys.stdout.flush()
 
 app = Flask(__name__)
 CORS(app)
+
+# Desabilita buffering
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 DB_PATH = '192.168.6.46/3050:C:\\Fcerta\\DB\\ALTERDB.IB'
 DB_USER = 'SYSDBA'
@@ -20,6 +27,11 @@ def get_db_connection():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok"})
+
+# Teste ULTRA simples - texto puro, sem JSON
+@app.route('/api/ping', methods=['GET'])
+def ping():
+    return Response("pong", mimetype='text/plain')
 
 @app.route('/api/tabelas', methods=['GET'])
 def listar_tabelas():
@@ -513,4 +525,8 @@ def buscar_requisicao(nr_requisicao):
         return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    print("Servidor iniciando na porta 5000...")
+    print("Acesse: http://localhost:5000/api/health")
+    sys.stdout.flush()
+    # threaded=True permite múltiplas conexões simultâneas
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
