@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
 // Configurações padrão
 const DEFAULT_API_CONFIG: ApiConfig = {
   serverUrl: "http://192.168.6.46:5000",
-  codigoFilial: "279",
+  codigoFilial: "9",
 };
 
 const DEFAULT_PHARMACY_CONFIG: PharmacyConfig = {
