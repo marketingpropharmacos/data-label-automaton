@@ -606,7 +606,7 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca itens da requisição
+        # Busca itens da requisição (fórmulas)
         cursor.execute("""
             SELECT I.ITEMID, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO
             FROM FC12110 I
@@ -616,11 +616,52 @@ def buscar_requisicao(nr_requisicao):
         
         itens = cursor.fetchall()
         
+        # Lista de materiais a excluir da composição (embalagens, veículos, conservantes)
+        materiais_excluir = [
+            'TAMPA', 'SELO', 'FR AMBAR', 'FRASCO', 'AMPOLA',
+            'SOLUCAO FISIOLOGICA', 'AGUA PARA INJETAVEIS', 'ALCOOL BENZILICO'
+        ]
+        
         data = []
         for idx, item in enumerate(itens):
+            item_id = item[0]
             cdpro = item[5]
             
-            # Busca TODAS as observações deste produto para o TPFORMAFARMA da requisição
+            # Busca matérias-primas (R) do mesmo ITEMID para composição
+            cursor.execute("""
+                SELECT DESCR
+                FROM FC12110
+                WHERE NRRQU = ? AND CDFIL = ? AND ITEMID = ? AND TPCMP = 'R'
+                ORDER BY DESCR
+            """, (nr_requisicao, filial, item_id))
+            
+            materias_primas = cursor.fetchall()
+            
+            # Filtra apenas ativos (exclui embalagens e veículos)
+            ativos = []
+            for mp in materias_primas:
+                descr = mp[0] or ""
+                descr_upper = descr.upper()
+                
+                # Verifica se é material a excluir
+                excluir = False
+                for excl in materiais_excluir:
+                    if excl in descr_upper:
+                        excluir = True
+                        break
+                
+                if not excluir and descr.strip():
+                    # Evita duplicatas
+                    if descr.strip() not in ativos:
+                        ativos.append(descr.strip())
+            
+            # Monta composição concatenando os ativos
+            composicao = " + ".join(ativos)
+            
+            # Busca observações do produto (aplicação, descrição) via FC03300
+            aplicacao = ""
+            descricao_produto = ""
+            
             cursor.execute("""
                 SELECT CDICP, OBSER 
                 FROM FC03300 
@@ -630,21 +671,13 @@ def buscar_requisicao(nr_requisicao):
             
             observacoes = cursor.fetchall()
             
-            # Processa observações por tipo
-            composicao_lista = []
-            aplicacao = ""
-            descricao_produto = ""
-            
             for obs in observacoes:
-                cdicp = str(obs[0]).strip().zfill(5)  # Padroniza para 00001, 00002, etc.
+                cdicp = str(obs[0]).strip().zfill(5)
                 texto = obs[1]
                 if texto and hasattr(texto, 'read'):
                     texto = texto.read().decode('latin-1')
                 
-                if cdicp in ['00001', '00002']:  # Composição/Ativos
-                    if texto:
-                        composicao_lista.append(texto.strip())
-                elif cdicp == '00003':  # Aplicação
+                if cdicp == '00003':  # Aplicação
                     aplicacao = texto.strip() if texto else ""
                 elif cdicp == '00004':  # Descrição do produto
                     descricao_produto = texto.strip() if texto else ""
@@ -663,10 +696,10 @@ def buscar_requisicao(nr_requisicao):
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
                 "lote": (item[4] or "").strip(),
                 "quantidade": str(int(item[2])) if item[2] else "",
-                "composicao": " | ".join(composicao_lista),  # Ativos combinados
+                "composicao": composicao,  # Ativos via ITEMID
                 "aplicacao": aplicacao,  # Vem do banco (ID, SC, EV, IM)
                 "descricaoProduto": descricao_produto,
-                "observacoes": "\n".join(composicao_lista) if composicao_lista else "",
+                "observacoes": composicao,  # Mesma composição para observações
             }
             data.append(rotulo)
         
