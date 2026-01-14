@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Printer, CheckSquare, Square, Settings } from "lucide-react";
+import { Printer, CheckSquare, Square, Settings, Edit } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import SearchRequisition from "@/components/SearchRequisition";
 import LabelCard from "@/components/LabelCard";
 import LayoutSelector from "@/components/LayoutSelector";
+import LayoutEditor from "@/components/LayoutEditor";
 import { useToast } from "@/hooks/use-toast";
 import { getPharmacyConfig, getLabelConfig } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout } from "@/config/layouts";
@@ -21,6 +23,7 @@ const Index = () => {
   const [labelConfig, setLabelConfig] = useState<LabelConfig>(getLabelConfig());
   const [layoutType, setLayoutType] = useState<LayoutType>(getSelectedLayout());
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>(getLayout(layoutType));
+  const [editorOpen, setEditorOpen] = useState(false);
   const { toast } = useToast();
 
   // Recarregar configs quando a página recebe foco
@@ -39,6 +42,12 @@ const Index = () => {
     setLayoutType(newType);
     setSelectedLayout(newType);
     setLayoutConfig(getLayout(newType));
+  };
+
+  // Salvar layout editado
+  const handleLayoutEditorSave = (newLayout: LayoutConfig) => {
+    setLayoutConfig(newLayout);
+    setEditorOpen(false);
   };
 
   const handleSearch = async (requisitionNumber: string) => {
@@ -164,11 +173,21 @@ const Index = () => {
                   <CardTitle className="text-xl">
                     Rótulos da Requisição #{searchedRequisition}
                   </CardTitle>
-                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center gap-4 mt-2">
                     <p className="text-sm text-muted-foreground">
                       {selectedLabels.size} de {rotulos.length} selecionados
                     </p>
-                    <LayoutSelector value={layoutType} onChange={handleLayoutChange} />
+                    <div className="flex items-center gap-2">
+                      <LayoutSelector value={layoutType} onChange={handleLayoutChange} />
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => setEditorOpen(true)}
+                        title="Editar layout"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -210,6 +229,23 @@ const Index = () => {
             </Card>
           </section>
         )}
+
+        {/* Layout Editor Dialog */}
+        <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Editar Layout: {layoutConfig.nome}</DialogTitle>
+              <DialogDescription>
+                Arraste os campos para reposicioná-los ou use os controles para ajustar
+              </DialogDescription>
+            </DialogHeader>
+            <LayoutEditor 
+              layout={layoutConfig} 
+              onSave={handleLayoutEditorSave}
+              onClose={() => setEditorOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* Empty State */}
         {rotulos.length === 0 && !isLoading && (
