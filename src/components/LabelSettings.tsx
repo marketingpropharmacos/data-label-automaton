@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   getApiConfig,
@@ -273,12 +273,15 @@ const LabelSettings = () => {
                                 Editar
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto">
                               <DialogHeader>
                                 <DialogTitle>Editar Layout: {layout.nome}</DialogTitle>
+                                <DialogDescription>
+                                  Arraste os campos para reposicioná-los ou use os controles para ajustar tamanho e posição.
+                                </DialogDescription>
                               </DialogHeader>
                               <LayoutEditor 
-                                layout={layout} 
+                                layout={layouts[tipo]} 
                                 onSave={handleLayoutSave}
                                 onClose={() => setEditingLayout(null)}
                               />
