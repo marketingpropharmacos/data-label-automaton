@@ -31,8 +31,15 @@ const LabelSettings = () => {
   const [labelConfig, setLabelConfigState] = useState<LabelConfig>(getLabelConfig());
 
   const handleLayoutSave = (layout: LayoutConfig) => {
-    setLayouts(prev => ({ ...prev, [layout.tipo]: layout }));
+    console.log('[LabelSettings] Salvando layout:', layout.tipo);
+    // Recarrega os layouts do localStorage para garantir sincronização
+    const updatedLayouts = getLayouts();
+    setLayouts(updatedLayouts);
     setEditingLayout(null);
+    toast({
+      title: "Layout salvo!",
+      description: `O layout ${layout.nome} foi salvo com sucesso.`,
+    });
   };
 
   const handleSaveApi = () => {

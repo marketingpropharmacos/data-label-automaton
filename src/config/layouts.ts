@@ -88,39 +88,59 @@ export const fieldLabels: Record<LabelFieldId, string> = {
 
 const STORAGE_KEY = 'label_layouts';
 
+// Função auxiliar para deep clone
+function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj));
+}
+
 // Funções para persistência
 export function getLayouts(): Record<LayoutType, LayoutConfig> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(parsed));
+      return parsed;
     }
   } catch (e) {
-    console.error('Erro ao carregar layouts:', e);
+    console.error('[Layouts] Erro ao carregar layouts:', e);
   }
-  return { ...defaultLayouts };
+  console.log('[Layouts] Usando layouts padrão');
+  return deepClone(defaultLayouts);
 }
 
 export function getLayout(tipo: LayoutType): LayoutConfig {
   const layouts = getLayouts();
-  return layouts[tipo] || defaultLayouts[tipo];
+  return layouts[tipo] || deepClone(defaultLayouts[tipo]);
 }
 
 export function saveLayout(layout: LayoutConfig): void {
-  const layouts = getLayouts();
-  layouts[layout.tipo] = layout;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
+  try {
+    const layouts = getLayouts();
+    layouts[layout.tipo] = deepClone(layout);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
+    console.log('[Layouts] Layout salvo:', layout.tipo, layout);
+  } catch (e) {
+    console.error('[Layouts] Erro ao salvar layout:', e);
+  }
 }
 
 export function resetLayout(tipo: LayoutType): LayoutConfig {
-  const layouts = getLayouts();
-  layouts[tipo] = { ...defaultLayouts[tipo] };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
-  return layouts[tipo];
+  try {
+    const layouts = getLayouts();
+    layouts[tipo] = deepClone(defaultLayouts[tipo]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(layouts));
+    console.log('[Layouts] Layout resetado:', tipo);
+    return deepClone(layouts[tipo]);
+  } catch (e) {
+    console.error('[Layouts] Erro ao resetar layout:', e);
+    return deepClone(defaultLayouts[tipo]);
+  }
 }
 
 export function resetAllLayouts(): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultLayouts));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(deepClone(defaultLayouts)));
+  console.log('[Layouts] Todos layouts resetados');
 }
 
 // Layout selecionado atualmente
