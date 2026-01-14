@@ -1,21 +1,21 @@
 import { LayoutType, LayoutConfig, LabelFieldId, FieldPosition } from "@/types/requisicao";
 
-// Campos padrão para todos os layouts
+// Campos padrão para todos os layouts - posicionamento em % do container de 140px de altura
 const defaultFields: Record<LabelFieldId, FieldPosition> = {
-  medico: { x: 0, y: 70, width: 100, fontSize: 10, visible: true },
-  paciente: { x: 0, y: 10, width: 70, fontSize: 11, visible: true },
-  requisicao: { x: 70, y: 10, width: 30, fontSize: 10, visible: true },
-  formula: { x: 0, y: 18, width: 100, fontSize: 11, visible: true },
-  lote: { x: 0, y: 28, width: 25, fontSize: 10, visible: true },
-  fabricacao: { x: 25, y: 28, width: 25, fontSize: 10, visible: true },
-  validade: { x: 50, y: 28, width: 25, fontSize: 10, visible: true },
-  ph: { x: 75, y: 28, width: 25, fontSize: 10, visible: true },
-  aplicacao: { x: 50, y: 38, width: 50, fontSize: 10, visible: true },
-  tipoUso: { x: 0, y: 38, width: 50, fontSize: 10, visible: true },
-  contem: { x: 0, y: 48, width: 60, fontSize: 10, visible: true },
-  posologia: { x: 0, y: 80, width: 100, fontSize: 9, visible: true },
-  observacoes: { x: 0, y: 88, width: 100, fontSize: 9, visible: true },
-  registro: { x: 60, y: 48, width: 40, fontSize: 10, visible: true },
+  paciente: { x: 0, y: 0, width: 65, fontSize: 10, visible: true },
+  requisicao: { x: 65, y: 0, width: 35, fontSize: 9, visible: true },
+  formula: { x: 0, y: 12, width: 100, fontSize: 11, visible: true },
+  lote: { x: 0, y: 26, width: 20, fontSize: 9, visible: true },
+  fabricacao: { x: 20, y: 26, width: 18, fontSize: 9, visible: true },
+  validade: { x: 38, y: 26, width: 18, fontSize: 9, visible: true },
+  ph: { x: 56, y: 26, width: 18, fontSize: 9, visible: true },
+  tipoUso: { x: 0, y: 40, width: 40, fontSize: 9, visible: true },
+  aplicacao: { x: 40, y: 40, width: 35, fontSize: 9, visible: true },
+  contem: { x: 0, y: 54, width: 55, fontSize: 9, visible: true },
+  registro: { x: 55, y: 54, width: 45, fontSize: 9, visible: true },
+  medico: { x: 0, y: 68, width: 100, fontSize: 9, visible: true },
+  posologia: { x: 0, y: 82, width: 100, fontSize: 8, visible: true },
+  observacoes: { x: 0, y: 92, width: 100, fontSize: 8, visible: true },
 };
 
 // Configurações padrão para cada tipo de layout

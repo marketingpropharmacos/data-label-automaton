@@ -103,53 +103,53 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         
         {/* Preview do Rótulo - Layout dinâmico */}
         <div 
-          className="flex-1 bg-white border border-border rounded p-3 font-mono text-foreground overflow-hidden relative"
+          className="flex-1 bg-white border border-border rounded p-3 font-mono text-foreground overflow-hidden"
           style={{ ...labelStyle, minHeight: '180px' }}
         >
           {/* Cabeçalho da Farmácia - fixo no topo */}
           <PharmacyHeader config={pharmacyConfig} compact />
           
-          {/* Área de campos posicionáveis */}
-          <div className="relative mt-2" style={{ height: 'calc(100% - 40px)' }}>
+          {/* Área de campos posicionáveis - altura fixa para cálculos de % */}
+          <div className="relative" style={{ height: '140px', marginTop: '8px' }}>
             {/* Paciente */}
             {renderField('paciente', (
-              <span className="font-bold text-foreground uppercase">
+              <span className="font-bold text-foreground uppercase whitespace-nowrap">
                 {rotulo.nomePaciente}
               </span>
             ))}
 
             {/* Requisição */}
             {renderField('requisicao', (
-              <span className="font-medium">
+              <span className="font-medium whitespace-nowrap">
                 REQ:{rotulo.nrRequisicao}-{rotulo.nrItem}
               </span>
             ))}
 
             {/* Fórmula */}
             {renderField('formula', (
-              <span className="font-bold text-primary uppercase">
+              <span className="font-bold text-primary uppercase whitespace-nowrap">
                 {formatarFormula(rotulo.formula)}
               </span>
             ))}
 
             {/* Lote */}
             {renderField('lote', (
-              <span>L:{formatarLote() || "___"}</span>
+              <span className="whitespace-nowrap">L:{formatarLote() || "___"}</span>
             ))}
 
             {/* Fabricação */}
             {renderField('fabricacao', (
-              <span>F:{formatarDataCurta(rotulo.dataFabricacao)}</span>
+              <span className="whitespace-nowrap">F:{formatarDataCurta(rotulo.dataFabricacao)}</span>
             ))}
 
             {/* Validade */}
             {renderField('validade', (
-              <span>V:{formatarDataCurta(rotulo.dataValidade)}</span>
+              <span className="whitespace-nowrap">V:{formatarDataCurta(rotulo.dataValidade)}</span>
             ))}
 
             {/* pH */}
             {renderField('ph', (
-              <span className="flex items-center">
+              <span className="flex items-center whitespace-nowrap">
                 pH:
                 <input
                   type="text"
@@ -165,13 +165,13 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
 
             {/* Tipo de Uso */}
             {renderField('tipoUso', (
-              <span className="uppercase">{rotulo.tipoUso || "USO"}</span>
+              <span className="uppercase whitespace-nowrap">{rotulo.tipoUso || "USO"}</span>
             ))}
 
             {/* Aplicação */}
             {renderField('aplicacao', (
-              <span className="font-medium">
-                APLICAÇÃO:
+              <span className="font-medium whitespace-nowrap">
+                APLIC:
                 {rotulo.aplicacao ? (
                   <span className="ml-1 uppercase">{rotulo.aplicacao}</span>
                 ) : (
@@ -180,7 +180,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
                     value={rotulo.aplicacao || ""}
                     onChange={(e) => onUpdate?.(rotulo.id, 'aplicacao', e.target.value)}
                     placeholder="ID/SC"
-                    className="ml-1 w-16 bg-muted/50 border-b border-dashed border-foreground/30 px-1 focus:outline-none focus:border-primary uppercase"
+                    className="ml-1 w-12 bg-muted/50 border-b border-dashed border-foreground/30 px-1 focus:outline-none focus:border-primary uppercase"
                     style={{ fontSize: 'inherit' }}
                     onClick={(e) => e.stopPropagation()}
                   />
@@ -190,14 +190,14 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
 
             {/* Contém */}
             {renderField('contem', (
-              <span>
-                CONTÉM:
+              <span className="whitespace-nowrap">
+                CONT:
                 <input
                   type="text"
                   value={rotulo.contem || ""}
                   onChange={(e) => onUpdate?.(rotulo.id, 'contem', e.target.value)}
                   placeholder="5 FR. DE 2ML"
-                  className="ml-1 w-24 bg-muted/50 border-b border-dashed border-foreground/30 px-1 focus:outline-none focus:border-primary uppercase"
+                  className="ml-1 w-20 bg-muted/50 border-b border-dashed border-foreground/30 px-1 focus:outline-none focus:border-primary uppercase"
                   style={{ fontSize: 'inherit' }}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -206,24 +206,24 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
 
             {/* Registro */}
             {isFieldVisible('registro') && rotulo.numeroRegistro && renderField('registro', (
-              <span>REG:{rotulo.numeroRegistro}</span>
+              <span className="whitespace-nowrap">REG:{rotulo.numeroRegistro}</span>
             ))}
 
             {/* Médico */}
             {isFieldVisible('medico') && formatarMedico() && renderField('medico', (
-              <span className="uppercase">{formatarMedico()}</span>
+              <span className="uppercase text-ellipsis overflow-hidden">{formatarMedico()}</span>
             ))}
 
             {/* Posologia */}
             {isFieldVisible('posologia') && rotulo.posologia && renderField('posologia', (
-              <span className="border-t border-dashed border-foreground/20 pt-1 block">
-                <span className="text-muted-foreground">Posologia:</span> {rotulo.posologia}
+              <span className="text-ellipsis overflow-hidden">
+                <span className="text-muted-foreground">Pos:</span> {rotulo.posologia}
               </span>
             ))}
 
             {/* Observações */}
             {isFieldVisible('observacoes') && rotulo.observacoes && renderField('observacoes', (
-              <span className="border-t border-dashed border-foreground/20 pt-1 text-muted-foreground italic block">
+              <span className="text-muted-foreground italic text-ellipsis overflow-hidden">
                 <span className="font-medium not-italic">Obs:</span> {rotulo.observacoes}
               </span>
             ))}
