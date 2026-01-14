@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Settings, Save, RefreshCw, Layout, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   getApiConfig,
@@ -15,15 +16,24 @@ import {
   setLabelConfig,
 } from "@/config/api";
 import { verificarConexao } from "@/services/requisicaoService";
-import { ApiConfig, PharmacyConfig, LabelConfig } from "@/types/requisicao";
+import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
+import { getLayouts, defaultLayouts } from "@/config/layouts";
+import LayoutEditor from "@/components/LayoutEditor";
 
 const LabelSettings = () => {
   const { toast } = useToast();
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [editingLayout, setEditingLayout] = useState<LayoutType | null>(null);
+  const [layouts, setLayouts] = useState<Record<LayoutType, LayoutConfig>>(getLayouts());
   
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
   const [labelConfig, setLabelConfigState] = useState<LabelConfig>(getLabelConfig());
+
+  const handleLayoutSave = (layout: LayoutConfig) => {
+    setLayouts(prev => ({ ...prev, [layout.tipo]: layout }));
+    setEditingLayout(null);
+  };
 
   const handleSaveApi = () => {
     setApiConfig(apiConfig);
@@ -71,10 +81,11 @@ const LabelSettings = () => {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="servidor" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="servidor">Servidor</TabsTrigger>
           <TabsTrigger value="farmacia">Farmácia</TabsTrigger>
           <TabsTrigger value="rotulo">Rótulo</TabsTrigger>
+          <TabsTrigger value="layouts">Layouts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="servidor">
@@ -230,6 +241,60 @@ const LabelSettings = () => {
                 <Save className="h-4 w-4 mr-2" />
                 Salvar
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="layouts">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layout className="h-5 w-5" />
+                Layouts de Rótulos
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Personalize a posição dos campos em cada tipo de layout. Arraste os campos para reposicioná-los.
+              </p>
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                {(Object.keys(layouts) as LayoutType[]).map((tipo) => {
+                  const layout = layouts[tipo];
+                  return (
+                    <Card key={tipo} className="border">
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base">{layout.nome}</CardTitle>
+                          <Dialog open={editingLayout === tipo} onOpenChange={(open) => setEditingLayout(open ? tipo : null)}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Edit2 className="h-4 w-4 mr-1" />
+                                Editar
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>Editar Layout: {layout.nome}</DialogTitle>
+                              </DialogHeader>
+                              <LayoutEditor 
+                                layout={layout} 
+                                onSave={handleLayoutSave}
+                                onClose={() => setEditingLayout(null)}
+                              />
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-xs text-muted-foreground">
+                          Tipo: {tipo}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

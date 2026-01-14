@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SearchRequisition from "@/components/SearchRequisition";
 import LabelCard from "@/components/LabelCard";
+import LayoutSelector from "@/components/LayoutSelector";
 import { useToast } from "@/hooks/use-toast";
 import { getPharmacyConfig, getLabelConfig } from "@/config/api";
+import { getLayout, getSelectedLayout, setSelectedLayout } from "@/config/layouts";
 import { buscarRequisicao } from "@/services/requisicaoService";
-import { RotuloItem, PharmacyConfig, LabelConfig } from "@/types/requisicao";
+import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +19,8 @@ const Index = () => {
   const [searchedRequisition, setSearchedRequisition] = useState("");
   const [pharmacyConfig, setPharmacyConfig] = useState<PharmacyConfig>(getPharmacyConfig());
   const [labelConfig, setLabelConfig] = useState<LabelConfig>(getLabelConfig());
+  const [layoutType, setLayoutType] = useState<LayoutType>(getSelectedLayout());
+  const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>(getLayout(layoutType));
   const { toast } = useToast();
 
   // Recarregar configs quando a página recebe foco
@@ -24,10 +28,18 @@ const Index = () => {
     const handleFocus = () => {
       setPharmacyConfig(getPharmacyConfig());
       setLabelConfig(getLabelConfig());
+      setLayoutConfig(getLayout(layoutType));
     };
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
-  }, []);
+  }, [layoutType]);
+
+  // Atualizar layout quando o tipo muda
+  const handleLayoutChange = (newType: LayoutType) => {
+    setLayoutType(newType);
+    setSelectedLayout(newType);
+    setLayoutConfig(getLayout(newType));
+  };
 
   const handleSearch = async (requisitionNumber: string) => {
     setIsLoading(true);
@@ -152,9 +164,12 @@ const Index = () => {
                   <CardTitle className="text-xl">
                     Rótulos da Requisição #{searchedRequisition}
                   </CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {selectedLabels.size} de {rotulos.length} selecionados
-                  </p>
+                  <div className="flex items-center gap-4 mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      {selectedLabels.size} de {rotulos.length} selecionados
+                    </p>
+                    <LayoutSelector value={layoutType} onChange={handleLayoutChange} />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={selectAll}>
@@ -184,6 +199,7 @@ const Index = () => {
                       rotulo={rotulo}
                       pharmacyConfig={pharmacyConfig}
                       labelConfig={labelConfig}
+                      layoutConfig={layoutConfig}
                       selected={selectedLabels.has(rotulo.id)}
                       onToggle={toggleLabel}
                       onUpdate={updateRotulo}
