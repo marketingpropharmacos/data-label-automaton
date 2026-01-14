@@ -1,5 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -15,7 +14,7 @@ interface LayoutEditorProps {
   onClose?: () => void;
 }
 
-const LayoutEditor = ({ layout, onSave, onClose }: LayoutEditorProps) => {
+const LayoutEditor = forwardRef<HTMLDivElement, LayoutEditorProps>(({ layout, onSave, onClose }, ref) => {
   const { toast } = useToast();
   const [editedLayout, setEditedLayout] = useState<LayoutConfig>(() => 
     JSON.parse(JSON.stringify(layout))
@@ -286,6 +285,8 @@ const LayoutEditor = ({ layout, onSave, onClose }: LayoutEditorProps) => {
       </div>
     </div>
   );
-};
+});
+
+LayoutEditor.displayName = "LayoutEditor";
 
 export default LayoutEditor;
