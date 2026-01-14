@@ -1,3 +1,39 @@
+// Tipos de Layout disponíveis
+export type LayoutType = 'AMP10' | 'AMP_CX' | 'A_PAC_GRAN' | 'TIRZ';
+
+// Posição de um campo no layout
+export interface FieldPosition {
+  x: number;      // posição horizontal em %
+  y: number;      // posição vertical em %
+  width: number;  // largura em %
+  fontSize: number; // tamanho da fonte em px
+  visible: boolean;
+}
+
+// Lista de campos disponíveis
+export type LabelFieldId = 
+  | 'medico'
+  | 'paciente'
+  | 'requisicao'
+  | 'formula'
+  | 'lote'
+  | 'fabricacao'
+  | 'validade'
+  | 'ph'
+  | 'aplicacao'
+  | 'tipoUso'
+  | 'contem'
+  | 'posologia'
+  | 'observacoes'
+  | 'registro';
+
+// Configuração completa de um layout
+export interface LayoutConfig {
+  tipo: LayoutType;
+  nome: string;
+  campos: Record<LabelFieldId, FieldPosition>;
+}
+
 // Rótulo individual por fórmula (cada aba do Fórmula Certa)
 export interface RotuloItem {
   id: string;
