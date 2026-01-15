@@ -560,6 +560,479 @@ def debug_verificar_obs_requisicao(nr_requisicao):
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ============================================
+# DEBUG: INVESTIGAÇÃO DE KITS E FÓRMULAS
+# ============================================
+
+# Debug: busca tabelas relacionadas a Fórmulas/Kits/Componentes
+@app.route('/api/debug/tabelas-formula', methods=['GET'])
+def debug_tabelas_formula():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Busca tabelas que possam conter fórmulas, kits ou componentes
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0 
+            AND (RDB$RELATION_NAME LIKE '%FORM%' 
+                 OR RDB$RELATION_NAME LIKE '%FRM%'
+                 OR RDB$RELATION_NAME LIKE '%KIT%'
+                 OR RDB$RELATION_NAME LIKE '%COMP%'
+                 OR RDB$RELATION_NAME LIKE '%ITEM%'
+                 OR RDB$RELATION_NAME LIKE '%037%'
+                 OR RDB$RELATION_NAME LIKE '%038%'
+                 OR RDB$RELATION_NAME LIKE '%039%')
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        
+        # Lista estrutura de cada tabela encontrada
+        resultado = []
+        for tabela in tabelas:
+            cursor.execute("""
+                SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
+                FROM RDB$RELATION_FIELDS RF
+                JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                WHERE RF.RDB$RELATION_NAME = ?
+                ORDER BY RF.RDB$FIELD_POSITION
+            """, (tabela,))
+            colunas = [{
+                "nome": row[0].strip(),
+                "tipo": row[1],
+                "tamanho": row[2]
+            } for row in cursor.fetchall()]
+            
+            # Conta registros
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {tabela}")
+                total = cursor.fetchone()[0]
+            except:
+                total = "?"
+            
+            resultado.append({
+                "tabela": tabela,
+                "colunas": colunas,
+                "totalRegistros": total
+            })
+        
+        conn.close()
+        return jsonify({"success": True, "tabelas": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca código de fórmula/kit em todas as tabelas
+@app.route('/api/debug/buscar-formula/<codigo>', methods=['GET'])
+def debug_buscar_formula(codigo):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Lista todas as tabelas
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        
+        encontrados = []
+        
+        for tabela in tabelas:
+            try:
+                # Busca colunas numéricas ou varchar
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE
+                    FROM RDB$RELATION_FIELDS RF
+                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    AND (F.RDB$FIELD_TYPE IN (7, 8, 10, 14, 16, 27, 37))
+                """, (tabela,))
+                
+                colunas = [(row[0].strip(), row[1]) for row in cursor.fetchall()]
+                
+                for coluna, tipo in colunas:
+                    try:
+                        # Tenta buscar o código
+                        if tipo in (7, 8, 10, 14, 16, 27):  # Numéricos
+                            sql = f"SELECT FIRST 5 * FROM {tabela} WHERE {coluna} = {codigo}"
+                        else:  # VARCHAR
+                            sql = f"SELECT FIRST 5 * FROM {tabela} WHERE {coluna} = '{codigo}'"
+                        
+                        cursor.execute(sql)
+                        rows = cursor.fetchall()
+                        
+                        if rows:
+                            cols = [desc[0].strip() for desc in cursor.description]
+                            for row in rows:
+                                registro = {}
+                                for i, col in enumerate(cols):
+                                    val = row[i]
+                                    if hasattr(val, 'read'):
+                                        try:
+                                            val = val.read().decode('latin-1')[:200]
+                                        except:
+                                            val = "[BLOB]"
+                                    elif hasattr(val, 'strftime'):
+                                        val = val.strftime('%d/%m/%Y')
+                                    elif val is not None:
+                                        val = str(val)[:200]
+                                    registro[col] = val
+                                encontrados.append({
+                                    "tabela": tabela,
+                                    "colunaEncontrada": coluna,
+                                    "registro": registro
+                                })
+                    except:
+                        pass
+            except:
+                pass
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "codigo": codigo,
+            "totalEncontrados": len(encontrados),
+            "encontrados": encontrados
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: estrutura completa das tabelas FC03xxx (produtos e observações)
+@app.route('/api/debug/estrutura-tabelas-produto', methods=['GET'])
+def debug_estrutura_tabelas_produto():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        tabelas = ['FC03000', 'FC03100', 'FC03200', 'FC03300', 'FC03310', 'FC03320', 'FC03900']
+        resultado = {}
+        
+        for tabela in tabelas:
+            try:
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
+                    FROM RDB$RELATION_FIELDS RF
+                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    ORDER BY RF.RDB$FIELD_POSITION
+                """, (tabela,))
+                colunas = [{
+                    "nome": row[0].strip(),
+                    "tipo": row[1],
+                    "tamanho": row[2]
+                } for row in cursor.fetchall()]
+                
+                # Conta registros
+                cursor.execute(f"SELECT COUNT(*) FROM {tabela}")
+                total = cursor.fetchone()[0]
+                
+                resultado[tabela] = {
+                    "colunas": colunas,
+                    "totalRegistros": total
+                }
+            except Exception as e:
+                resultado[tabela] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({"success": True, "tabelas": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca lotes e datas de um produto
+@app.route('/api/debug/lotes-produto/<cdpro>', methods=['GET'])
+def debug_lotes_produto(cdpro):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {}
+        
+        # Tabelas que podem conter lotes/datas
+        tabelas_lote = ['FC06100', 'FC06200', 'FC06300', 'FC07100', 'FC07200', 'FC12110']
+        
+        for tabela in tabelas_lote:
+            try:
+                # Verifica se tabela tem CDPRO ou similar
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME
+                    FROM RDB$RELATION_FIELDS RF
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    AND (RF.RDB$FIELD_NAME LIKE '%CDPRO%' 
+                         OR RF.RDB$FIELD_NAME LIKE '%PRO%'
+                         OR RF.RDB$FIELD_NAME LIKE '%COD%')
+                """, (tabela,))
+                colunas_busca = [row[0].strip() for row in cursor.fetchall()]
+                
+                for col in colunas_busca:
+                    try:
+                        cursor.execute(f"SELECT FIRST 10 * FROM {tabela} WHERE {col} = ?", (cdpro,))
+                        rows = cursor.fetchall()
+                        
+                        if rows:
+                            cols = [desc[0].strip() for desc in cursor.description]
+                            registros = []
+                            for row in rows:
+                                registro = {}
+                                for i, c in enumerate(cols):
+                                    val = row[i]
+                                    if hasattr(val, 'strftime'):
+                                        val = val.strftime('%d/%m/%Y')
+                                    elif hasattr(val, 'read'):
+                                        val = "[BLOB]"
+                                    elif val is not None:
+                                        val = str(val)[:100]
+                                    registro[c] = val
+                                registros.append(registro)
+                            resultado[f"{tabela}.{col}"] = {
+                                "colunas": cols,
+                                "registros": registros
+                            }
+                    except:
+                        pass
+            except:
+                pass
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "cdpro": cdpro,
+            "tabelasAnalisadas": tabelas_lote,
+            "encontrados": resultado
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca observações com código 94 (Observação Ficha descoberto pelo usuário)
+@app.route('/api/debug/obs-ficha-94', methods=['GET'])
+def debug_obs_ficha_94():
+    limite = request.args.get('limite', '50')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {}
+        
+        # Busca na FC03300 com GRICP = 94
+        try:
+            cursor.execute(f"""
+                SELECT FIRST {limite} CDPRO, TPFORMAFARMA, CDICP, GRICP, OBSER 
+                FROM FC03300 
+                WHERE GRICP = 94
+                ORDER BY CDPRO
+            """)
+            
+            registros = []
+            for row in cursor.fetchall():
+                obser = row[4]
+                if obser and hasattr(obser, 'read'):
+                    obser = obser.read().decode('latin-1')
+                registros.append({
+                    "cdpro": row[0],
+                    "tipoFormaFarma": row[1],
+                    "cdicp": row[2],
+                    "gricp": row[3],
+                    "observacao": obser[:500] if obser else None
+                })
+            resultado["FC03300_GRICP_94"] = registros
+        except Exception as e:
+            resultado["FC03300_GRICP_94"] = {"erro": str(e)}
+        
+        # Busca na FC03900 (se existir)
+        try:
+            cursor.execute(f"""
+                SELECT FIRST {limite} * FROM FC03900
+                ORDER BY 1
+            """)
+            cols = [desc[0].strip() for desc in cursor.description]
+            registros = []
+            for row in cursor.fetchall():
+                registro = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'read'):
+                        try:
+                            val = val.read().decode('latin-1')[:300]
+                        except:
+                            val = "[BLOB]"
+                    elif hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif val is not None:
+                        val = str(val)[:200]
+                    registro[col] = val
+                registros.append(registro)
+            resultado["FC03900"] = {
+                "colunas": cols,
+                "registros": registros
+            }
+        except Exception as e:
+            resultado["FC03900"] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({"success": True, "resultado": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca componentes de um kit/fórmula pelo código do produto
+@app.route('/api/debug/componentes-kit/<cdpro>', methods=['GET'])
+def debug_componentes_kit(cdpro):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {}
+        
+        # Primeiro, busca informações do produto
+        cursor.execute("""
+            SELECT CDPRO, DESCR, TPPRO, TPFORMAFARMA
+            FROM FC03000
+            WHERE CDPRO = ?
+        """, (cdpro,))
+        prod = cursor.fetchone()
+        if prod:
+            resultado["produto"] = {
+                "cdpro": prod[0],
+                "descricao": prod[1],
+                "tipoProduto": prod[2],
+                "tipoFormaFarma": prod[3]
+            }
+        
+        # Busca em várias tabelas possíveis de componentes
+        tabelas_comp = [
+            ('FC03100', 'CDPRO'),
+            ('FC03200', 'CDPRO'),
+            ('FC03710', 'CDPRO'),
+            ('FC03720', 'CDPRO'),
+            ('FC03730', 'CDPRO'),
+            ('FC12110', 'CDPRO'),
+        ]
+        
+        for tabela, coluna in tabelas_comp:
+            try:
+                cursor.execute(f"SELECT FIRST 20 * FROM {tabela} WHERE {coluna} = ?", (cdpro,))
+                rows = cursor.fetchall()
+                
+                if rows:
+                    cols = [desc[0].strip() for desc in cursor.description]
+                    registros = []
+                    for row in rows:
+                        registro = {}
+                        for i, col in enumerate(cols):
+                            val = row[i]
+                            if hasattr(val, 'read'):
+                                try:
+                                    val = val.read().decode('latin-1')[:200]
+                                except:
+                                    val = "[BLOB]"
+                            elif hasattr(val, 'strftime'):
+                                val = val.strftime('%d/%m/%Y')
+                            elif val is not None:
+                                val = str(val)[:200]
+                            registro[col] = val
+                        registros.append(registro)
+                    resultado[tabela] = {
+                        "colunas": cols,
+                        "registros": registros
+                    }
+            except Exception as e:
+                resultado[tabela] = {"erro": str(e)}
+        
+        # Busca requisições que usaram este produto
+        try:
+            cursor.execute("""
+                SELECT FIRST 5 NRRQU, CDFIL, ITEMID, DESCR, QUANT, TPCMP
+                FROM FC12110
+                WHERE CDPRO = ?
+                ORDER BY NRRQU DESC
+            """, (cdpro,))
+            rows = cursor.fetchall()
+            if rows:
+                resultado["requisicoes_com_produto"] = [{
+                    "nrRequisicao": row[0],
+                    "filial": row[1],
+                    "itemId": row[2],
+                    "descricao": row[3],
+                    "quantidade": str(row[4]) if row[4] else None,
+                    "tipoCmp": row[5]
+                } for row in rows]
+        except Exception as e:
+            resultado["requisicoes_com_produto"] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({"success": True, "cdpro": cdpro, "resultado": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# Debug: busca todas tabelas FC06xxx e FC07xxx (lotes e fabricação)
+@app.route('/api/debug/tabelas-lotes', methods=['GET'])
+def debug_tabelas_lotes():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT RDB$RELATION_NAME 
+            FROM RDB$RELATIONS 
+            WHERE RDB$SYSTEM_FLAG = 0 
+            AND (RDB$RELATION_NAME LIKE 'FC06%' 
+                 OR RDB$RELATION_NAME LIKE 'FC07%'
+                 OR RDB$RELATION_NAME LIKE '%LOT%')
+            ORDER BY RDB$RELATION_NAME
+        """)
+        tabelas = [row[0].strip() for row in cursor.fetchall()]
+        
+        resultado = []
+        for tabela in tabelas:
+            try:
+                cursor.execute("""
+                    SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH
+                    FROM RDB$RELATION_FIELDS RF
+                    JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+                    WHERE RF.RDB$RELATION_NAME = ?
+                    ORDER BY RF.RDB$FIELD_POSITION
+                """, (tabela,))
+                colunas = [{
+                    "nome": row[0].strip(),
+                    "tipo": row[1],
+                    "tamanho": row[2]
+                } for row in cursor.fetchall()]
+                
+                cursor.execute(f"SELECT COUNT(*) FROM {tabela}")
+                total = cursor.fetchone()[0]
+                
+                # Pega exemplo
+                cursor.execute(f"SELECT FIRST 3 * FROM {tabela}")
+                cols = [desc[0].strip() for desc in cursor.description]
+                exemplos = []
+                for row in cursor.fetchall():
+                    exemplo = {}
+                    for i, col in enumerate(cols):
+                        val = row[i]
+                        if hasattr(val, 'strftime'):
+                            val = val.strftime('%d/%m/%Y')
+                        elif hasattr(val, 'read'):
+                            val = "[BLOB]"
+                        elif val is not None:
+                            val = str(val)[:100]
+                        exemplo[col] = val
+                    exemplos.append(exemplo)
+                
+                resultado.append({
+                    "tabela": tabela,
+                    "colunas": colunas,
+                    "totalRegistros": total,
+                    "exemplos": exemplos
+                })
+            except Exception as e:
+                resultado.append({"tabela": tabela, "erro": str(e)})
+        
+        conn.close()
+        return jsonify({"success": True, "tabelas": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ============================================
 # ENDPOINT PRINCIPAL - BUSCAR REQUISIÇÃO
 # ============================================
 @app.route('/api/requisicao/<nr_requisicao>', methods=['GET'])
