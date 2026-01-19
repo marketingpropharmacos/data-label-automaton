@@ -1,69 +1,99 @@
-import { LayoutType, LayoutConfig, LabelFieldId, FieldPosition } from "@/types/requisicao";
+import { LayoutType, LayoutConfig, LabelFieldId, FieldConfig, LineConfig } from "@/types/requisicao";
 
-// Campos padrão para todos os layouts - posicionamento em % do container de 140px de altura
-const defaultFields: Record<LabelFieldId, FieldPosition> = {
-  paciente: { x: 0, y: 0, width: 65, fontSize: 10, visible: true },
-  requisicao: { x: 65, y: 0, width: 35, fontSize: 9, visible: true },
-  formula: { x: 0, y: 12, width: 100, fontSize: 11, visible: true },
-  lote: { x: 0, y: 26, width: 20, fontSize: 9, visible: true },
-  fabricacao: { x: 20, y: 26, width: 18, fontSize: 9, visible: true },
-  validade: { x: 38, y: 26, width: 18, fontSize: 9, visible: true },
-  ph: { x: 56, y: 26, width: 18, fontSize: 9, visible: true },
-  tipoUso: { x: 0, y: 40, width: 40, fontSize: 9, visible: true },
-  aplicacao: { x: 40, y: 40, width: 35, fontSize: 9, visible: true },
-  contem: { x: 0, y: 54, width: 55, fontSize: 9, visible: true },
-  registro: { x: 55, y: 54, width: 45, fontSize: 9, visible: true },
-  medico: { x: 0, y: 68, width: 100, fontSize: 9, visible: true },
-  posologia: { x: 0, y: 82, width: 100, fontSize: 8, visible: true },
-  observacoes: { x: 0, y: 92, width: 100, fontSize: 8, visible: true },
+// Configuração padrão dos campos
+const defaultFieldConfig: Record<LabelFieldId, FieldConfig> = {
+  paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
+  requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  formula: { visible: true, fontSize: 11, bold: true, uppercase: true },
+  lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
+  aplicacao: { visible: true, fontSize: 9, bold: true, uppercase: true },
+  contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
+  registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
+  medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
+  posologia: { visible: true, fontSize: 8, bold: false, uppercase: false },
+  observacoes: { visible: true, fontSize: 8, bold: false, uppercase: false },
 };
+
+// Linhas padrão para organização dos campos
+const defaultLines: LineConfig[] = [
+  { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
+  { id: 'linha2', campos: ['formula'], spacing: 'normal' },
+  { id: 'linha3', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'compact' },
+  { id: 'linha4', campos: ['tipoUso', 'aplicacao', 'contem'], spacing: 'normal' },
+  { id: 'linha5', campos: ['medico'], spacing: 'normal' },
+  { id: 'linha6', campos: ['posologia'], spacing: 'normal' },
+  { id: 'linha7', campos: ['observacoes'], spacing: 'normal' },
+];
 
 // Configurações padrão para cada tipo de layout
 export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   AMP10: {
     tipo: 'AMP10',
     nome: 'Ampola 10',
-    campos: { ...defaultFields },
+    linhas: [...defaultLines],
+    campoConfig: { ...defaultFieldConfig },
   },
   AMP_CX: {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
-    campos: {
-      ...defaultFields,
-      // Ajustes específicos para caixa (campos mais espaçados)
-      paciente: { x: 0, y: 8, width: 65, fontSize: 12, visible: true },
-      requisicao: { x: 65, y: 8, width: 35, fontSize: 11, visible: true },
-      formula: { x: 0, y: 18, width: 100, fontSize: 12, visible: true },
-      lote: { x: 0, y: 30, width: 22, fontSize: 10, visible: true },
-      fabricacao: { x: 22, y: 30, width: 22, fontSize: 10, visible: true },
-      validade: { x: 44, y: 30, width: 22, fontSize: 10, visible: true },
-      ph: { x: 66, y: 30, width: 34, fontSize: 10, visible: true },
+    linhas: [
+      { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
+      { id: 'linha2', campos: ['formula'], spacing: 'wide' },
+      { id: 'linha3', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'normal' },
+      { id: 'linha4', campos: ['tipoUso', 'aplicacao', 'contem'], spacing: 'normal' },
+      { id: 'linha5', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha6', campos: ['posologia'], spacing: 'normal' },
+      { id: 'linha7', campos: ['observacoes', 'registro'], spacing: 'compact' },
+    ],
+    campoConfig: {
+      ...defaultFieldConfig,
+      paciente: { visible: true, fontSize: 11, bold: true, uppercase: true },
+      formula: { visible: true, fontSize: 12, bold: true, uppercase: true },
     },
   },
   A_PAC_GRAN: {
     tipo: 'A_PAC_GRAN',
     nome: 'Ampola Pacote Grande',
-    campos: {
-      ...defaultFields,
-      // Layout maior com mais espaço
-      paciente: { x: 0, y: 5, width: 60, fontSize: 13, visible: true },
-      requisicao: { x: 60, y: 5, width: 40, fontSize: 12, visible: true },
-      formula: { x: 0, y: 15, width: 100, fontSize: 13, visible: true },
-      medico: { x: 0, y: 60, width: 100, fontSize: 11, visible: true },
-      posologia: { x: 0, y: 72, width: 100, fontSize: 10, visible: true },
-      observacoes: { x: 0, y: 82, width: 100, fontSize: 10, visible: true },
+    linhas: [
+      { id: 'linha1', campos: ['paciente'], spacing: 'wide' },
+      { id: 'linha2', campos: ['requisicao'], spacing: 'normal' },
+      { id: 'linha3', campos: ['formula'], spacing: 'wide' },
+      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'normal' },
+      { id: 'linha5', campos: ['ph', 'tipoUso', 'aplicacao'], spacing: 'normal' },
+      { id: 'linha6', campos: ['contem', 'registro'], spacing: 'normal' },
+      { id: 'linha7', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha8', campos: ['posologia'], spacing: 'normal' },
+      { id: 'linha9', campos: ['observacoes'], spacing: 'normal' },
+    ],
+    campoConfig: {
+      ...defaultFieldConfig,
+      paciente: { visible: true, fontSize: 12, bold: true, uppercase: true },
+      formula: { visible: true, fontSize: 13, bold: true, uppercase: true },
+      medico: { visible: true, fontSize: 10, bold: false, uppercase: true },
     },
   },
   TIRZ: {
     tipo: 'TIRZ',
     nome: 'Tirzepatida',
-    campos: {
-      ...defaultFields,
-      // Layout específico para Tirzepatida
-      paciente: { x: 0, y: 8, width: 100, fontSize: 12, visible: true },
-      requisicao: { x: 0, y: 0, width: 100, fontSize: 10, visible: true },
-      formula: { x: 0, y: 20, width: 100, fontSize: 14, visible: true },
-      medico: { x: 0, y: 65, width: 100, fontSize: 11, visible: true },
+    linhas: [
+      { id: 'linha1', campos: ['requisicao'], spacing: 'normal' },
+      { id: 'linha2', campos: ['paciente'], spacing: 'wide' },
+      { id: 'linha3', campos: ['formula'], spacing: 'wide' },
+      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'compact' },
+      { id: 'linha5', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
+      { id: 'linha6', campos: ['contem'], spacing: 'normal' },
+      { id: 'linha7', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha8', campos: ['posologia'], spacing: 'normal' },
+    ],
+    campoConfig: {
+      ...defaultFieldConfig,
+      paciente: { visible: true, fontSize: 11, bold: true, uppercase: true },
+      formula: { visible: true, fontSize: 13, bold: true, uppercase: true },
+      observacoes: { visible: false, fontSize: 8, bold: false, uppercase: false },
     },
   },
 };
@@ -86,7 +116,7 @@ export const fieldLabels: Record<LabelFieldId, string> = {
   registro: 'Registro',
 };
 
-const STORAGE_KEY = 'label_layouts';
+const STORAGE_KEY = 'label_layouts_v2';
 
 // Função auxiliar para deep clone
 function deepClone<T>(obj: T): T {
