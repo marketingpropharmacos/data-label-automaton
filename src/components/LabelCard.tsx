@@ -69,21 +69,21 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
 
   // Mapeamento de tipos de prescritores por código PFCRM
   const tiposPrescritores: Record<string, { prefixo: string; conselho: string }> = {
-    '1': { prefixo: 'DR.', conselho: 'CRM' },
-    '2': { prefixo: 'DR.', conselho: 'CRM' },
-    '3': { prefixo: 'DR.', conselho: 'CRM' },
-    '4': { prefixo: 'DR.', conselho: 'CRM' },
-    '5': { prefixo: 'DR.', conselho: 'CRM' },
-    '6': { prefixo: 'DR.', conselho: 'CRM' },
-    '7': { prefixo: 'BIOM.', conselho: 'CRBM' },
-    '8': { prefixo: 'FONO', conselho: 'CRFA' },
-    '9': { prefixo: 'NUTR.', conselho: 'CRN' },
-    'A': { prefixo: 'FISIO', conselho: 'CREFITO' },
-    'B': { prefixo: 'T.O.', conselho: 'CREFITO' },
-    'C': { prefixo: 'ENF.', conselho: 'COREN' },
-    'D': { prefixo: '', conselho: 'RMS' },
-    'E': { prefixo: 'BIOL.', conselho: 'CRBio' },
-    'F': { prefixo: 'DR.', conselho: 'CRO' }, // Dentista
+    '1': { prefixo: 'DR.', conselho: 'CRM' },       // Médico
+    '2': { prefixo: 'DR.', conselho: 'CRO' },       // Dentista
+    '3': { prefixo: 'DR.', conselho: 'CRMV' },      // Veterinário
+    '4': { prefixo: 'EST.', conselho: '' },         // Esteticista
+    '5': { prefixo: 'PSI.', conselho: 'CRP' },      // Psicóloga
+    '6': { prefixo: 'FARM.', conselho: 'CRF' },     // Farmacêutico
+    '7': { prefixo: 'BIOM.', conselho: 'CRBM' },    // Biomédico
+    '8': { prefixo: 'FONO.', conselho: 'CRFA' },    // Fonoaudiólogo
+    '9': { prefixo: 'NUTR.', conselho: 'CRN' },     // Nutricionista
+    'A': { prefixo: 'FISIO.', conselho: 'CREFITO' }, // Fisioterapeuta
+    'B': { prefixo: 'T.O.', conselho: 'CREFITO' },  // Terapeuta Ocupacional
+    'C': { prefixo: 'ENF.', conselho: 'COREN' },    // Enfermeiro
+    'D': { prefixo: '', conselho: 'RMS' },          // Registro Min. Saúde
+    'E': { prefixo: 'BIOL.', conselho: 'CRBio' },   // Biólogo
+    'F': { prefixo: 'DR.', conselho: 'CRO' },       // Dentista (alternativo)
   };
 
   const formatarPrescritor = () => {
@@ -143,7 +143,10 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     // Linha 2: Paciente
     if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
     
-    // Linha 3: Fórmula/Produto
+    // Linha 3: Composição (ativos da mescla)
+    if (rotulo.composicao) lines.push(rotulo.composicao.toUpperCase());
+    
+    // Linha 4: Fórmula/Produto
     const formula = formatarFormula(rotulo.formula);
     if (formula) lines.push(formula);
     
@@ -158,7 +161,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     // Linha 5: pH, Aplicação, Contém (em uma linha)
     const infoLine: string[] = [];
     if (rotulo.ph) infoLine.push(`pH: ${rotulo.ph}`);
-    if (aplicacao) infoLine.push(`APLIC: ${aplicacao}`);
+    if (aplicacao) infoLine.push(`APLICAÇÃO: ${aplicacao}`);
     if (rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
     if (infoLine.length > 0) lines.push(infoLine.join('  '));
     
@@ -211,6 +214,8 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     switch (fieldId) {
       case 'paciente':
         return rotulo.nomePaciente || "";
+      case 'composicao':
+        return rotulo.composicao?.toUpperCase() || "";
       case 'requisicao':
         return `REQ: ${rotulo.nrRequisicao}-${rotulo.nrItem}`;
       case 'formula':
@@ -226,7 +231,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       case 'tipoUso':
         return rotulo.tipoUso?.toUpperCase() || "USO INJETÁVEL";
       case 'aplicacao':
-        return aplicacao ? `APLIC: ${aplicacao}` : "";
+        return aplicacao ? `APLICAÇÃO: ${aplicacao}` : "";
       case 'contem':
         return rotulo.contem ? `CONT: ${rotulo.contem}` : "";
       case 'registro':
