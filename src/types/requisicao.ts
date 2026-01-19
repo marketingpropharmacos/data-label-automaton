@@ -20,6 +20,7 @@ export interface LineConfig {
 export type LabelFieldId = 
   | 'medico'
   | 'paciente'
+  | 'composicao'
   | 'requisicao'
   | 'formula'
   | 'lote'

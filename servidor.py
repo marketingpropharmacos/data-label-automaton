@@ -1161,6 +1161,23 @@ def buscar_requisicao(nr_requisicao):
             elif aplicacao.upper().startswith("APLICACAO:"):
                 aplicacao = aplicacao[10:].strip()
             
+            # Valida aplicação - só aceita vias de aplicação conhecidas
+            # Se contiver textos longos (ativos), considera inválido
+            vias_validas = ['ID', 'SC', 'IM', 'EV', 'IV', 'ID/SC', 'SC/IM', 'IM/SC', 'EV/SC', 'ID/IM', 'IDSC', 'TOP', 'VO', 'SL']
+            aplicacao_upper = aplicacao.upper().strip()
+            
+            # Se aplicação é muito longa (mais de 20 chars) ou contém vírgula, provavelmente são ativos
+            if len(aplicacao) > 20 or ',' in aplicacao:
+                aplicacao = ""  # Limpa - não é uma via válida
+            elif aplicacao_upper not in vias_validas:
+                # Tenta extrair via válida do texto
+                via_encontrada = ""
+                for via in vias_validas:
+                    if via in aplicacao_upper.split():
+                        via_encontrada = via
+                        break
+                aplicacao = via_encontrada
+            
             rotulo = {
                 **dados_base,
                 "nrItem": str(idx + 1),

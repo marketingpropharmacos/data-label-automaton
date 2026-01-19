@@ -3,6 +3,7 @@ import { LayoutType, LayoutConfig, LabelFieldId, FieldConfig, LineConfig } from 
 // Configuração padrão dos campos
 const defaultFieldConfig: Record<LabelFieldId, FieldConfig> = {
   paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
+  composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
   requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
   formula: { visible: true, fontSize: 11, bold: true, uppercase: true },
   lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
@@ -22,12 +23,13 @@ const defaultFieldConfig: Record<LabelFieldId, FieldConfig> = {
 const defaultLines: LineConfig[] = [
   { id: 'linha1', campos: ['medico'], spacing: 'normal' },
   { id: 'linha2', campos: ['paciente'], spacing: 'normal' },
-  { id: 'linha3', campos: ['formula'], spacing: 'normal' },
-  { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
-  { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
-  { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
-  { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
-  { id: 'linha8', campos: ['observacoes', 'registro'], spacing: 'compact' },
+  { id: 'linha3', campos: ['composicao'], spacing: 'normal' },
+  { id: 'linha4', campos: ['formula'], spacing: 'normal' },
+  { id: 'linha5', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
+  { id: 'linha6', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
+  { id: 'linha7', campos: ['tipoUso'], spacing: 'normal' },
+  { id: 'linha8', campos: ['posologia'], spacing: 'normal' },
+  { id: 'linha9', campos: ['observacoes', 'registro'], spacing: 'compact' },
 ];
 
 // Configurações padrão para cada tipo de layout
@@ -100,8 +102,9 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
 
 // Labels amigáveis para os campos
 export const fieldLabels: Record<LabelFieldId, string> = {
-  medico: 'Médico',
+  medico: 'Prescritor',
   paciente: 'Paciente',
+  composicao: 'Composição',
   requisicao: 'Requisição',
   formula: 'Fórmula',
   lote: 'Lote',
