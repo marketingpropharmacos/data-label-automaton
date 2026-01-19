@@ -1,13 +1,19 @@
 // Tipos de Layout disponíveis
 export type LayoutType = 'AMP10' | 'AMP_CX' | 'A_PAC_GRAN' | 'TIRZ';
 
-// Posição de um campo no layout
-export interface FieldPosition {
-  x: number;      // posição horizontal em %
-  y: number;      // posição vertical em %
-  width: number;  // largura em %
-  fontSize: number; // tamanho da fonte em px
+// Configuração de um campo (simplificado para sistema de linhas)
+export interface FieldConfig {
   visible: boolean;
+  fontSize: number;  // tamanho da fonte em px
+  bold?: boolean;
+  uppercase?: boolean;
+}
+
+// Configuração de uma linha do layout
+export interface LineConfig {
+  id: string;
+  campos: LabelFieldId[];  // campos nesta linha, na ordem
+  spacing?: 'normal' | 'compact' | 'wide';
 }
 
 // Lista de campos disponíveis
@@ -27,11 +33,21 @@ export type LabelFieldId =
   | 'observacoes'
   | 'registro';
 
-// Configuração completa de um layout
+// Configuração completa de um layout (novo formato baseado em linhas)
 export interface LayoutConfig {
   tipo: LayoutType;
   nome: string;
-  campos: Record<LabelFieldId, FieldPosition>;
+  linhas: LineConfig[];  // organização em linhas
+  campoConfig: Record<LabelFieldId, FieldConfig>;  // configuração individual de cada campo
+}
+
+// Manter compatibilidade com formato antigo (deprecado)
+export interface FieldPosition {
+  x: number;
+  y: number;
+  width: number;
+  fontSize: number;
+  visible: boolean;
 }
 
 // Rótulo individual por fórmula (cada aba do Fórmula Certa)
