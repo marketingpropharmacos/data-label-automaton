@@ -18,15 +18,16 @@ const defaultFieldConfig: Record<LabelFieldId, FieldConfig> = {
   observacoes: { visible: true, fontSize: 8, bold: false, uppercase: false },
 };
 
-// Linhas padrão para organização dos campos
+// Linhas padrão para organização dos campos - ordem lógica e limpa
 const defaultLines: LineConfig[] = [
-  { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
-  { id: 'linha2', campos: ['formula'], spacing: 'normal' },
-  { id: 'linha3', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'compact' },
-  { id: 'linha4', campos: ['tipoUso', 'aplicacao', 'contem'], spacing: 'normal' },
-  { id: 'linha5', campos: ['medico'], spacing: 'normal' },
-  { id: 'linha6', campos: ['posologia'], spacing: 'normal' },
-  { id: 'linha7', campos: ['observacoes'], spacing: 'normal' },
+  { id: 'linha1', campos: ['medico'], spacing: 'normal' },
+  { id: 'linha2', campos: ['paciente'], spacing: 'normal' },
+  { id: 'linha3', campos: ['formula'], spacing: 'normal' },
+  { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
+  { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
+  { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
+  { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
+  { id: 'linha8', campos: ['observacoes', 'registro'], spacing: 'compact' },
 ];
 
 // Configurações padrão para cada tipo de layout
@@ -41,13 +42,14 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
     linhas: [
-      { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
-      { id: 'linha2', campos: ['formula'], spacing: 'wide' },
-      { id: 'linha3', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'normal' },
-      { id: 'linha4', campos: ['tipoUso', 'aplicacao', 'contem'], spacing: 'normal' },
-      { id: 'linha5', campos: ['medico'], spacing: 'normal' },
-      { id: 'linha6', campos: ['posologia'], spacing: 'normal' },
-      { id: 'linha7', campos: ['observacoes', 'registro'], spacing: 'compact' },
+      { id: 'linha1', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha2', campos: ['paciente'], spacing: 'normal' },
+      { id: 'linha3', campos: ['formula'], spacing: 'wide' },
+      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
+      { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
+      { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
+      { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
+      { id: 'linha8', campos: ['observacoes', 'registro'], spacing: 'compact' },
     ],
     campoConfig: {
       ...defaultFieldConfig,
@@ -59,15 +61,14 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'A_PAC_GRAN',
     nome: 'Ampola Pacote Grande',
     linhas: [
-      { id: 'linha1', campos: ['paciente'], spacing: 'wide' },
-      { id: 'linha2', campos: ['requisicao'], spacing: 'normal' },
+      { id: 'linha1', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha2', campos: ['paciente'], spacing: 'wide' },
       { id: 'linha3', campos: ['formula'], spacing: 'wide' },
-      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'normal' },
-      { id: 'linha5', campos: ['ph', 'tipoUso', 'aplicacao'], spacing: 'normal' },
-      { id: 'linha6', campos: ['contem', 'registro'], spacing: 'normal' },
-      { id: 'linha7', campos: ['medico'], spacing: 'normal' },
-      { id: 'linha8', campos: ['posologia'], spacing: 'normal' },
-      { id: 'linha9', campos: ['observacoes'], spacing: 'normal' },
+      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
+      { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
+      { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
+      { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
+      { id: 'linha8', campos: ['observacoes', 'registro'], spacing: 'compact' },
     ],
     campoConfig: {
       ...defaultFieldConfig,
@@ -80,14 +81,13 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'TIRZ',
     nome: 'Tirzepatida',
     linhas: [
-      { id: 'linha1', campos: ['requisicao'], spacing: 'normal' },
+      { id: 'linha1', campos: ['medico'], spacing: 'normal' },
       { id: 'linha2', campos: ['paciente'], spacing: 'wide' },
       { id: 'linha3', campos: ['formula'], spacing: 'wide' },
-      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade', 'ph'], spacing: 'compact' },
-      { id: 'linha5', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
-      { id: 'linha6', campos: ['contem'], spacing: 'normal' },
-      { id: 'linha7', campos: ['medico'], spacing: 'normal' },
-      { id: 'linha8', campos: ['posologia'], spacing: 'normal' },
+      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
+      { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
+      { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
+      { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
     ],
     campoConfig: {
       ...defaultFieldConfig,

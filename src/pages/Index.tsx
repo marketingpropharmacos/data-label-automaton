@@ -10,7 +10,7 @@ import LayoutSelector from "@/components/LayoutSelector";
 import LayoutEditor from "@/components/LayoutEditor";
 import { useToast } from "@/hooks/use-toast";
 import { getPharmacyConfig, getLabelConfig } from "@/config/api";
-import { getLayout, getSelectedLayout, setSelectedLayout } from "@/config/layouts";
+import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao } from "@/services/requisicaoService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 
@@ -25,6 +25,12 @@ const Index = () => {
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>(getLayout(layoutType));
   const [editorOpen, setEditorOpen] = useState(false);
   const { toast } = useToast();
+
+  // Resetar layouts ao inicializar para aplicar mudanças recentes
+  useEffect(() => {
+    resetAllLayouts();
+    setLayoutConfig(getLayout(layoutType));
+  }, []);
 
   // Recarregar configs quando a página recebe foco
   useEffect(() => {

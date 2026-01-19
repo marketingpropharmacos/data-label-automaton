@@ -101,25 +101,25 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     return lote ? `${lote}/${ano}` : "";
   };
 
-  // Gerar texto formatado inicial para edição
+  // Gerar texto formatado inicial para edição - ordem padronizada
   const generateInitialText = (): string => {
     const aplicacao = getAplicacao();
     const observacoes = getObservacoes();
     
     const lines: string[] = [];
     
-    // Linha 1: Médico
+    // Linha 1: Médico (primeiro porque é quem prescreveu)
     const medico = formatarMedico();
     if (medico) lines.push(medico);
     
     // Linha 2: Paciente
     if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
     
-    // Linha 3: Fórmula
+    // Linha 3: Fórmula/Produto
     const formula = formatarFormula(rotulo.formula);
     if (formula) lines.push(formula);
     
-    // Linha 4: Lote, Fabricação, Validade
+    // Linha 4: Lote, Fabricação, Validade (em uma linha)
     const loteInfo: string[] = [];
     const lote = formatarLote();
     if (lote) loteInfo.push(`L: ${lote}`);
@@ -127,7 +127,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     if (rotulo.dataValidade) loteInfo.push(`V: ${formatarDataCurta(rotulo.dataValidade)}`);
     if (loteInfo.length > 0) lines.push(loteInfo.join('  '));
     
-    // Linha 5: pH, Aplicação, Contem
+    // Linha 5: pH, Aplicação, Contém (em uma linha)
     const infoLine: string[] = [];
     if (rotulo.ph) infoLine.push(`pH: ${rotulo.ph}`);
     if (aplicacao) infoLine.push(`APLIC: ${aplicacao}`);
@@ -135,14 +135,15 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     if (infoLine.length > 0) lines.push(infoLine.join('  '));
     
     // Linha 6: Tipo de Uso
-    const tipoUso = rotulo.tipoUso?.toUpperCase() || "USO INJETÁVEL";
-    lines.push(tipoUso);
+    const tipoUso = rotulo.tipoUso?.toUpperCase();
+    if (tipoUso) lines.push(tipoUso);
     
     // Linha 7: Posologia (se existir)
-    if (rotulo.posologia) lines.push(`Pos: ${rotulo.posologia}`);
+    if (rotulo.posologia) lines.push(`POS: ${rotulo.posologia.toUpperCase()}`);
     
-    // Linha 8: Observações (se existir)
-    if (observacoes) lines.push(`Obs: ${observacoes}`);
+    // Linha 8: Observações e Registro
+    if (observacoes) lines.push(`OBS: ${observacoes}`);
+    if (rotulo.numeroRegistro) lines.push(`REG: ${rotulo.numeroRegistro}`);
     
     return lines.join('\n');
   };
