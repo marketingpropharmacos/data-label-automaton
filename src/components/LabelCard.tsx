@@ -67,13 +67,41 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     return obs;
   };
 
-  const formatarMedico = () => {
+  // Mapeamento de tipos de prescritores por código PFCRM
+  const tiposPrescritores: Record<string, { prefixo: string; conselho: string }> = {
+    '1': { prefixo: 'DR.', conselho: 'CRM' },
+    '2': { prefixo: 'DR.', conselho: 'CRM' },
+    '3': { prefixo: 'DR.', conselho: 'CRM' },
+    '4': { prefixo: 'DR.', conselho: 'CRM' },
+    '5': { prefixo: 'DR.', conselho: 'CRM' },
+    '6': { prefixo: 'DR.', conselho: 'CRM' },
+    '7': { prefixo: 'BIOM.', conselho: 'CRBM' },
+    '8': { prefixo: 'FONO', conselho: 'CRFA' },
+    '9': { prefixo: 'NUTR.', conselho: 'CRN' },
+    'A': { prefixo: 'FISIO', conselho: 'CREFITO' },
+    'B': { prefixo: 'T.O.', conselho: 'CREFITO' },
+    'C': { prefixo: 'ENF.', conselho: 'COREN' },
+    'D': { prefixo: '', conselho: 'RMS' },
+    'E': { prefixo: 'BIOL.', conselho: 'CRBio' },
+    'F': { prefixo: 'DR.', conselho: 'CRO' }, // Dentista
+  };
+
+  const formatarPrescritor = () => {
     if (!rotulo.numeroCRM) return "";
-    const prefixo = (rotulo.prefixoCRM || 'DR').toUpperCase().replace(/\./g, '');
+    
+    const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+    const tipo = tiposPrescritores[codigo] || { prefixo: 'DR.', conselho: 'CRM' };
+    
+    const prefixo = tipo.prefixo;
+    const conselho = tipo.conselho;
+    
     if (rotulo.nomeMedico) {
-      return `${prefixo} ${rotulo.nomeMedico.toUpperCase()} - CRM ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
+      if (prefixo) {
+        return `${prefixo} ${rotulo.nomeMedico.toUpperCase()} - ${conselho} ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
+      }
+      return `${rotulo.nomeMedico.toUpperCase()} - ${conselho} ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
     }
-    return `${prefixo} CRM ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
+    return `${conselho} ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
   };
 
   const formatarDataCurta = (data: string) => {
@@ -108,9 +136,9 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     
     const lines: string[] = [];
     
-    // Linha 1: Médico (primeiro porque é quem prescreveu)
-    const medico = formatarMedico();
-    if (medico) lines.push(medico);
+    // Linha 1: Prescritor (primeiro porque é quem prescreveu)
+    const prescritor = formatarPrescritor();
+    if (prescritor) lines.push(prescritor);
     
     // Linha 2: Paciente
     if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
@@ -204,7 +232,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       case 'registro':
         return rotulo.numeroRegistro ? `REG: ${rotulo.numeroRegistro}` : "";
       case 'medico':
-        return formatarMedico();
+        return formatarPrescritor();
       case 'posologia':
         return rotulo.posologia ? `Pos: ${rotulo.posologia}` : "";
       case 'observacoes':
