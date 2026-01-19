@@ -447,6 +447,44 @@ def debug_observacoes(cdpro):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: dados da FC99999 por CDPRO (OBSFIC)
+@app.route('/api/debug/fc99999/<cdpro>', methods=['GET'])
+def debug_fc99999(cdpro):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        argumento_obsfic = f"OBSFIC{cdpro}"
+        cursor.execute("""
+            SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+            FROM FC99999 
+            WHERE ARGUMENTO = ?
+            ORDER BY SUBARGUM
+        """, (argumento_obsfic,))
+        
+        registros = []
+        for row in cursor.fetchall():
+            texto = row[2]
+            if texto and hasattr(texto, 'read'):
+                texto = texto.read().decode('latin-1')
+            registros.append({
+                "argumento": row[0],
+                "subargum": row[1],
+                "parametro": texto
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "cdpro": cdpro,
+            "argumento_buscado": argumento_obsfic,
+            "total": len(registros),
+            "registros": registros
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/debug/observacoes-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_observacoes_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
@@ -1100,68 +1138,116 @@ def buscar_requisicao(nr_requisicao):
             item_id = item[0]
             cdpro = item[5]
             
-            # Busca matérias-primas (R) do mesmo ITEMID para composição
+            # =====================================================
+            # PRIORIDADE: Busca dados na FC99999 (OBSFIC + CDPRO)
+            # Esta é a fonte principal para MESCLAS
+            # =====================================================
+            argumento_obsfic = f"OBSFIC{cdpro}"
             cursor.execute("""
-                SELECT DESCR
-                FROM FC12110
-                WHERE NRRQU = ? AND CDFIL = ? AND ITEMID = ? AND TPCMP = 'R'
-                ORDER BY DESCR
-            """, (nr_requisicao, filial, item_id))
+                SELECT SUBARGUM, PARAMETRO 
+                FROM FC99999 
+                WHERE ARGUMENTO = ?
+                ORDER BY SUBARGUM
+            """, (argumento_obsfic,))
             
-            materias_primas = cursor.fetchall()
+            obs_fc99999 = cursor.fetchall()
             
-            # Filtra apenas ativos (exclui embalagens e veículos)
-            ativos = []
-            for mp in materias_primas:
-                descr = mp[0] or ""
-                descr_upper = descr.upper()
-                
-                # Verifica se é material a excluir
-                excluir = False
-                for excl in materiais_excluir:
-                    if excl in descr_upper:
-                        excluir = True
-                        break
-                
-                if not excluir and descr.strip():
-                    # Evita duplicatas
-                    if descr.strip() not in ativos:
-                        ativos.append(descr.strip())
+            # Processa dados da FC99999
+            ativos_mescla = []  # Para composição da mescla
+            aplicacao_fc99999 = ""
             
-            # Monta composição concatenando os ativos
-            composicao = " + ".join(ativos)
-            
-            # Busca observações do produto (aplicação, descrição) via FC03300
-            aplicacao = ""
-            descricao_produto = ""
-            
-            cursor.execute("""
-                SELECT CDICP, OBSER 
-                FROM FC03300 
-                WHERE CDPRO = ?
-                ORDER BY CDICP
-            """, (cdpro,))
-            
-            observacoes = cursor.fetchall()
-            
-            for obs in observacoes:
-                cdicp = str(obs[0]).strip().zfill(5)
+            for obs in obs_fc99999:
+                subargum = str(obs[0]).strip().zfill(5)
                 texto = obs[1]
                 if texto and hasattr(texto, 'read'):
                     texto = texto.read().decode('latin-1')
                 texto = texto.strip() if texto else ""
                 
-                # Busca aplicação em QUALQUER código que contenha "APLICAÇÃO:" ou "APLICACAO:"
+                if not texto:
+                    continue
+                
+                # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
                 texto_upper = texto.upper()
                 if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
-                    # Extrai o valor após "APLICAÇÃO:"
-                    if texto_upper.startswith("APLICAÇÃO:"):
-                        aplicacao = texto[10:].strip()
-                    else:
-                        aplicacao = texto[10:].strip()
-                elif cdicp == '00004' and not descricao_produto:
-                    # Descrição do produto (se não for aplicação)
-                    descricao_produto = texto
+                    aplicacao_fc99999 = texto[10:].strip()
+                elif subargum in ['00002', '00003']:
+                    # SUBARGUM 00002 e 00003 = Ativos da mescla
+                    ativos_mescla.append(texto)
+            
+            # =====================================================
+            # FALLBACK: Busca matérias-primas (FC12110) se não achou na FC99999
+            # =====================================================
+            composicao = ""
+            if ativos_mescla:
+                # Usa ativos da mescla (FC99999)
+                composicao = ", ".join(ativos_mescla)
+            else:
+                # Fallback: busca matérias-primas (R) do mesmo ITEMID
+                cursor.execute("""
+                    SELECT DESCR
+                    FROM FC12110
+                    WHERE NRRQU = ? AND CDFIL = ? AND ITEMID = ? AND TPCMP = 'R'
+                    ORDER BY DESCR
+                """, (nr_requisicao, filial, item_id))
+                
+                materias_primas = cursor.fetchall()
+                
+                # Filtra apenas ativos (exclui embalagens e veículos)
+                ativos = []
+                for mp in materias_primas:
+                    descr = mp[0] or ""
+                    descr_upper = descr.upper()
+                    
+                    # Verifica se é material a excluir
+                    excluir = False
+                    for excl in materiais_excluir:
+                        if excl in descr_upper:
+                            excluir = True
+                            break
+                    
+                    if not excluir and descr.strip():
+                        # Evita duplicatas
+                        if descr.strip() not in ativos:
+                            ativos.append(descr.strip())
+                
+                composicao = " + ".join(ativos)
+            
+            # =====================================================
+            # APLICAÇÃO: Prioriza FC99999, fallback para FC03300
+            # =====================================================
+            aplicacao = aplicacao_fc99999
+            descricao_produto = ""
+            
+            # Fallback para FC03300 se não encontrou aplicação na FC99999
+            if not aplicacao:
+                cursor.execute("""
+                    SELECT CDICP, OBSER 
+                    FROM FC03300 
+                    WHERE CDPRO = ?
+                    ORDER BY CDICP
+                """, (cdpro,))
+                
+                observacoes = cursor.fetchall()
+                
+                for obs in observacoes:
+                    cdicp = str(obs[0]).strip().zfill(5)
+                    texto = obs[1]
+                    if texto and hasattr(texto, 'read'):
+                        texto = texto.read().decode('latin-1')
+                    texto = texto.strip() if texto else ""
+                    
+                    texto_upper = texto.upper()
+                    if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
+                        if texto_upper.startswith("APLICAÇÃO:"):
+                            aplicacao = texto[10:].strip()
+                        else:
+                            aplicacao = texto[10:].strip()
+                    elif cdicp == '00004' and not descricao_produto:
+                        descricao_produto = texto
+            
+            # Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
+            if len(aplicacao) > 30 or ',' in aplicacao:
+                aplicacao = ""
             
             rotulo = {
                 **dados_base,
@@ -1171,10 +1257,10 @@ def buscar_requisicao(nr_requisicao):
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
                 "lote": (item[4] or "").strip(),
                 "quantidade": str(int(item[2])) if item[2] else "",
-                "composicao": composicao,  # Ativos via ITEMID
-                "aplicacao": aplicacao,  # Vem do banco (ID, SC, EV, IM)
+                "composicao": composicao,
+                "aplicacao": aplicacao,
                 "descricaoProduto": descricao_produto,
-                "observacoes": composicao,  # Mesma composição para observações
+                "observacoes": composicao,
             }
             data.append(rotulo)
         
