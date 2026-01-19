@@ -1143,6 +1143,25 @@ def buscar_requisicao(nr_requisicao):
             # Esta é a fonte principal para MESCLAS
             # =====================================================
             argumento_obsfic = f"OBSFIC{cdpro}"
+            print(f"\n{'='*60}")
+            print(f"DEBUG FC99999 - Item {idx+1}")
+            print(f"  CDPRO: '{cdpro}'")
+            print(f"  ARGUMENTO buscado: '{argumento_obsfic}'")
+            
+            # Primeiro, vamos ver TODOS os argumentos que contêm este CDPRO
+            cursor.execute("""
+                SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                FROM FC99999 
+                WHERE ARGUMENTO CONTAINING ?
+                ORDER BY ARGUMENTO, SUBARGUM
+            """, (cdpro,))
+            todos_args = cursor.fetchall()
+            print(f"  Argumentos encontrados contendo CDPRO: {len(todos_args)}")
+            for arg in todos_args:
+                param_preview = arg[2][:50] if arg[2] else 'NULL'
+                print(f"    - ARG: {arg[0]}, SUB: {arg[1]}, PARAM: {param_preview}...")
+            
+            # Agora busca com o argumento exato
             cursor.execute("""
                 SELECT SUBARGUM, PARAMETRO 
                 FROM FC99999 
@@ -1151,9 +1170,10 @@ def buscar_requisicao(nr_requisicao):
             """, (argumento_obsfic,))
             
             obs_fc99999 = cursor.fetchall()
-            
-            # Processa dados da FC99999
-            ativos_mescla = []  # Para composição da mescla
+            print(f"  Registros com ARGUMENTO exato: {len(obs_fc99999)}")
+            for obs in obs_fc99999:
+                param_preview = obs[1][:50] if obs[1] else 'NULL'
+                print(f"    - SUBARGUM: {obs[0]}, PARAMETRO: {param_preview}...")
             aplicacao_fc99999 = ""
             
             for obs in obs_fc99999:
