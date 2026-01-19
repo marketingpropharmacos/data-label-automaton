@@ -1138,9 +1138,9 @@ def buscar_requisicao(nr_requisicao):
             cursor.execute("""
                 SELECT CDICP, OBSER 
                 FROM FC03300 
-                WHERE CDPRO = ? AND TPFORMAFARMA = ?
+                WHERE CDPRO = ?
                 ORDER BY CDICP
-            """, (cdpro, tipo_forma))
+            """, (cdpro,))
             
             observacoes = cursor.fetchall()
             
