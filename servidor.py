@@ -1139,13 +1139,13 @@ def buscar_requisicao(nr_requisicao):
             cdpro = item[5]
             
             # =====================================================
-            # PRIORIDADE: Busca dados na FC99999 (OBSFIC + CDPRO)
+            # PRIORIDADE: Busca dados na FC99999 (OBSFIC + NR_REQUISICAO)
             # Esta é a fonte principal para MESCLAS
             # =====================================================
-            argumento_obsfic = f"OBSFIC{cdpro}"
+            argumento_obsfic = f"OBSFIC{nr_requisicao}"
             print(f"\n{'='*60}")
             print(f"DEBUG FC99999 - Item {idx+1}")
-            print(f"  CDPRO: '{cdpro}'")
+            print(f"  NR_REQUISICAO: '{nr_requisicao}'")
             print(f"  ARGUMENTO buscado: '{argumento_obsfic}'")
             
             # Primeiro, vamos ver TODOS os argumentos que contêm este CDPRO
@@ -1172,8 +1172,14 @@ def buscar_requisicao(nr_requisicao):
             obs_fc99999 = cursor.fetchall()
             print(f"  Registros com ARGUMENTO exato: {len(obs_fc99999)}")
             for obs in obs_fc99999:
-                param_preview = obs[1][:50] if obs[1] else 'NULL'
+                param_val = obs[1]
+                if param_val and hasattr(param_val, 'read'):
+                    param_val = param_val.read().decode('latin-1')
+                param_preview = param_val[:80] if param_val else 'NULL'
                 print(f"    - SUBARGUM: {obs[0]}, PARAMETRO: {param_preview}...")
+            
+            # Inicializa variáveis para dados da FC99999
+            ativos_mescla = []
             aplicacao_fc99999 = ""
             
             for obs in obs_fc99999:
@@ -1188,11 +1194,14 @@ def buscar_requisicao(nr_requisicao):
                 
                 # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
                 texto_upper = texto.upper()
-                if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
-                    aplicacao_fc99999 = texto[10:].strip()
-                elif subargum in ['00002', '00003']:
-                    # SUBARGUM 00002 e 00003 = Ativos da mescla
+                if "APLICA" in texto_upper and ":" in texto:
+                    # Extrai tudo após os dois pontos (funciona com APLICAÇÃO: ou APLICACAO:)
+                    aplicacao_fc99999 = texto.split(":", 1)[1].strip()
+                    print(f"  -> APLICAÇÃO encontrada: '{aplicacao_fc99999}'")
+                elif subargum in ['00001', '00002']:
+                    # SUBARGUM 00001 e 00002 = Ativos da mescla
                     ativos_mescla.append(texto)
+                    print(f"  -> ATIVO encontrado: '{texto[:50]}...'")
             
             # =====================================================
             # FALLBACK: Busca matérias-primas (FC12110) se não achou na FC99999
