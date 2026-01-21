@@ -239,7 +239,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       case 'composicao':
         return rotulo.composicao?.toUpperCase() || "";
       case 'requisicao':
-        return `REQ: ${rotulo.nrRequisicao}-${rotulo.nrItem}`;
+        return `REQ:${rotulo.nrRequisicao}-${rotulo.nrItem}`;
       case 'formula':
         return formatarFormula(rotulo.formula);
       case 'lote':

@@ -44,19 +44,36 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
     linhas: [
-      { id: 'linha1', campos: ['medico'], spacing: 'normal' },
-      { id: 'linha2', campos: ['paciente'], spacing: 'normal' },
-      { id: 'linha3', campos: ['formula'], spacing: 'wide' },
-      { id: 'linha4', campos: ['lote', 'fabricacao', 'validade'], spacing: 'compact' },
-      { id: 'linha5', campos: ['ph', 'aplicacao', 'contem'], spacing: 'compact' },
-      { id: 'linha6', campos: ['tipoUso'], spacing: 'normal' },
-      { id: 'linha7', campos: ['posologia'], spacing: 'normal' },
-      { id: 'linha8', campos: ['observacoes', 'registro'], spacing: 'compact' },
+      // Linha 1: Paciente (esquerda) + Requisição (direita)
+      { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
+      // Linha 2: Prescritor
+      { id: 'linha2', campos: ['medico'], spacing: 'normal' },
+      // Linha 3: Composição (ativos)
+      { id: 'linha3', campos: ['composicao'], spacing: 'normal' },
+      // Linha 4: pH, Lote, Fabricação, Validade
+      { id: 'linha4', campos: ['ph', 'lote', 'fabricacao', 'validade'], spacing: 'compact' },
+      // Linha 5: Tipo de Uso + Aplicação
+      { id: 'linha5', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
+      // Linha 6: Contém
+      { id: 'linha6', campos: ['contem'], spacing: 'normal' },
     ],
     campoConfig: {
-      ...defaultFieldConfig,
-      paciente: { visible: true, fontSize: 11, bold: true, uppercase: true },
-      formula: { visible: true, fontSize: 12, bold: true, uppercase: true },
+      // Todos os campos com MESMA fonte, SEM negrito - padronizado
+      paciente: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+      formula: { visible: false, fontSize: 9, bold: false, uppercase: true },
+      lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
+      fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+      validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
+      ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
+      tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      aplicacao: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      registro: { visible: false, fontSize: 9, bold: false, uppercase: false },
+      medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
+      posologia: { visible: false, fontSize: 9, bold: false, uppercase: false },
+      observacoes: { visible: false, fontSize: 9, bold: false, uppercase: false },
     },
   },
   A_PAC_GRAN: {
