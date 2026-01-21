@@ -63,7 +63,15 @@ export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiRes
     // API agora retorna array de fórmulas diretamente
     const rawData = result.data;
     const formulas = Array.isArray(rawData) ? rawData : [rawData];
-    const rotulos = formulas.map(mapearRotulo);
+    
+    // Mapeia cada fórmula com índice único para evitar IDs duplicados
+    const rotulos = formulas.map((item, index) => {
+      const rotulo = mapearRotulo(item);
+      // Criar ID único combinando requisição, índice e lote
+      rotulo.id = `${rotulo.nrRequisicao}-${index + 1}-${rotulo.lote || index}`;
+      rotulo.nrItem = String(index + 1); // Usar índice como número do item
+      return rotulo;
+    });
     
     return { success: true, data: rotulos };
   } catch (error) {
