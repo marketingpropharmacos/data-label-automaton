@@ -1133,18 +1133,46 @@ def buscar_requisicao(nr_requisicao):
             'SOLUCAO FISIOLOGICA', 'AGUA PARA INJETAVEIS', 'ALCOOL BENZILICO'
         ]
         
+        # Função para simplificar nome de mesclas
+        def simplificar_nome_mescla(nome_completo):
+            """Extrai nome simplificado de mesclas (ex: 'AMP TRISH 10MG/ML' -> 'TRISH')"""
+            if not nome_completo:
+                return ""
+            
+            nome = nome_completo.upper().strip()
+            
+            # Remove prefixos comuns
+            prefixos = ['AMP ', 'CX ', 'FRS ', 'PACOTE ', 'KIT ']
+            for prefixo in prefixos:
+                if nome.startswith(prefixo):
+                    nome = nome[len(prefixo):]
+                    break
+            
+            # Pega primeira palavra significativa (antes de números/concentração)
+            partes = nome.split()
+            if partes:
+                nome_simples = partes[0]
+                # Se nome muito curto ou genérico, pega mais palavras
+                if len(nome_simples) < 3 and len(partes) > 1:
+                    nome_simples = " ".join(partes[:2])
+                return nome_simples
+            
+            return nome_completo
+        
         data = []
         for idx, item in enumerate(itens):
             item_id = item[0]
             cdpro = item[5]
+            nome_produto = item[1] or ""  # DESCR da FC12110
             
             # =====================================================
             # PRIORIDADE: Busca dados na FC99999 (CONTAINING CDPRO)
             # Esta é a fonte principal para MESCLAS
             # =====================================================
             print(f"\n{'='*60}")
-            print(f"DEBUG FC99999 - Item {idx+1}")
+            print(f"DEBUG FC99999 - Item {item_id} (ITEMID original)")
             print(f"  CDPRO: '{cdpro}'")
+            print(f"  NOME PRODUTO: '{nome_produto}'")
             
             # Busca TODOS os argumentos que contêm este CDPRO
             cursor.execute("""
@@ -1198,12 +1226,44 @@ def buscar_requisicao(nr_requisicao):
                         print(f"  -> ATIVO encontrado: '{texto_limpo[:50]}...'")
 
             # =====================================================
-            # FALLBACK: Busca matérias-primas (FC12110) se não achou na FC99999
+            # LÓGICA: PRODUTO ÚNICO vs MESCLA
             # =====================================================
+            # Compara nome do produto com os ativos encontrados na FC99999
+            nome_produto_upper = nome_produto.upper()
+            
+            e_mescla = False
             composicao = ""
+            nome_formula = nome_produto  # Padrão: usa nome original
+            
             if ativos_mescla:
-                # Usa ativos da mescla (FC99999)
-                composicao = ", ".join(ativos_mescla)
+                # Verifica se os ativos são diferentes do nome do produto
+                for ativo in ativos_mescla:
+                    ativo_upper = ativo.upper()
+                    # Se o ativo NÃO é similar ao nome do produto, é uma mescla
+                    # Exemplo: produto "SKINBOOSTER" tem ativos "HIALURONATO" e "TRISH" -> é MESCLA
+                    # Exemplo: produto "GLICOSE" tem ativo "GLICOSE" -> é PRODUTO ÚNICO
+                    if nome_produto_upper not in ativo_upper and ativo_upper not in nome_produto_upper:
+                        # Verifica também palavras-chave do nome no ativo
+                        palavras_nome = nome_produto_upper.split()
+                        match_encontrado = False
+                        for palavra in palavras_nome:
+                            if len(palavra) > 3 and palavra in ativo_upper:
+                                match_encontrado = True
+                                break
+                        if not match_encontrado:
+                            e_mescla = True
+                            break
+                
+                if e_mescla:
+                    # É MESCLA: usa ativos como composição e nome simplificado
+                    composicao = ", ".join(ativos_mescla)
+                    nome_formula = simplificar_nome_mescla(nome_produto)
+                    print(f"  -> TIPO: MESCLA")
+                    print(f"  -> NOME SIMPLIFICADO: '{nome_formula}'")
+                else:
+                    # É PRODUTO ÚNICO: sem composição extra
+                    composicao = ""
+                    print(f"  -> TIPO: PRODUTO ÚNICO")
             else:
                 # Fallback: busca matérias-primas (R) do mesmo ITEMID
                 cursor.execute("""
@@ -1233,7 +1293,11 @@ def buscar_requisicao(nr_requisicao):
                         if descr.strip() not in ativos:
                             ativos.append(descr.strip())
                 
-                composicao = " + ".join(ativos)
+                # Se encontrou múltiplos ativos diferentes, pode ser mescla
+                if len(ativos) > 1:
+                    composicao = " + ".join(ativos)
+                    e_mescla = True
+                    nome_formula = simplificar_nome_mescla(nome_produto)
             
             # =====================================================
             # APLICAÇÃO: Prioriza FC99999, fallback para FC03300
@@ -1274,8 +1338,8 @@ def buscar_requisicao(nr_requisicao):
             
             rotulo = {
                 **dados_base,
-                "nrItem": str(idx + 1),
-                "formula": item[1] or "",
+                "nrItem": str(item_id),  # USA ITEMID ORIGINAL (corrige ordenação)
+                "formula": nome_formula,  # Nome simplificado para mesclas
                 "volume": str(item[2]) if item[2] else dados_base["volume"],
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
                 "lote": (item[4] or "").strip(),
@@ -1284,6 +1348,7 @@ def buscar_requisicao(nr_requisicao):
                 "aplicacao": aplicacao,
                 "descricaoProduto": descricao_produto,
                 "observacoes": composicao,
+                "tipoItem": "MESCLA" if e_mescla else "PRODUTO ÚNICO",  # Novo campo para debug
             }
             data.append(rotulo)
         
