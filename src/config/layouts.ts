@@ -56,6 +56,8 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha5', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
       // Linha 6: Contém
       { id: 'linha6', campos: ['contem'], spacing: 'normal' },
+      // Linha 7: Posologia + Registro
+      { id: 'linha7', campos: ['posologia', 'registro'], spacing: 'normal' },
     ],
     campoConfig: {
       // Todos os campos com MESMA fonte, SEM negrito - padronizado
@@ -70,9 +72,9 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
       aplicacao: { visible: true, fontSize: 9, bold: false, uppercase: true },
       contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      registro: { visible: false, fontSize: 9, bold: false, uppercase: false },
+      registro: { visible: true, fontSize: 9, bold: false, uppercase: false },
       medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      posologia: { visible: false, fontSize: 9, bold: false, uppercase: false },
+      posologia: { visible: true, fontSize: 9, bold: false, uppercase: true },
       observacoes: { visible: false, fontSize: 9, bold: false, uppercase: false },
     },
   },
