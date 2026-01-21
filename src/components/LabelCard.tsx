@@ -249,7 +249,8 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       case 'validade':
         return `V: ${formatarDataCurta(rotulo.dataValidade)}`;
       case 'ph':
-        return rotulo.ph ? `pH: ${rotulo.ph}` : "";
+        // Sempre exibir "pH:" mesmo sem valor - permite edição manual
+        return `pH: ${rotulo.ph || ""}`;
       case 'tipoUso':
         // Filtrar valores numéricos (pH incorreto vindo da API)
         const tipoUsoValor = rotulo.tipoUso?.toUpperCase() || "";
@@ -258,7 +259,8 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       case 'aplicacao':
         return aplicacao ? `APLICAÇÃO: ${aplicacao}` : "";
       case 'contem':
-        return rotulo.contem ? `CONT: ${rotulo.contem}` : "";
+        // Sempre exibir "CONTÉM:" mesmo sem valor - permite edição manual
+        return `CONTÉM: ${rotulo.contem || ""}`;
       case 'registro':
         return rotulo.numeroRegistro ? `REG: ${rotulo.numeroRegistro}` : "";
       case 'medico':
@@ -276,6 +278,10 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
   const shouldRenderField = (fieldId: LabelFieldId): boolean => {
     const config = layoutConfig.campoConfig[fieldId];
     if (!config?.visible) return false;
+    
+    // Campos que sempre aparecem (para edição manual)
+    const camposSempreVisiveis: LabelFieldId[] = ['ph', 'contem'];
+    if (camposSempreVisiveis.includes(fieldId)) return true;
     
     const content = getFieldContent(fieldId);
     if (content === "" || content === null) return false;
