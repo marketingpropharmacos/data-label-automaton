@@ -9,9 +9,10 @@ import LabelCard from "@/components/LabelCard";
 import LayoutSelector from "@/components/LayoutSelector";
 import LayoutEditor from "@/components/LayoutEditor";
 import { useToast } from "@/hooks/use-toast";
-import { getPharmacyConfig, getLabelConfig, getPrinterConfig } from "@/config/api";
+import { getPharmacyConfig, getLabelConfig, getPrinterConfig, getPrintAgentConfig } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao, imprimirRotulos } from "@/services/requisicaoService";
+import { imprimirViaAgente } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 
 const Index = () => {
@@ -122,24 +123,41 @@ const Index = () => {
 
     setIsPrinting(true);
     
-    // Busca configuração da impressora
-    const printerConfig = getPrinterConfig();
-    const caminho = `\\\\${printerConfig.nomePC}\\${printerConfig.nomeCompartilhamento}`;
-    
     // Filtra apenas os rótulos selecionados
     const rotulosSelecionados = rotulos.filter(r => selectedLabels.has(r.id));
     
-    // Envia para impressão
-    const result = await imprimirRotulos(
-      caminho,
-      rotulosSelecionados,
-      layoutType,
-      {
-        nome: pharmacyConfig.nome,
-        farmaceutico: pharmacyConfig.farmaceutico,
-        crf: pharmacyConfig.crf,
-      }
-    );
+    // Dados da farmácia
+    const farmaciaData = {
+      nome: pharmacyConfig.nome,
+      farmaceutico: pharmacyConfig.farmaceutico,
+      crf: pharmacyConfig.crf,
+    };
+
+    // Verifica se deve usar o agente HTTP
+    const agentConfig = getPrintAgentConfig();
+    
+    let result;
+    
+    if (agentConfig.enabled) {
+      // Usa agente HTTP local
+      result = await imprimirViaAgente(
+        agentConfig,
+        rotulosSelecionados,
+        layoutType,
+        farmaciaData
+      );
+    } else {
+      // Usa servidor Flask via compartilhamento
+      const printerConfig = getPrinterConfig();
+      const caminho = `\\\\${printerConfig.nomePC}\\${printerConfig.nomeCompartilhamento}`;
+      
+      result = await imprimirRotulos(
+        caminho,
+        rotulosSelecionados,
+        layoutType,
+        farmaciaData
+      );
+    }
     
     setIsPrinting(false);
     

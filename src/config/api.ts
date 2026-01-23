@@ -1,10 +1,11 @@
-import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig } from "@/types/requisicao";
+import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig, PrintAgentConfig } from "@/types/requisicao";
 
 const STORAGE_KEYS = {
   API_CONFIG: "label-system-api-config",
   PHARMACY_CONFIG: "label-system-pharmacy-config",
   LABEL_CONFIG: "label-system-label-config",
   PRINTER_CONFIG: "label-system-printer-config",
+  PRINT_AGENT_CONFIG: "label-system-print-agent-config",
 };
 
 // Configurações padrão
@@ -30,6 +31,12 @@ const DEFAULT_LABEL_CONFIG: LabelConfig = {
 const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   nomePC: "Campos2",
   nomeCompartilhamento: "Campos2",
+};
+
+const DEFAULT_PRINT_AGENT_CONFIG: PrintAgentConfig = {
+  enabled: false,
+  agentUrl: "http://192.168.10.105:5001",
+  impressora: "argox01",
 };
 
 // Funções de persistência
@@ -93,4 +100,21 @@ export const setPrinterConfig = (config: PrinterConfig): void => {
 export const getPrinterPath = (): string => {
   const config = getPrinterConfig();
   return `\\\\${config.nomePC}\\${config.nomeCompartilhamento}`;
+};
+
+export const getPrintAgentConfig = (): PrintAgentConfig => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.PRINT_AGENT_CONFIG);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return { ...DEFAULT_PRINT_AGENT_CONFIG, ...parsed };
+    }
+    return DEFAULT_PRINT_AGENT_CONFIG;
+  } catch {
+    return DEFAULT_PRINT_AGENT_CONFIG;
+  }
+};
+
+export const setPrintAgentConfig = (config: PrintAgentConfig): void => {
+  localStorage.setItem(STORAGE_KEYS.PRINT_AGENT_CONFIG, JSON.stringify(config));
 };
