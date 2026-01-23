@@ -1,11 +1,13 @@
-import { useState } from "react";
-import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   getApiConfig,
@@ -16,11 +18,13 @@ import {
   setLabelConfig,
   getPrinterConfig,
   setPrinterConfig,
-  getPrinterPath,
+  getPrintAgentConfig,
+  setPrintAgentConfig,
 } from "@/config/api";
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
-import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig } from "@/types/requisicao";
-import { getLayouts, defaultLayouts } from "@/config/layouts";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente } from "@/services/printAgentService";
+import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig } from "@/types/requisicao";
+import { getLayouts } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
 
 const LabelSettings = () => {
@@ -31,14 +35,45 @@ const LabelSettings = () => {
   const [editingLayout, setEditingLayout] = useState<LayoutType | null>(null);
   const [layouts, setLayouts] = useState<Record<LayoutType, LayoutConfig>>(getLayouts());
   
+  // Estados do agente HTTP
+  const [isTestingAgent, setIsTestingAgent] = useState(false);
+  const [isAgentOnline, setIsAgentOnline] = useState<boolean | null>(null);
+  const [isPrintingAgentTest, setIsPrintingAgentTest] = useState(false);
+  const [agentPrinters, setAgentPrinters] = useState<string[]>([]);
+  const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
+  
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
   const [labelConfig, setLabelConfigState] = useState<LabelConfig>(getLabelConfig());
   const [printerConfig, setPrinterConfigState] = useState<PrinterConfig>(getPrinterConfig());
+  const [agentConfig, setAgentConfigState] = useState<PrintAgentConfig>(getPrintAgentConfig());
+
+  // Verificar status do agente ao carregar
+  useEffect(() => {
+    if (agentConfig.agentUrl) {
+      checkAgentStatus();
+    }
+  }, []);
+
+  const checkAgentStatus = async () => {
+    const result = await verificarAgente(agentConfig.agentUrl);
+    setIsAgentOnline(result.success);
+    if (result.success) {
+      loadAgentPrinters();
+    }
+  };
+
+  const loadAgentPrinters = async () => {
+    setIsLoadingPrinters(true);
+    const result = await listarImpressoras(agentConfig.agentUrl);
+    if (result.success && result.data) {
+      setAgentPrinters(result.data.impressoras);
+    }
+    setIsLoadingPrinters(false);
+  };
 
   const handleLayoutSave = (layout: LayoutConfig) => {
     console.log('[LabelSettings] Salvando layout:', layout.tipo);
-    // Recarrega os layouts do localStorage para garantir sincronização
     const updatedLayouts = getLayouts();
     setLayouts(updatedLayouts);
     setEditingLayout(null);
@@ -139,11 +174,61 @@ const LabelSettings = () => {
     }
   };
 
+  // Handlers do Agente HTTP
+  const handleSaveAgent = () => {
+    setPrintAgentConfig(agentConfig);
+    toast({
+      title: "Configurações salvas",
+      description: "Configurações do agente HTTP atualizadas.",
+    });
+  };
+
+  const handleTestAgent = async () => {
+    setIsTestingAgent(true);
+    const result = await verificarAgente(agentConfig.agentUrl);
+    setIsTestingAgent(false);
+    setIsAgentOnline(result.success);
+    
+    if (result.success) {
+      toast({
+        title: "Agente online!",
+        description: `Conectado: ${result.data?.impressora_padrao || 'OK'}`,
+      });
+      loadAgentPrinters();
+    } else {
+      toast({
+        title: "Agente offline",
+        description: result.error || "Não foi possível conectar ao agente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePrintAgentTest = async () => {
+    setIsPrintingAgentTest(true);
+    const result = await testeImpressaoAgente(agentConfig.agentUrl);
+    setIsPrintingAgentTest(false);
+    
+    if (result.success) {
+      toast({
+        title: "Teste enviado!",
+        description: "Etiqueta de teste enviada via agente HTTP.",
+      });
+    } else {
+      toast({
+        title: "Falha na impressão",
+        description: result.error || "Não foi possível imprimir via agente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="servidor" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="servidor">Servidor</TabsTrigger>
+          <TabsTrigger value="agente">Agente HTTP</TabsTrigger>
           <TabsTrigger value="impressora">Impressora</TabsTrigger>
           <TabsTrigger value="farmacia">Farmácia</TabsTrigger>
           <TabsTrigger value="rotulo">Rótulo</TabsTrigger>
@@ -203,15 +288,133 @@ const LabelSettings = () => {
           </Card>
         </TabsContent>
 
+        <TabsContent value="agente">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Wifi className="h-5 w-5" />
+                Agente HTTP de Impressão
+                {isAgentOnline !== null && (
+                  <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
+                    isAgentOnline 
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+                      : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                  }`}>
+                    {isAgentOnline ? 'Online' : 'Offline'}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div className="space-y-0.5">
+                  <Label htmlFor="agentEnabled" className="text-base font-medium">Usar Agente HTTP</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Quando ativado, a impressão é enviada diretamente para o PC local
+                  </p>
+                </div>
+                <Switch
+                  id="agentEnabled"
+                  checked={agentConfig.enabled}
+                  onCheckedChange={(checked) => setAgentConfigState({ ...agentConfig, enabled: checked })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agentUrl">URL do Agente</Label>
+                <Input
+                  id="agentUrl"
+                  placeholder="http://192.168.10.105:5001"
+                  value={agentConfig.agentUrl}
+                  onChange={(e) => setAgentConfigState({ ...agentConfig, agentUrl: e.target.value })}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Endereço do agente Flask rodando no PC da impressora (porta 5001)
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agentPrinter">Impressora</Label>
+                <Select
+                  value={agentConfig.impressora}
+                  onValueChange={(value) => setAgentConfigState({ ...agentConfig, impressora: value })}
+                >
+                  <SelectTrigger id="agentPrinter">
+                    <SelectValue placeholder="Selecione a impressora" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {agentPrinters.length > 0 ? (
+                      agentPrinters.map((printer) => (
+                        <SelectItem key={printer} value={printer}>
+                          {printer}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value={agentConfig.impressora}>
+                        {agentConfig.impressora}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">
+                  Nome da impressora instalada no PC do agente
+                </p>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={handleSaveAgent}>
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleTestAgent}
+                  disabled={isTestingAgent}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isTestingAgent ? 'animate-spin' : ''}`} />
+                  Testar Conexão
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  onClick={handlePrintAgentTest}
+                  disabled={isPrintingAgentTest || !isAgentOnline}
+                >
+                  <TestTube className={`h-4 w-4 mr-2 ${isPrintingAgentTest ? 'animate-pulse' : ''}`} />
+                  Imprimir Teste
+                </Button>
+              </div>
+
+              {agentConfig.enabled && (
+                <div className="p-3 bg-primary/10 border border-primary/20 rounded-md">
+                  <p className="text-sm font-medium text-primary">
+                    ✓ Modo Agente HTTP ativado
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    A impressão será enviada para {agentConfig.agentUrl} → {agentConfig.impressora}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="impressora">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Printer className="h-5 w-5" />
-                Configurações da Impressora
+                Configurações da Impressora (via Servidor)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {agentConfig.enabled && (
+                <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md mb-4">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    ⚠️ O Agente HTTP está ativado. Esta configuração só será usada se o agente for desativado.
+                  </p>
+                </div>
+              )}
+              
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="nomePC">Nome do PC</Label>

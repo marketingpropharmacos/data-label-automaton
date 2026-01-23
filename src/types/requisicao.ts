@@ -107,3 +107,9 @@ export interface PrinterConfig {
   nomePC: string;
   nomeCompartilhamento: string;
 }
+
+export interface PrintAgentConfig {
+  enabled: boolean;
+  agentUrl: string;
+  impressora: string;
+}
