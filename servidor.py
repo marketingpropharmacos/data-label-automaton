@@ -1117,9 +1117,9 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca itens da requisição (fórmulas)
+        # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
         cursor.execute("""
-            SELECT I.ITEMID, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO
+            SELECT I.ITEMID, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN
             FROM FC12110 I
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
             ORDER BY I.ITEMID
@@ -1163,25 +1163,38 @@ def buscar_requisicao(nr_requisicao):
         for idx, item in enumerate(itens):
             item_id = item[0]
             cdpro = item[5]
+            cdprin = item[6]  # CDPRIN - código do produto principal (base para mesclas)
             nome_produto = item[1] or ""  # DESCR da FC12110
             
             # =====================================================
-            # PRIORIDADE: Busca dados na FC99999 (CONTAINING CDPRO)
-            # Esta é a fonte principal para MESCLAS
+            # PRIORIDADE: Busca dados na FC99999 usando CDPRIN quando disponível
+            # CDPRIN contém o código do produto base (ex: 92779 para TRISH)
+            # CDPRO contém o código do produto específico (ex: 92781 para SKINBOOSTER)
             # =====================================================
             print(f"\n{'='*60}")
             print(f"DEBUG FC99999 - Item {item_id} (ITEMID original)")
             print(f"  CDPRO: '{cdpro}'")
+            print(f"  CDPRIN: '{cdprin}'")
             print(f"  NOME PRODUTO: '{nome_produto}'")
             
-            # Busca exata pelo CDPRO em diferentes formatos
+            # Determina qual código usar para buscar composição
+            # Se CDPRIN existe e é diferente de CDPRO, usa CDPRIN (é uma mescla/derivado)
+            cdprin_str = str(cdprin).strip() if cdprin else ""
             cdpro_str = str(cdpro).strip()
-            cdpro_padded = cdpro_str.zfill(8)  # Ex: '00092781'
             
-            print(f"  CDPRO buscado: '{cdpro_str}'")
-            print(f"  CDPRO padded: '{cdpro_padded}'")
+            if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
+                codigo_busca = cdprin_str
+                print(f"  -> USANDO CDPRIN ({cdprin_str}) para buscar composição (MESCLA/DERIVADO)")
+            else:
+                codigo_busca = cdpro_str
+                print(f"  -> USANDO CDPRO ({cdpro_str}) para buscar composição")
             
-            # Query com match exato em múltiplos formatos
+            codigo_busca_padded = codigo_busca.zfill(8)  # Ex: '00092779'
+            
+            print(f"  Código buscado: '{codigo_busca}'")
+            print(f"  Código padded: '{codigo_busca_padded}'")
+            
+            # Query com match exato em múltiplos formatos usando codigo_busca (CDPRIN ou CDPRO)
             cursor.execute("""
                 SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
                 FROM FC99999 
@@ -1190,7 +1203,7 @@ def buscar_requisicao(nr_requisicao):
                    OR ARGUMENTO = ?
                    OR ARGUMENTO = ?
                 ORDER BY SUBARGUM
-            """, (cdpro_str, cdpro_padded, f'OBSFIC{cdpro_str}', f'OBSFIC{cdpro_padded}'))
+            """, (codigo_busca, codigo_busca_padded, f'OBSFIC{codigo_busca}', f'OBSFIC{codigo_busca_padded}'))
             todos_args_exato = cursor.fetchall()
             print(f"  Argumentos EXATOS encontrados: {len(todos_args_exato)}")
             
@@ -1202,22 +1215,22 @@ def buscar_requisicao(nr_requisicao):
                     FROM FC99999 
                     WHERE ARGUMENTO CONTAINING ?
                     ORDER BY ARGUMENTO, SUBARGUM
-                """, (cdpro_str,))
+                """, (codigo_busca,))
                 todos_args_containing = cursor.fetchall()
                 
-                # Filtra apenas os que correspondem exatamente ao CDPRO
+                # Filtra apenas os que correspondem exatamente ao código buscado
                 todos_args = []
                 for arg in todos_args_containing:
                     argumento = arg[0].strip() if arg[0] else ""
-                    # Aceita se termina com o CDPRO ou é exatamente o CDPRO
-                    if (argumento.endswith(cdpro_str) or 
-                        argumento.endswith(cdpro_padded) or
-                        argumento == cdpro_str or 
-                        argumento == cdpro_padded):
+                    # Aceita se termina com o código ou é exatamente o código
+                    if (argumento.endswith(codigo_busca) or 
+                        argumento.endswith(codigo_busca_padded) or
+                        argumento == codigo_busca or 
+                        argumento == codigo_busca_padded):
                         todos_args.append(arg)
                         print(f"    VALIDADO: '{argumento}'")
                     else:
-                        print(f"    REJEITADO: '{argumento}' (não corresponde ao CDPRO)")
+                        print(f"    REJEITADO: '{argumento}' (não corresponde ao código)")
                 print(f"  Argumentos VALIDADOS após CONTAINING: {len(todos_args)}")
             else:
                 todos_args = todos_args_exato
