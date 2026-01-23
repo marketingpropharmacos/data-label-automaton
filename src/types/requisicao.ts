@@ -102,3 +102,8 @@ export interface ApiConfig {
   serverUrl: string;
   codigoFilial: string;
 }
+
+export interface PrinterConfig {
+  nomePC: string;
+  nomeCompartilhamento: string;
+}

@@ -1,9 +1,10 @@
-import { ApiConfig, PharmacyConfig, LabelConfig } from "@/types/requisicao";
+import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig } from "@/types/requisicao";
 
 const STORAGE_KEYS = {
   API_CONFIG: "label-system-api-config",
   PHARMACY_CONFIG: "label-system-pharmacy-config",
   LABEL_CONFIG: "label-system-label-config",
+  PRINTER_CONFIG: "label-system-printer-config",
 };
 
 // Configurações padrão
@@ -24,6 +25,11 @@ const DEFAULT_PHARMACY_CONFIG: PharmacyConfig = {
 const DEFAULT_LABEL_CONFIG: LabelConfig = {
   larguraMM: 80,
   alturaMM: 50,
+};
+
+const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
+  nomePC: "Campos2",
+  nomeCompartilhamento: "Campos2",
 };
 
 // Funções de persistência
@@ -69,4 +75,22 @@ export const getLabelConfig = (): LabelConfig => {
 
 export const setLabelConfig = (config: LabelConfig): void => {
   localStorage.setItem(STORAGE_KEYS.LABEL_CONFIG, JSON.stringify(config));
+};
+
+export const getPrinterConfig = (): PrinterConfig => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.PRINTER_CONFIG);
+    return stored ? JSON.parse(stored) : DEFAULT_PRINTER_CONFIG;
+  } catch {
+    return DEFAULT_PRINTER_CONFIG;
+  }
+};
+
+export const setPrinterConfig = (config: PrinterConfig): void => {
+  localStorage.setItem(STORAGE_KEYS.PRINTER_CONFIG, JSON.stringify(config));
+};
+
+export const getPrinterPath = (): string => {
+  const config = getPrinterConfig();
+  return `\\\\${config.nomePC}\\${config.nomeCompartilhamento}`;
 };

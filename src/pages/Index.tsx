@@ -9,13 +9,14 @@ import LabelCard from "@/components/LabelCard";
 import LayoutSelector from "@/components/LayoutSelector";
 import LayoutEditor from "@/components/LayoutEditor";
 import { useToast } from "@/hooks/use-toast";
-import { getPharmacyConfig, getLabelConfig } from "@/config/api";
+import { getPharmacyConfig, getLabelConfig, getPrinterConfig } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
-import { buscarRequisicao } from "@/services/requisicaoService";
+import { buscarRequisicao, imprimirRotulos } from "@/services/requisicaoService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [rotulos, setRotulos] = useState<RotuloItem[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [searchedRequisition, setSearchedRequisition] = useState("");
@@ -108,7 +109,7 @@ const Index = () => {
     setSelectedLabels(new Set());
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const selectedCount = selectedLabels.size;
     if (selectedCount === 0) {
       toast({
@@ -118,12 +119,42 @@ const Index = () => {
       });
       return;
     }
+
+    setIsPrinting(true);
     
-    // TODO: Implementar impressão real para Argox
-    toast({
-      title: "Imprimindo...",
-      description: `${selectedCount} rótulo(s) enviado(s) para a impressora Argox.`,
-    });
+    // Busca configuração da impressora
+    const printerConfig = getPrinterConfig();
+    const caminho = `\\\\${printerConfig.nomePC}\\${printerConfig.nomeCompartilhamento}`;
+    
+    // Filtra apenas os rótulos selecionados
+    const rotulosSelecionados = rotulos.filter(r => selectedLabels.has(r.id));
+    
+    // Envia para impressão
+    const result = await imprimirRotulos(
+      caminho,
+      rotulosSelecionados,
+      layoutType,
+      {
+        nome: pharmacyConfig.nome,
+        farmaceutico: pharmacyConfig.farmaceutico,
+        crf: pharmacyConfig.crf,
+      }
+    );
+    
+    setIsPrinting(false);
+    
+    if (result.success) {
+      toast({
+        title: "Impressão concluída!",
+        description: `${result.data?.impressos || selectedCount} rótulo(s) enviado(s) para a impressora.`,
+      });
+    } else {
+      toast({
+        title: "Erro na impressão",
+        description: result.error || "Não foi possível imprimir os rótulos.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -208,11 +239,11 @@ const Index = () => {
                   <Button 
                     size="sm" 
                     onClick={handlePrint}
-                    disabled={selectedLabels.size === 0}
+                    disabled={selectedLabels.size === 0 || isPrinting}
                     className="bg-secondary hover:bg-secondary/90"
                   >
-                    <Printer className="h-4 w-4 mr-1" />
-                    Imprimir
+                    <Printer className={`h-4 w-4 mr-1 ${isPrinting ? 'animate-pulse' : ''}`} />
+                    {isPrinting ? 'Imprimindo...' : 'Imprimir'}
                   </Button>
                 </div>
               </CardHeader>

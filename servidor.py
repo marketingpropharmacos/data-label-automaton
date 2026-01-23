@@ -1,6 +1,20 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import fdb
+import platform
+
+# Importa win32print apenas no Windows
+if platform.system() == 'Windows':
+    try:
+        import win32print
+        import win32ui
+        PRINTING_AVAILABLE = True
+    except ImportError:
+        print("AVISO: pywin32 não instalado. Execute: pip install pywin32")
+        PRINTING_AVAILABLE = False
+else:
+    PRINTING_AVAILABLE = False
+    print("AVISO: Sistema não-Windows detectado. Impressão desabilitada.")
 
 app = Flask(__name__)
 CORS(app)
@@ -1414,9 +1428,220 @@ def buscar_requisicao(nr_requisicao):
         print(f"Erro: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ============================================
+# FUNÇÕES DE IMPRESSÃO
+# ============================================
+
+def gerar_ppla_ampcx(rotulo, farmacia):
+    """
+    Gera comandos PPLA para layout AMP_CX (76mm x 35mm).
+    Argox OS-2140 @ 203dpi: 76mm = 608 dots, 35mm = 280 dots
+    """
+    # Dados do rótulo
+    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    nr_req = rotulo.get('nrRequisicao', '')
+    nr_item = rotulo.get('nrItem', '1')
+    
+    # Médico
+    nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
+    prefixo_crm = rotulo.get('prefixoCRM', '')
+    numero_crm = rotulo.get('numeroCRM', '')
+    uf_crm = rotulo.get('ufCRM', '')
+    crm_completo = f"{prefixo_crm}{numero_crm}/{uf_crm}".strip('/')
+    
+    # Composição (prioriza composicao, senão usa formula)
+    composicao = rotulo.get('composicao', '') or rotulo.get('formula', '')
+    composicao = (composicao or '')[:50].upper()
+    
+    # Dados de fabricação
+    ph = rotulo.get('ph', '')
+    lote = rotulo.get('lote', '')
+    fab = rotulo.get('dataFabricacao', '')
+    val = rotulo.get('dataValidade', '')
+    
+    # Aplicação e conteúdo
+    aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
+    contem = (rotulo.get('contem', '') or '')[:30].upper()
+    
+    # Registro
+    registro = rotulo.get('numeroRegistro', '')
+    
+    # Monta linha 4: pH, Lote, Fab, Val
+    linha4_parts = []
+    if ph:
+        linha4_parts.append(f"pH:{ph}")
+    if lote:
+        linha4_parts.append(f"LT:{lote}")
+    if fab:
+        linha4_parts.append(f"F:{fab}")
+    if val:
+        linha4_parts.append(f"V:{val}")
+    linha4 = " ".join(linha4_parts)
+    
+    # Comandos PPLA
+    # A = texto: x,y,rotação,fonte,mult_h,mult_v,N/R,texto
+    # Fonte 2 = 10x16, Fonte 1 = 8x12
+    comandos = [
+        "N",                                                    # Limpa buffer
+        "q608",                                                 # Largura em dots
+        "Q280,24",                                              # Altura + gap
+        f'A20,15,0,2,1,1,N,"{paciente}"',                       # L1: Paciente
+        f'A470,15,0,1,1,1,N,"REQ:{nr_req}-{nr_item}"',          # L1: Requisição (direita)
+        f'A20,45,0,1,1,1,N,"DR. {nome_medico[:25]} CRM {crm_completo}"',  # L2: Médico
+        f'A20,75,0,2,1,1,N,"{composicao}"',                     # L3: Composição
+        f'A20,105,0,1,1,1,N,"{linha4}"',                        # L4: pH/Lote/Fab/Val
+        f'A20,135,0,1,1,1,N,"APLICACAO: {aplicacao}"',          # L5: Aplicação
+        f'A20,165,0,1,1,1,N,"CONTEM: {contem}"',                # L6: Contém
+        f'A20,195,0,1,1,1,N,"Reg: {registro}"',                 # L7: Registro
+        "P1",                                                   # Imprime 1 cópia
+    ]
+    
+    return "\r\n".join(comandos)
+
+
+def imprimir_compartilhada(caminho_impressora, comandos):
+    """
+    Envia comandos PPLA para impressora compartilhada Windows.
+    caminho_impressora: ex: \\\\Campos2\\Campos2
+    """
+    if not PRINTING_AVAILABLE:
+        return {"success": False, "error": "pywin32 não disponível"}
+    
+    try:
+        # Abre a impressora
+        hPrinter = win32print.OpenPrinter(caminho_impressora)
+        
+        try:
+            # Inicia documento
+            hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta", None, "RAW"))
+            
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                
+                # Codifica comandos em CP850 (padrão Argox)
+                dados = comandos.encode('cp850', errors='replace')
+                win32print.WritePrinter(hPrinter, dados)
+                
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+        
+        return {"success": True}
+    
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================
+# ENDPOINTS DE IMPRESSÃO
+# ============================================
+
+@app.route('/api/verificar-impressora', methods=['POST'])
+def verificar_impressora():
+    """Verifica se a impressora está acessível."""
+    if not PRINTING_AVAILABLE:
+        return jsonify({"success": False, "error": "pywin32 não instalado no servidor"}), 500
+    
+    data = request.get_json()
+    caminho = data.get('caminho', '')
+    
+    if not caminho:
+        return jsonify({"success": False, "error": "Caminho da impressora não informado"}), 400
+    
+    try:
+        hPrinter = win32print.OpenPrinter(caminho)
+        win32print.ClosePrinter(hPrinter)
+        return jsonify({"success": True, "message": "Impressora acessível"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/imprimir-teste', methods=['POST'])
+def imprimir_teste():
+    """Imprime etiqueta de teste."""
+    if not PRINTING_AVAILABLE:
+        return jsonify({"success": False, "error": "pywin32 não instalado no servidor"}), 500
+    
+    data = request.get_json()
+    caminho = data.get('caminho', '')
+    
+    if not caminho:
+        return jsonify({"success": False, "error": "Caminho da impressora não informado"}), 400
+    
+    # Etiqueta de teste simples
+    comandos = [
+        "N",
+        "q608",
+        "Q280,24",
+        'A20,50,0,3,1,1,N,"*** TESTE DE IMPRESSAO ***"',
+        'A20,100,0,2,1,1,N,"Argox OS-2140 - PPLA"',
+        'A20,150,0,2,1,1,N,"Impressora configurada com sucesso!"',
+        'A20,200,0,1,1,1,N,"Sistema de Rotulos - Pro Pharmacos"',
+        "P1",
+    ]
+    
+    resultado = imprimir_compartilhada(caminho, "\r\n".join(comandos))
+    
+    if resultado["success"]:
+        return jsonify({"success": True, "message": "Etiqueta de teste enviada"})
+    else:
+        return jsonify({"success": False, "error": resultado["error"]}), 500
+
+
+@app.route('/api/imprimir', methods=['POST'])
+def imprimir_rotulos():
+    """Imprime rótulos selecionados."""
+    if not PRINTING_AVAILABLE:
+        return jsonify({"success": False, "error": "pywin32 não instalado no servidor"}), 500
+    
+    data = request.get_json()
+    caminho = data.get('caminho', '')
+    rotulos = data.get('rotulos', [])
+    layout_tipo = data.get('layoutTipo', 'AMP_CX')
+    farmacia = data.get('farmacia', {})
+    
+    if not caminho:
+        return jsonify({"success": False, "error": "Caminho da impressora não informado"}), 400
+    
+    if not rotulos:
+        return jsonify({"success": False, "error": "Nenhum rótulo para imprimir"}), 400
+    
+    impressos = 0
+    erros = []
+    
+    for rotulo in rotulos:
+        try:
+            # Gera comandos PPLA (por enquanto só AMP_CX)
+            if layout_tipo == 'AMP_CX':
+                comandos = gerar_ppla_ampcx(rotulo, farmacia)
+            else:
+                # Para outros layouts, usa o mesmo por enquanto
+                comandos = gerar_ppla_ampcx(rotulo, farmacia)
+            
+            resultado = imprimir_compartilhada(caminho, comandos)
+            
+            if resultado["success"]:
+                impressos += 1
+            else:
+                erros.append(f"Rótulo {rotulo.get('id', '?')}: {resultado['error']}")
+        
+        except Exception as e:
+            erros.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
+    
+    if impressos == len(rotulos):
+        return jsonify({"success": True, "impressos": impressos})
+    elif impressos > 0:
+        return jsonify({"success": True, "impressos": impressos, "erros": erros})
+    else:
+        return jsonify({"success": False, "error": "Nenhum rótulo impresso", "erros": erros}), 500
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Servidor iniciando na porta 5000...")
+    print(f"Impressão disponível: {PRINTING_AVAILABLE}")
     print("Teste: http://localhost:5000/api/health")
     print("=" * 50)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

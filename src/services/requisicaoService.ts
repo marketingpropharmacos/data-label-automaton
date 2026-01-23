@@ -99,3 +99,86 @@ export const verificarConexao = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// ============================================
+// FUNÇÕES DE IMPRESSÃO
+// ============================================
+
+export const verificarImpressora = async (caminho: string): Promise<ApiResponse<{ message: string }>> => {
+  const config = getApiConfig();
+  
+  try {
+    const response = await fetch(`${config.serverUrl}/api/verificar-impressora`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({ caminho }),
+    });
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro ao verificar impressora",
+    };
+  }
+};
+
+export const imprimirTeste = async (caminho: string): Promise<ApiResponse<{ message: string }>> => {
+  const config = getApiConfig();
+  
+  try {
+    const response = await fetch(`${config.serverUrl}/api/imprimir-teste`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({ caminho }),
+    });
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro ao imprimir teste",
+    };
+  }
+};
+
+export const imprimirRotulos = async (
+  caminho: string,
+  rotulos: RotuloItem[],
+  layoutTipo: string,
+  farmacia: { nome: string; farmaceutico: string; crf: string }
+): Promise<ApiResponse<{ impressos: number; erros?: string[] }>> => {
+  const config = getApiConfig();
+  
+  try {
+    const response = await fetch(`${config.serverUrl}/api/imprimir`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({
+        caminho,
+        rotulos,
+        layoutTipo,
+        farmacia,
+      }),
+    });
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro ao imprimir rótulos",
+    };
+  }
+};
