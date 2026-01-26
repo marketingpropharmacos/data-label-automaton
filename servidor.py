@@ -1232,17 +1232,21 @@ def buscar_requisicao(nr_requisicao):
                 """, (codigo_busca,))
                 todos_args_containing = cursor.fetchall()
                 
-                # Filtra apenas os que correspondem exatamente ao código buscado
+                # Filtra registros que contêm o código buscado (correção: aceita sufixos)
                 todos_args = []
                 for arg in todos_args_containing:
                     argumento = arg[0].strip() if arg[0] else ""
-                    # Aceita se termina com o código ou é exatamente o código
-                    if (argumento.endswith(codigo_busca) or 
-                        argumento.endswith(codigo_busca_padded) or
-                        argumento == codigo_busca or 
-                        argumento == codigo_busca_padded):
+                    # Remove prefixo OBSFIC para comparação
+                    codigo_no_arg = argumento.replace("OBSFIC", "").strip()
+                    
+                    # Aceita se o código buscado está CONTIDO no argumento (não só terminando)
+                    # Ex: OBSFIC9244614 -> extrai "9244614" -> contém "92446"? -> ACEITA
+                    if (codigo_busca in codigo_no_arg or 
+                        codigo_busca_padded in codigo_no_arg or
+                        argumento.endswith(codigo_busca) or 
+                        argumento.endswith(codigo_busca_padded)):
                         todos_args.append(arg)
-                        print(f"    VALIDADO: '{argumento}'")
+                        print(f"    VALIDADO: '{argumento}' (código contido em '{codigo_no_arg}')")
                     else:
                         print(f"    REJEITADO: '{argumento}' (não corresponde ao código)")
                 print(f"  Argumentos VALIDADOS após CONTAINING: {len(todos_args)}")
@@ -1252,6 +1256,9 @@ def buscar_requisicao(nr_requisicao):
             # Inicializa variáveis para dados da FC99999
             ativos_mescla = []
             aplicacao_fc99999 = ""
+            
+            # Lista de prefixos/palavras que indicam que NÃO é um ativo real
+            IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO']
             
             # Processa TODOS os registros encontrados com CONTAINING
             for arg in todos_args:
@@ -1280,6 +1287,11 @@ def buscar_requisicao(nr_requisicao):
                     # SUBARGUM 00001 e 00002 = Ativos da mescla
                     # Evita adicionar a linha de APLICAÇÃO como ativo
                     if "APLICA" not in texto_upper:
+                        # FILTRO: Ignora registros que são instruções/etiquetas, não ativos
+                        if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
+                            print(f"    IGNORADO (não é ativo): '{texto[:50]}...'")
+                            continue
+                        
                         # Remove prefixo OBS: se existir
                         texto_limpo = texto
                         if texto_upper.startswith("OBS:"):
@@ -1301,30 +1313,37 @@ def buscar_requisicao(nr_requisicao):
             nome_formula = nome_produto  # Padrão: usa nome original
             
             if ativos_mescla:
-                # Verifica se os ativos são diferentes do nome do produto
-                for ativo in ativos_mescla:
-                    ativo_upper = ativo.upper()
-                    # Se o ativo NÃO é similar ao nome do produto, é uma mescla
-                    # Exemplo: produto "SKINBOOSTER" tem ativos "HIALURONATO" e "TRISH" -> é MESCLA
-                    # Exemplo: produto "GLICOSE" tem ativo "GLICOSE" -> é PRODUTO ÚNICO
-                    if nome_produto_upper not in ativo_upper and ativo_upper not in nome_produto_upper:
-                        # Verifica também palavras-chave do nome no ativo
-                        palavras_nome = nome_produto_upper.split()
-                        match_encontrado = False
-                        for palavra in palavras_nome:
-                            if len(palavra) > 3 and palavra in ativo_upper:
-                                match_encontrado = True
-                                break
-                        if not match_encontrado:
-                            e_mescla = True
-                            break
+                primeiro_ativo = ativos_mescla[0] if ativos_mescla else ""
+                
+                # =====================================================
+                # NOVA LÓGICA DE CLASSIFICAÇÃO (mais confiável)
+                # =====================================================
+                
+                # CRITÉRIO 1: CDPRIN diferente de CDPRO indica derivado/mescla
+                if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
+                    e_mescla = True
+                    print(f"  -> MESCLA (CDPRIN {cdprin_str} diferente de CDPRO {cdpro_str})")
+                
+                # CRITÉRIO 2: Primeiro ativo contém vírgula (lista de componentes)
+                elif ',' in primeiro_ativo:
+                    e_mescla = True
+                    print(f"  -> MESCLA (ativos com vírgula = múltiplos componentes)")
+                
+                # CRITÉRIO 3: Nome do produto NÃO está contido no ativo
+                elif primeiro_ativo and nome_produto_upper not in primeiro_ativo.upper():
+                    # Verifica se é realmente diferente usando palavras-chave
+                    palavras_produto = [p for p in nome_produto_upper.split() if len(p) > 3]
+                    if not any(p in primeiro_ativo.upper() for p in palavras_produto[:2]):
+                        e_mescla = True
+                        print(f"  -> MESCLA (ativo diferente do nome do produto)")
                 
                 if e_mescla:
-                    # É MESCLA: usa ativos como composição e nome simplificado
-                    composicao = ", ".join(ativos_mescla)
-                    nome_formula = simplificar_nome_mescla(nome_produto)
+                    # É MESCLA: usa o primeiro ativo como composição (geralmente é a lista completa)
+                    composicao = primeiro_ativo
+                    # Remove prefixo AMP do nome se houver
+                    nome_formula = nome_produto.replace("AMP ", "").strip()
                     print(f"  -> TIPO: MESCLA")
-                    print(f"  -> NOME SIMPLIFICADO: '{nome_formula}'")
+                    print(f"  -> COMPOSIÇÃO: '{composicao[:60]}...'")
                 else:
                     # É PRODUTO ÚNICO: sem composição extra
                     composicao = ""
