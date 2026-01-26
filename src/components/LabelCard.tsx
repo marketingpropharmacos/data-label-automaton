@@ -151,10 +151,21 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     return lote ? `${lote}/${ano}` : "";
   };
 
+  // ============================================
+  // REGRA DE EXCLUSÃO MÚTUA: composicao vs formula
+  // - MESCLA: composicao tem valor → mostrar SÓ composicao
+  // - PRODUTO ÚNICO: composicao vazio → mostrar SÓ formula
+  // ============================================
+  const isMescla = (): boolean => {
+    const composicao = (rotulo.composicao || "").trim();
+    return composicao.length > 0;
+  };
+
   // Gerar texto formatado inicial para edição - ordem padronizada
   const generateInitialText = (): string => {
     const aplicacao = getAplicacao();
     const observacoes = getObservacoes();
+    const mescla = isMescla();
     
     const lines: string[] = [];
     
@@ -165,12 +176,15 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     // Linha 2: Paciente
     if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
     
-    // Linha 3: Composição (ativos da mescla)
-    if (rotulo.composicao) lines.push(rotulo.composicao.toUpperCase());
-    
-    // Linha 4: Fórmula/Produto
-    const formula = formatarFormula(rotulo.formula);
-    if (formula) lines.push(formula);
+    // Linha 3: Composição OU Fórmula (exclusão mútua)
+    if (mescla) {
+      // MESCLA: mostra só os ativos
+      lines.push(rotulo.composicao!.toUpperCase());
+    } else {
+      // PRODUTO ÚNICO: mostra só o nome do ativo
+      const formula = formatarFormula(rotulo.formula);
+      if (formula) lines.push(formula);
+    }
     
     // Linha 4: Lote, Fabricação, Validade (em uma linha)
     const loteInfo: string[] = [];
@@ -226,22 +240,26 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
   };
 
   // Obter conteúdo do campo (para modo visual)
+  // Aplica regra de exclusão mútua: composicao vs formula
   const getFieldContent = (fieldId: LabelFieldId): React.ReactNode => {
     const config = layoutConfig.campoConfig[fieldId];
     if (!config?.visible) return null;
 
     const aplicacao = getAplicacao();
     const observacoes = getObservacoes();
+    const mescla = isMescla();
 
     switch (fieldId) {
       case 'paciente':
         return rotulo.nomePaciente || "";
       case 'composicao':
-        return rotulo.composicao?.toUpperCase() || "";
+        // MESCLA: mostra composição / PRODUTO ÚNICO: oculta (retorna vazio)
+        return mescla ? rotulo.composicao!.toUpperCase() : "";
       case 'requisicao':
         return `REQ:${rotulo.nrRequisicao}-${rotulo.nrItem}`;
       case 'formula':
-        return formatarFormula(rotulo.formula);
+        // PRODUTO ÚNICO: mostra fórmula / MESCLA: oculta (retorna vazio)
+        return mescla ? "" : formatarFormula(rotulo.formula);
       case 'lote':
         return `L: ${formatarLote() || "___"}`;
       case 'fabricacao':
