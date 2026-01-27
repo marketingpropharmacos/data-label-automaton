@@ -1253,14 +1253,43 @@ def buscar_requisicao(nr_requisicao):
             else:
                 todos_args = todos_args_exato
             
+            # =====================================================
+            # BUSCA EM CASCATA: Se não encontrou com CDPRIN, tenta CDPRO
+            # =====================================================
+            if not todos_args and cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
+                print(f"  -> Sem resultados com CDPRIN. Tentando CDPRO ({cdpro_str})...")
+                cdpro_padded = cdpro_str.zfill(8)
+                
+                cursor.execute("""
+                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                    FROM FC99999 
+                    WHERE ARGUMENTO CONTAINING ?
+                    ORDER BY ARGUMENTO, SUBARGUM
+                """, (cdpro_str,))
+                todos_args_cdpro = cursor.fetchall()
+                
+                # Valida os resultados da busca por CDPRO
+                for arg in todos_args_cdpro:
+                    argumento = arg[0].strip() if arg[0] else ""
+                    codigo_no_arg = argumento.replace("OBSFIC", "").strip()
+                    
+                    if (cdpro_str in codigo_no_arg or 
+                        cdpro_padded in codigo_no_arg or
+                        argumento.endswith(cdpro_str) or 
+                        argumento.endswith(cdpro_padded)):
+                        todos_args.append(arg)
+                        print(f"    VALIDADO (CDPRO): '{argumento}'")
+                
+                print(f"  Argumentos encontrados via CDPRO: {len(todos_args)}")
+            
             # Inicializa variáveis para dados da FC99999
             ativos_mescla = []
             aplicacao_fc99999 = ""
             
             # Lista de prefixos/palavras que indicam que NÃO é um ativo real
-            IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO']
+            IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO', 'INSTRUC', 'AVISO']
             
-            # Processa TODOS os registros encontrados com CONTAINING
+            # Processa TODOS os registros encontrados
             for arg in todos_args:
                 argumento = arg[0]
                 subargum = str(arg[1]).strip().zfill(5)
@@ -1277,30 +1306,38 @@ def buscar_requisicao(nr_requisicao):
                 param_preview = texto[:80] if texto else 'NULL'
                 print(f"    - ARG: {argumento}, SUB: {subargum}, PARAM: {param_preview}...")
                 
-                # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
                 texto_upper = texto.upper()
+                
+                # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
                 if "APLICA" in texto_upper and ":" in texto:
-                    # Extrai tudo após os dois pontos (funciona com APLICAÇÃO: ou APLICACAO:)
                     aplicacao_fc99999 = texto.split(":", 1)[1].strip()
                     print(f"  -> APLICAÇÃO encontrada: '{aplicacao_fc99999}'")
-                elif subargum in ['00001', '00002']:
-                    # SUBARGUM 00001 e 00002 = Ativos da mescla
-                    # Evita adicionar a linha de APLICAÇÃO como ativo
-                    if "APLICA" not in texto_upper:
-                        # FILTRO: Ignora registros que são instruções/etiquetas, não ativos
-                        if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
-                            print(f"    IGNORADO (não é ativo): '{texto[:50]}...'")
-                            continue
-                        
-                        # Remove prefixo OBS: se existir
-                        texto_limpo = texto
-                        if texto_upper.startswith("OBS:"):
-                            texto_limpo = texto[4:].strip()
-                        elif texto_upper.startswith("OBS :"):
-                            texto_limpo = texto[5:].strip()
-                        
-                        ativos_mescla.append(texto_limpo)
-                        print(f"  -> ATIVO encontrado: '{texto_limpo[:50]}...'")
+                    continue
+                
+                # =====================================================
+                # EXPANDIDO: Aceita QUALQUER SUBARGUM para ativos
+                # (antes só aceitava 00001 e 00002)
+                # =====================================================
+                # Ignora se contém palavra de exclusão
+                if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
+                    print(f"    IGNORADO (não é ativo): '{texto[:50]}...'")
+                    continue
+                
+                # Ignora se parece ser instrução ou texto muito longo sem vírgula
+                if len(texto) > 200 and ',' not in texto:
+                    print(f"    IGNORADO (texto muito longo sem ativos): '{texto[:50]}...'")
+                    continue
+                
+                # Remove prefixo OBS: se existir
+                texto_limpo = texto
+                if texto_upper.startswith("OBS:"):
+                    texto_limpo = texto[4:].strip()
+                elif texto_upper.startswith("OBS :"):
+                    texto_limpo = texto[5:].strip()
+                
+                if texto_limpo.strip():
+                    ativos_mescla.append(texto_limpo)
+                    print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
 
             # =====================================================
             # LÓGICA: PRODUTO ÚNICO vs MESCLA
