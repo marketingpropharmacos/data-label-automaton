@@ -1,136 +1,85 @@
 
+# Plano: Corrigir Ordenação dos Itens de Requisição (REQ: X-0, X-1, X-2...)
 
-# Plano: Correção da Extração de Ativos para SKINBOOSTER e Outros Produtos
+## Problema Identificado
 
-## Diagnóstico do Problema
+O frontend está sobrescrevendo o número do item (`nrItem`) que vem do backend com um índice sequencial simples, ignorando a ordem original da prescrição.
 
-Analisando sua imagem e o código atual, identifiquei que:
+**Arquivo problemático**: `src/services/requisicaoService.ts` (linhas 68-74)
 
-- **SKINBOOSTER (Req 90198)**: CDPRO = 92781, CDPRIN = 92779
-- Os ativos esperados são: **Hialuronato de Sódio** e **Monometiltricional**
-- A lógica atual busca na FC99999 usando o CDPRIN (92779), mas os ativos não estão aparecendo no frontend
-
-## Hipóteses do Problema
-
-1. **ARGUMENTO na FC99999 não está no formato esperado**: O código busca por `OBSFIC92779` ou `92779`, mas os ativos podem estar em outro formato (ex: `OBSFIC9277914` com sufixo)
-
-2. **Os ativos estão em outra tabela ou SUBARGUM diferente**: Podem não estar em SUBARGUM `00001`/`00002`
-
-3. **Os ativos estão vinculados diretamente ao CDPRO (92781)** e não ao CDPRIN
-
-## Plano de Investigação e Correção
-
-### Etapa 1: Diagnóstico no Banco de Dados
-
-Você precisa executar estas queries no IBExpert para descobrir onde os ativos estão:
-
-```sql
--- Query 1: Buscar ativos pelo CDPRIN (92779)
-SELECT * FROM FC99999 
-WHERE ARGUMENTO CONTAINING '92779'
-ORDER BY ARGUMENTO, SUBARGUM;
-
--- Query 2: Buscar pelo CDPRO (92781)
-SELECT * FROM FC99999 
-WHERE ARGUMENTO CONTAINING '92781'
-ORDER BY ARGUMENTO, SUBARGUM;
-
--- Query 3: Buscar por "HIALURO" em qualquer tabela
-SELECT * FROM FC99999 
-WHERE PARAMETRO CONTAINING 'HIALURO';
-
--- Query 4: Verificar FC03300 para o produto
-SELECT * FROM FC03300 
-WHERE CDPRO IN (92779, 92781);
+```typescript
+// CÓDIGO ATUAL (ERRADO)
+const rotulos = formulas.map((item, index) => {
+  const rotulo = mapearRotulo(item);
+  rotulo.id = `${rotulo.nrRequisicao}-${index + 1}-${rotulo.lote || index}`;
+  rotulo.nrItem = String(index + 1); // ← SOBRESCREVE o nrItem original!
+  return rotulo;
+});
 ```
 
-### Etapa 2: Correção no servidor.py
+O backend já envia o `nrItem` correto (baseado no `ITEMID` da tabela FC12110 ordenado), mas o frontend ignora e substitui.
 
-Baseado nos resultados das queries, vou corrigir a lógica de extração. As possíveis correções são:
+---
 
-**Opção A**: Se os ativos estiverem em SUBARGUM diferente (ex: `00003`, `00004`):
-- Expandir a verificação de `['00001', '00002']` para incluir outros subargumentos
+## Solução
 
-**Opção B**: Se os ativos estiverem vinculados ao CDPRO e não ao CDPRIN:
-- Adicionar busca em ambos os códigos quando o primeiro não retornar ativos
+### Alteração no arquivo `src/services/requisicaoService.ts`
 
-**Opção C**: Se o ARGUMENTO tiver formato especial (ex: `OBSFIC9277900` com zeros extras):
-- Melhorar a validação do CONTAINING para aceitar mais variações
+Preservar o `nrItem` que vem do backend (baseado no ITEMID original) e apenas gerar um ID único para React:
 
-### Etapa 3: Estrutura da Correção
+```typescript
+// CÓDIGO CORRIGIDO
+const rotulos = formulas.map((item, index) => {
+  const rotulo = mapearRotulo(item);
+  // ID único para React (combina requisição, nrItem original e lote)
+  rotulo.id = `${rotulo.nrRequisicao}-${rotulo.nrItem}-${rotulo.lote || index}`;
+  // MANTÉM o nrItem original do backend (não sobrescreve!)
+  return rotulo;
+});
+```
+
+---
+
+## Resultado Esperado
+
+Antes da correção:
+- Item 1: Alfa-Lipóico (REQ: 86482-1)
+- Item 2: Coenzima (REQ: 86482-2)
+- Item 3: Outro (REQ: 86482-3)
+
+Depois da correção (ordem do ITEMID original):
+- Item 1: Coenzima (REQ: 86482-1)  ← conforme ITEMID no banco
+- Item 2: Alfa-Lipóico (REQ: 86482-2)
+- Item 3: Outro (REQ: 86482-3)
+
+---
+
+## Seção Técnica
+
+### Fluxo de Dados Corrigido
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO DE BUSCA DE ATIVOS                     │
-├─────────────────────────────────────────────────────────────────┤
-│ 1. Buscar por CDPRIN (código base)                              │
-│    └── FC99999 WHERE ARGUMENTO CONTAINING '92779'               │
-│                                                                 │
-│ 2. SE não encontrar ativos:                                     │
-│    └── Buscar por CDPRO (código específico)                     │
-│        └── FC99999 WHERE ARGUMENTO CONTAINING '92781'           │
-│                                                                 │
-│ 3. SE ainda não encontrar:                                      │
-│    └── Buscar em FC03300 (observações do produto)               │
-│                                                                 │
-│ 4. Extrair ativos de TODOS SUBARGUMs relevantes                 │
-│    └── 00001, 00002, 00003, 00004...                            │
-└─────────────────────────────────────────────────────────────────┘
+FC12110 (Banco)          servidor.py              requisicaoService.ts        LabelCard.tsx
+┌──────────────┐         ┌──────────────┐         ┌──────────────────────┐    ┌────────────┐
+│ ITEMID = 1   │───────▶ │ nrItem = "1" │───────▶ │ nrItem = "1" (MANTÉM)│──▶ │ REQ:X-1    │
+│ ITEMID = 2   │         │ nrItem = "2" │         │ nrItem = "2" (MANTÉM)│    │ REQ:X-2    │
+│ ITEMID = 3   │         │ nrItem = "3" │         │ nrItem = "3" (MANTÉM)│    │ REQ:X-3    │
+└──────────────┘         └──────────────┘         └──────────────────────┘    └────────────┘
+       ↑                        ↑                         ↑
+  ORDER BY ITEMID         Usa ITEMID como          NÃO sobrescreve mais
+                          nrItem (linha 1462)       (remove linha 72)
 ```
 
-## Seção Técnica - Alterações Específicas no servidor.py
+### Arquivos Modificados
 
-### Alteração 1: Busca em cascata (CDPRIN → CDPRO)
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/services/requisicaoService.ts` | Remover linha que sobrescreve `nrItem` |
 
-Na linha ~1254, após verificar que não encontrou ativos com CDPRIN, adicionar busca pelo CDPRO:
+### Verificação Backend
 
-```python
-# Se não encontrou ativos com CDPRIN, tenta com CDPRO
-if not ativos_mescla and cdprin_str != cdpro_str:
-    print(f"  -> Sem ativos com CDPRIN. Tentando CDPRO ({cdpro_str})...")
-    cursor.execute("""
-        SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
-        FROM FC99999 
-        WHERE ARGUMENTO CONTAINING ?
-        ORDER BY ARGUMENTO, SUBARGUM
-    """, (cdpro_str,))
-    # ... processar resultados
-```
+O backend já está correto:
+- Linha 1139: `ORDER BY I.ITEMID`
+- Linha 1462: `"nrItem": str(item_id)`
 
-### Alteração 2: Expandir SUBARGUMs aceitos
-
-Na linha ~1286, mudar de verificação rígida para mais flexível:
-
-```python
-# ANTES:
-elif subargum in ['00001', '00002']:
-
-# DEPOIS: Aceita qualquer SUBARGUM que não seja aplicação
-else:  # Qualquer outro SUBARGUM
-    if "APLICA" not in texto_upper and texto.strip():
-        # Verifica se parece com lista de ativos
-        if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
-            continue
-        ativos_mescla.append(texto_limpo)
-```
-
-### Alteração 3: Debug melhorado para troubleshooting
-
-Adicionar endpoint de debug específico:
-
-```python
-@app.route('/api/debug/ativos/<cdpro>', methods=['GET'])
-def debug_ativos(cdpro):
-    """Debug completo de busca de ativos para um código"""
-    # Busca em FC99999 e FC03300 com logs detalhados
-```
-
-## Próximos Passos
-
-1. **Execute as queries** do passo 1 no IBExpert e me envie o resultado
-2. Com base nos resultados, farei a correção específica no servidor.py
-3. Você copia o arquivo atualizado para o servidor
-4. Testamos a requisição 90198 novamente
-
-**Esta abordagem resolve o problema de forma estruturada**: identificamos ONDE os dados estão antes de corrigir o COMO buscá-los.
-
+Apenas o frontend precisa de correção.
