@@ -1459,7 +1459,7 @@ def buscar_requisicao(nr_requisicao):
             
             rotulo = {
                 **dados_base,
-                "nrItem": str(item_id),  # USA ITEMID ORIGINAL (corrige ordenação)
+                "nrItem": str(item_id - 1),  # Converte ITEMID (1,2,3) para barra (0,1,2)
                 "formula": nome_formula,  # Nome simplificado para mesclas
                 "volume": str(item[2]) if item[2] else dados_base["volume"],
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
@@ -1476,7 +1476,7 @@ def buscar_requisicao(nr_requisicao):
         conn.close()
         
         if not data:
-            data = [{**dados_base, "nrItem": "1", "formula": "", "lote": "", "quantidade": "", "observacoes": "", "composicao": "", "aplicacao": "", "descricaoProduto": ""}]
+            data = [{**dados_base, "nrItem": "0", "formula": "", "lote": "", "quantidade": "", "observacoes": "", "composicao": "", "aplicacao": "", "descricaoProduto": ""}]
         
         return jsonify({"success": True, "data": data})
         
