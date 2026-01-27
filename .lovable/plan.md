@@ -1,143 +1,136 @@
 
-# Plano: Correção da Lógica de Extração FC99999 no servidor.py
 
-## Problemas Identificados nos Logs
+# Plano: Correção da Extração de Ativos para SKINBOOSTER e Outros Produtos
 
-| CDPRO | CDPRIN | Problema | Causa Raiz |
-|-------|--------|----------|------------|
-| 92446 | 92446 | Rejeita `OBSFIC9244614` | Validação CONTAINING muito restritiva |
-| 92497 | 92496 | Classifica como ÚNICO tendo 4 ativos | Lógica de comparação de nome vs ativos falha |
-| 92781 | 92779 | Rejeita `OBSFIC9277914` | Mesmo problema do 92446 |
-| 92406 | 92406 | Encontra "L CARNITINA" (dado errado?) | Dado pode estar incorreto na FC99999 |
+## Diagnóstico do Problema
 
----
+Analisando sua imagem e o código atual, identifiquei que:
 
-## Correções Necessárias
+- **SKINBOOSTER (Req 90198)**: CDPRO = 92781, CDPRIN = 92779
+- Os ativos esperados são: **Hialuronato de Sódio** e **Monometiltricional**
+- A lógica atual busca na FC99999 usando o CDPRIN (92779), mas os ativos não estão aparecendo no frontend
 
-### Correção 1: Validação CONTAINING mais flexível (linha ~1240)
+## Hipóteses do Problema
 
-**Problema**: A validação atual rejeita `OBSFIC9244614` porque exige que termine exatamente com `92446`.
+1. **ARGUMENTO na FC99999 não está no formato esperado**: O código busca por `OBSFIC92779` ou `92779`, mas os ativos podem estar em outro formato (ex: `OBSFIC9277914` com sufixo)
 
-**Solução**: Aceitar se o código está **contido** no argumento após remover o prefixo "OBSFIC".
+2. **Os ativos estão em outra tabela ou SUBARGUM diferente**: Podem não estar em SUBARGUM `00001`/`00002`
+
+3. **Os ativos estão vinculados diretamente ao CDPRO (92781)** e não ao CDPRIN
+
+## Plano de Investigação e Correção
+
+### Etapa 1: Diagnóstico no Banco de Dados
+
+Você precisa executar estas queries no IBExpert para descobrir onde os ativos estão:
+
+```sql
+-- Query 1: Buscar ativos pelo CDPRIN (92779)
+SELECT * FROM FC99999 
+WHERE ARGUMENTO CONTAINING '92779'
+ORDER BY ARGUMENTO, SUBARGUM;
+
+-- Query 2: Buscar pelo CDPRO (92781)
+SELECT * FROM FC99999 
+WHERE ARGUMENTO CONTAINING '92781'
+ORDER BY ARGUMENTO, SUBARGUM;
+
+-- Query 3: Buscar por "HIALURO" em qualquer tabela
+SELECT * FROM FC99999 
+WHERE PARAMETRO CONTAINING 'HIALURO';
+
+-- Query 4: Verificar FC03300 para o produto
+SELECT * FROM FC03300 
+WHERE CDPRO IN (92779, 92781);
+```
+
+### Etapa 2: Correção no servidor.py
+
+Baseado nos resultados das queries, vou corrigir a lógica de extração. As possíveis correções são:
+
+**Opção A**: Se os ativos estiverem em SUBARGUM diferente (ex: `00003`, `00004`):
+- Expandir a verificação de `['00001', '00002']` para incluir outros subargumentos
+
+**Opção B**: Se os ativos estiverem vinculados ao CDPRO e não ao CDPRIN:
+- Adicionar busca em ambos os códigos quando o primeiro não retornar ativos
+
+**Opção C**: Se o ARGUMENTO tiver formato especial (ex: `OBSFIC9277900` com zeros extras):
+- Melhorar a validação do CONTAINING para aceitar mais variações
+
+### Etapa 3: Estrutura da Correção
 
 ```text
-ANTES:  OBSFIC9244614 → rejeita (não termina com 92446)
-DEPOIS: OBSFIC9244614 → extrai "9244614" → contém "92446"? → ACEITA
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLUXO DE BUSCA DE ATIVOS                     │
+├─────────────────────────────────────────────────────────────────┤
+│ 1. Buscar por CDPRIN (código base)                              │
+│    └── FC99999 WHERE ARGUMENTO CONTAINING '92779'               │
+│                                                                 │
+│ 2. SE não encontrar ativos:                                     │
+│    └── Buscar por CDPRO (código específico)                     │
+│        └── FC99999 WHERE ARGUMENTO CONTAINING '92781'           │
+│                                                                 │
+│ 3. SE ainda não encontrar:                                      │
+│    └── Buscar em FC03300 (observações do produto)               │
+│                                                                 │
+│ 4. Extrair ativos de TODOS SUBARGUMs relevantes                 │
+│    └── 00001, 00002, 00003, 00004...                            │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Código a alterar** (linhas 1235-1247):
-```python
-# Filtra registros que contêm o código buscado
-todos_args = []
-for arg in todos_args_containing:
-    argumento = arg[0].strip() if arg[0] else ""
-    # Remove prefixo OBSFIC para comparação
-    codigo_no_arg = argumento.replace("OBSFIC", "").strip()
-    
-    # Aceita se o código buscado está contido no argumento
-    if (codigo_busca in codigo_no_arg or 
-        codigo_busca_padded in codigo_no_arg or
-        argumento.endswith(codigo_busca) or 
-        argumento.endswith(codigo_busca_padded)):
-        todos_args.append(arg)
-        print(f"    VALIDADO: '{argumento}'")
-    else:
-        print(f"    REJEITADO: '{argumento}' (não corresponde ao código)")
-```
+## Seção Técnica - Alterações Específicas no servidor.py
 
----
+### Alteração 1: Busca em cascata (CDPRIN → CDPRO)
 
-### Correção 2: Classificação MESCLA vs PRODUTO ÚNICO (linhas 1294-1331)
-
-**Problema**: O produto 92496 tem 4 ativos reais mas é classificado como ÚNICO porque palavras do nome ("GORD", "LOC") podem estar sendo encontradas nos ativos.
-
-**Solução**: Usar critérios mais simples e confiáveis:
-1. Se `CDPRIN != CDPRO` → provavelmente é derivado/mescla
-2. Se encontra múltiplos ativos com vírgula/separador → é MESCLA
-3. Se o primeiro ativo contém vírgula (lista de componentes) → é MESCLA
-
-**Código a alterar** (linhas 1299-1331):
-```python
-e_mescla = False
-composicao = ""
-nome_formula = nome_produto
-
-if ativos_mescla:
-    primeiro_ativo = ativos_mescla[0] if ativos_mescla else ""
-    
-    # CRITÉRIO 1: CDPRIN diferente de CDPRO indica derivado
-    if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
-        e_mescla = True
-        print(f"  -> MESCLA (CDPRIN diferente de CDPRO)")
-    
-    # CRITÉRIO 2: Primeiro ativo contém vírgula (lista de componentes)
-    elif ',' in primeiro_ativo:
-        e_mescla = True
-        print(f"  -> MESCLA (ativos com vírgula = múltiplos componentes)")
-    
-    # CRITÉRIO 3: Nome do produto NÃO está contido no ativo
-    elif primeiro_ativo and nome_produto_upper not in primeiro_ativo.upper():
-        # Verifica se é realmente diferente
-        palavras_produto = [p for p in nome_produto_upper.split() if len(p) > 3]
-        if not any(p in primeiro_ativo.upper() for p in palavras_produto[:2]):
-            e_mescla = True
-            print(f"  -> MESCLA (ativo diferente do nome do produto)")
-
-    if e_mescla:
-        # Usa o primeiro ativo como composição (geralmente é a lista completa)
-        composicao = primeiro_ativo
-        # Remove prefixo AMP do nome se houver
-        nome_formula = nome_produto.replace("AMP ", "").strip()
-        print(f"  -> TIPO: MESCLA")
-        print(f"  -> COMPOSIÇÃO: '{composicao}'")
-    else:
-        composicao = ""
-        print(f"  -> TIPO: PRODUTO ÚNICO")
-```
-
----
-
-### Correção 3: Filtrar ativos inválidos
-
-**Problema**: Registros como "ETIQUETA (CATALOGO...)" e "PREGA MENOR 3CM" estão sendo capturados como ativos.
-
-**Solução**: Adicionar filtro para ignorar registros que são instruções, não ativos.
+Na linha ~1254, após verificar que não encontrou ativos com CDPRIN, adicionar busca pelo CDPRO:
 
 ```python
-# Lista de prefixos/palavras que indicam que NÃO é um ativo
-IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO']
-
-# Na hora de processar os ativos:
-for arg in todos_args:
-    parametro = (arg[2] or "").strip()
-    # Ignora se é instrução/etiqueta
-    if any(ignorar in parametro.upper() for ignorar in IGNORAR_ATIVOS):
-        print(f"    IGNORADO (não é ativo): '{parametro[:50]}...'")
-        continue
-    ativos_mescla.append(parametro)
+# Se não encontrou ativos com CDPRIN, tenta com CDPRO
+if not ativos_mescla and cdprin_str != cdpro_str:
+    print(f"  -> Sem ativos com CDPRIN. Tentando CDPRO ({cdpro_str})...")
+    cursor.execute("""
+        SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+        FROM FC99999 
+        WHERE ARGUMENTO CONTAINING ?
+        ORDER BY ARGUMENTO, SUBARGUM
+    """, (cdpro_str,))
+    # ... processar resultados
 ```
 
----
+### Alteração 2: Expandir SUBARGUMs aceitos
 
-## Arquivo Atualizado
+Na linha ~1286, mudar de verificação rígida para mais flexível:
 
-Vou gerar o `servidor.py` completo com todas as correções aplicadas para você copiar e colar.
+```python
+# ANTES:
+elif subargum in ['00001', '00002']:
 
----
+# DEPOIS: Aceita qualquer SUBARGUM que não seja aplicação
+else:  # Qualquer outro SUBARGUM
+    if "APLICA" not in texto_upper and texto.strip():
+        # Verifica se parece com lista de ativos
+        if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
+            continue
+        ativos_mescla.append(texto_limpo)
+```
 
-## Resultado Esperado Após Correções
+### Alteração 3: Debug melhorado para troubleshooting
 
-| CDPRO | Antes | Depois |
-|-------|-------|--------|
-| 92446 | Sem ativos | Encontra composição via OBSFIC9244614 |
-| 92496 | "PRODUTO ÚNICO" | "MESCLA" com ativos corretos |
-| 92779 | Sem ativos | Encontra composição via OBSFIC9277914 |
+Adicionar endpoint de debug específico:
 
----
+```python
+@app.route('/api/debug/ativos/<cdpro>', methods=['GET'])
+def debug_ativos(cdpro):
+    """Debug completo de busca de ativos para um código"""
+    # Busca em FC99999 e FC03300 com logs detalhados
+```
 
-## Resumo das Alterações
+## Próximos Passos
 
-1. **Linha ~1240**: Validação CONTAINING aceita códigos contidos (não só terminando)
-2. **Linha ~1299**: Nova lógica de classificação baseada em CDPRIN e vírgulas
-3. **Linha ~1260**: Filtro para ignorar registros de etiqueta/catálogo
+1. **Execute as queries** do passo 1 no IBExpert e me envie o resultado
+2. Com base nos resultados, farei a correção específica no servidor.py
+3. Você copia o arquivo atualizado para o servidor
+4. Testamos a requisição 90198 novamente
+
+**Esta abordagem resolve o problema de forma estruturada**: identificamos ONDE os dados estão antes de corrigir o COMO buscá-los.
 
