@@ -49,8 +49,8 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       // Linha 2: Prescritor
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
-      // Linha 3: Composição (ativos)
-      { id: 'linha3', campos: ['composicao'], spacing: 'normal' },
+      // Linha 3: Composição OU Fórmula (exclusão mútua - só um aparece)
+      { id: 'linha3', campos: ['composicao', 'formula'], spacing: 'normal' },
       // Linha 4: pH (editável), Lote, Fabricação, Validade
       { id: 'linha4', campos: ['ph', 'lote', 'fabricacao', 'validade'], spacing: 'compact' },
       // Linha 5: Aplicação (sem tipoUso que mostra "7")
@@ -65,7 +65,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       paciente: { visible: true, fontSize: 9, bold: false, uppercase: true },
       composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
       requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      formula: { visible: false, fontSize: 9, bold: false, uppercase: true },
+      formula: { visible: true, fontSize: 9, bold: false, uppercase: true },  // Visível para PRODUTO ÚNICO
       lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
       fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
       validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
