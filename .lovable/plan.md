@@ -115,29 +115,27 @@ Para cada componente encontrado na FC12111:
 
 ## Etapas de Implementação
 
-| # | Tarefa | Arquivo |
-|---|--------|---------|
-| 1 | Criar endpoint de debug para testar FC12111 | servidor.py |
-| 2 | Implementar função `buscar_componentes_kit_fc12111()` | servidor.py |
-| 3 | Modificar endpoint `/api/requisicao` para usar FC12111 | servidor.py |
-| 4 | Buscar nome do componente na FC03000 | servidor.py |
-| 5 | Buscar metadados (pH/lote) na FC06100/FC07100 | servidor.py |
-| 6 | Testar com requisição que contenha kit | Manual |
+| # | Tarefa | Status |
+|---|--------|--------|
+| 1 | Criar endpoint de debug para testar FC12111 | ✅ Completo |
+| 2 | Implementar função `buscar_componentes_kit_fc12111()` | ✅ Completo |
+| 3 | Modificar endpoint `/api/requisicao` para usar FC12111 | ✅ Completo |
+| 4 | Buscar nome do componente na FC03000 | ✅ Completo |
+| 5 | Buscar metadados (pH/lote) na FC06100/FC07100 | ✅ Completo |
+| 6 | Testar com requisição que contenha kit | ⏳ Pendente |
 
-## Primeiro Passo: Validação
+## Endpoints de Debug
 
-Antes de implementar, criar endpoint de debug para confirmar:
-
-```python
-@app.route('/api/debug/fc12111/<nrrqu>/<serier>')
-def debug_fc12111(nrrqu, serier):
-    # Buscar componentes do kit nesta requisição/barra
-    # Confirmar que retorna os 4 componentes do kit 2499
+**Novo endpoint para validação:**
 ```
+GET /api/debug/fc12111/<nrrqu>/<serier>?filial=279
+```
+
+Exemplo: `http://localhost:5000/api/debug/fc12111/89129/0?filial=279`
 
 ## Seção Técnica
 
-### Query Principal
+### Query Principal (FC12111)
 
 ```sql
 SELECT 
@@ -158,7 +156,7 @@ ORDER BY c.ORDCAP
 
 ```sql
 SELECT PH, NRLOT, DTFAB, DTVAL
-FROM FC07100
+FROM FC06100
 WHERE CDPRO = ? AND CDFIL = ?
 ORDER BY DTVAL DESC
 ROWS 1
