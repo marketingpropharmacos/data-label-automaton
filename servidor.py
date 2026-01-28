@@ -1179,11 +1179,12 @@ def buscar_requisicao(nr_requisicao):
         }
         
         # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
+        # SERIER contém a sequência das barras (0, 1, 2...) conforme FórmulaCerta
         cursor.execute("""
-            SELECT I.ITEMID, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN
+            SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN
             FROM FC12110 I
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
-            ORDER BY I.ITEMID
+            ORDER BY I.SERIER
         """, (nr_requisicao, filial))
         
         itens = cursor.fetchall()
@@ -1222,7 +1223,7 @@ def buscar_requisicao(nr_requisicao):
         
         data = []
         for idx, item in enumerate(itens):
-            item_id = item[0]
+            serier = item[0]  # SERIER - número da barra (0, 1, 2...) direto do banco
             cdpro = item[5]
             cdprin = item[6]  # CDPRIN - código do produto principal (base para mesclas)
             nome_produto = item[1] or ""  # DESCR da FC12110
@@ -1233,7 +1234,7 @@ def buscar_requisicao(nr_requisicao):
             # CDPRO contém o código do produto específico (ex: 92781 para SKINBOOSTER)
             # =====================================================
             print(f"\n{'='*60}")
-            print(f"DEBUG FC99999 - Item {item_id} (ITEMID original)")
+            print(f"DEBUG FC99999 - Barra {serier} (SERIER)")
             print(f"  CDPRO: '{cdpro}'")
             print(f"  CDPRIN: '{cdprin}'")
             print(f"  NOME PRODUTO: '{nome_produto}'")
@@ -1506,7 +1507,7 @@ def buscar_requisicao(nr_requisicao):
             
             rotulo = {
                 **dados_base,
-                "nrItem": str(idx),  # Usa índice do loop (0,1,2...) para garantir numeração sequencial
+                "nrItem": str(serier),  # Usa SERIER do banco - número exato da barra no FórmulaCerta
                 "formula": nome_formula,  # Nome simplificado para mesclas
                 "volume": str(item[2]) if item[2] else dados_base["volume"],
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
