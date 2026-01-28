@@ -287,7 +287,9 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         // Sem prefixo "Pos:" - exibe só o conteúdo
         return rotulo.posologia ? rotulo.posologia.toUpperCase() : "";
       case 'observacoes':
-        return observacoes || "";
+        // Só exibe se tiver conteúdo (indica mescla)
+        // Produto único não tem observação
+        return observacoes ? observacoes.toUpperCase() : "";
       default:
         return "";
     }
