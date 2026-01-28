@@ -421,6 +421,53 @@ def debug_produtos_requisicao(nr_requisicao):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: FC12110 completo - mostra TODOS os campos para descobrir campo de ordenação
+@app.route('/api/debug/fc12110-completo/<nr_requisicao>', methods=['GET'])
+def debug_fc12110_completo(nr_requisicao):
+    """
+    Endpoint para investigar campos de ordenação da FC12110.
+    Retorna TODOS os campos da tabela para identificar qual campo
+    corresponde à ordem visual das 'barras' no FórmulaCerta.
+    """
+    filial = request.args.get('filial', '1')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM FC12110 
+            WHERE NRRQU = ? AND CDFIL = ? AND TPCMP IN ('C', 'S')
+            ORDER BY ITEMID
+        """, (nr_requisicao, filial))
+        
+        colunas = [desc[0].strip() for desc in cursor.description]
+        itens = []
+        for row in cursor.fetchall():
+            item = {}
+            for i, col in enumerate(colunas):
+                val = row[i]
+                if hasattr(val, 'read'):
+                    try:
+                        val = val.read().decode('latin-1')[:200]
+                    except:
+                        val = "[BLOB]"
+                elif hasattr(val, 'strftime'):
+                    val = val.strftime('%d/%m/%Y %H:%M:%S')
+                item[col] = str(val) if val is not None else None
+            itens.append(item)
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "requisicao": nr_requisicao,
+            "filial": filial,
+            "totalColunas": len(colunas),
+            "totalItens": len(itens),
+            "colunas": colunas,
+            "itens": itens
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # Debug: observações por CDPRO com GRICP
 @app.route('/api/debug/observacoes/<cdpro>', methods=['GET'])
 def debug_observacoes(cdpro):
