@@ -7,6 +7,16 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// Mapeia componente de kit
+const mapearComponenteKit = (comp: any) => ({
+  codigo: comp.codigo || "",
+  nome: comp.nome || "",
+  ph: comp.ph || "",
+  lote: comp.lote || "",
+  fabricacao: comp.fabricacao || "",
+  validade: comp.validade || "",
+});
+
 // Mapeia cada fórmula da API para um rótulo
 const mapearRotulo = (data: any): RotuloItem => ({
   id: data.id || `${data.nrRequisicao}-${data.nrItem || '0'}`,
@@ -33,6 +43,9 @@ const mapearRotulo = (data: any): RotuloItem => ({
   quantidade: data.quantidade || "",
   composicao: data.composicao || "",
   descricaoProduto: data.descricaoProduto || "",
+  // Novos campos para suporte a kits
+  tipoItem: data.tipoItem || undefined,
+  componentes: data.componentes ? data.componentes.map(mapearComponenteKit) : undefined,
 });
 
 export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiResponse<RotuloItem[]>> => {
