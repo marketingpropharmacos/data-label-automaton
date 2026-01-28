@@ -1,176 +1,172 @@
 
-# Plano: Implementação de Kits (Terceira Fase)
+# Plano: Correção da Busca de Componentes de Kits
 
-## Resumo Executivo
+## Resumo
 
-Implementar a lógica de **Kits** para que o sistema gere um único rótulo contendo todos os componentes do kit, cada um com seu próprio pH, lote, fabricação e validade.
+Corrigir a lógica no backend para buscar componentes de kits na tabela **FC12111** (sub-itens de requisição) em vez de FC03100 (que é tabela de estoque).
 
-## Regra de Negócio
+## Descoberta
 
-| Tipo | Características | Rótulo |
-|------|-----------------|--------|
-| **Produto Único** | 1 ativo, sem composição | Mostra só o nome do ativo |
-| **Mescla** | Múltiplos ativos, compartilham metadados | Mostra composição única |
-| **Kit** | Múltiplos ativos, cada um com metadados próprios | Um rótulo listando cada ativo com seu pH/lote/fab/val |
-
-## Exemplo Visual (Kit com 4 itens)
-
-```text
-┌─────────────────────────────────────────────────────┐
-│ PRO PHARMACOS                                       │
-├─────────────────────────────────────────────────────┤
-│ PACIENTE: MARIA SILVA         REQ: 86483-0         │
-│ DR. JOÃO PEREIRA - CRM 12345/SP                    │
-│                                                     │
-│ CRISINA 30MCG/ML   pH:6.5  L:001/25  V:03/25       │
-│ CAFEINA 2,5%       pH:7.0  L:002/25  V:03/25       │
-│ L-CARNITINA 600MG  pH:6.8  L:003/25  V:04/25       │
-│ PROCAINA 2%        pH:7.2  L:004/25  V:03/25       │
-│                                                     │
-│ APLICAÇÃO: IM                                       │
-└─────────────────────────────────────────────────────┘
-```
+A tabela `FC12111` vincula:
+- `NRRQU` (número requisição) + `SERIER` (barra do kit) → aos `CDPRO` (componentes)
 
 ## Arquitetura da Solução
 
-### 1. Backend (servidor.py)
-
-**Identificação de Kit:**
-- Consulta FC03100 para verificar se o código do produto tem componentes
-- Se tiver componentes → é um KIT
-- Se não tiver → mantém lógica atual (Produto Único ou Mescla)
-
-**Busca de Componentes:**
-```sql
-SELECT CDPRO, DESCR FROM FC03100 WHERE CDPRO_PAI = ?
+```text
+FC12100 (Requisição 89129)
+    │
+    └── FC12110 (Itens)
+            │
+            ├── SERIER=0: Kit 2499
+            │       │
+            │       └── FC12111 (Componentes do Kit)
+            │               ├── CDPRO: 92376 (Tripeptídeo)
+            │               ├── CDPRO: 92580 (Silox)
+            │               ├── CDPRO: 92803 (Ioimbina)
+            │               └── CDPRO: 92766 (Procaína)
+            │
+            ├── SERIER=1: Produto único
+            └── SERIER=2: Mescla
 ```
 
-**Busca de Metadados por Componente:**
-Para cada componente, buscar nas tabelas de lotes (FC06xxx ou FC07xxx):
-- pH
-- Lote
-- Fabricação
-- Validade
+## Mudanças no Backend (servidor.py)
 
-**Novo Campo de Resposta:**
+### 1. Nova Função: buscar_componentes_kit_fc12111
+
+```python
+def buscar_componentes_kit_fc12111(cursor, nrrqu, serier, cdfil):
+    """
+    Busca componentes de um kit na FC12111
+    """
+    cursor.execute("""
+        SELECT 
+            c.CDPRO,
+            c.CDPRIN,
+            c.QUANT,
+            c.UNIDADE,
+            c.ORDCAP,
+            p.NOMRED
+        FROM FC12111 c
+        LEFT JOIN FC03000 p ON c.CDPRO = p.CDPRO
+        WHERE c.NRRQU = ? AND c.SERIER = ? AND c.CDFIL = ?
+        ORDER BY c.ORDCAP
+    """, (nrrqu, serier, cdfil))
+    
+    return cursor.fetchall()
+```
+
+### 2. Modificar Lógica de Identificação
+
+No endpoint `/api/requisicao`:
+- Após buscar cada item da FC12110
+- Verificar se existe registro na FC12111 para aquele NRRQU + SERIER
+- Se existir → é KIT, buscar componentes
+- Se não existir → manter lógica atual (Mescla/Produto Único)
+
+### 3. Buscar Metadados de Cada Componente
+
+Para cada componente encontrado na FC12111:
+- Buscar pH, lote, fabricação e validade nas tabelas FC06100/FC07100
+- Usar o CDPRO do componente para a busca
+
+## Fluxo de Execução
+
+```text
+1. Recebe requisição (ex: 89129)
+2. Busca itens na FC12110 (ex: barra 0, 1, 2, 3)
+3. Para cada item:
+   a. Busca componentes na FC12111 (WHERE NRRQU=89129 AND SERIER=barra)
+   b. Se encontrou componentes:
+      - tipoItem = "KIT"
+      - Para cada componente: buscar nome (FC03000) e metadados (FC06100/FC07100)
+   c. Se não encontrou:
+      - Manter lógica atual (Mescla ou Produto Único)
+4. Retorna dados com componentes populados
+```
+
+## Estrutura de Resposta JSON
+
 ```json
 {
+  "nrRequisicao": "89129",
+  "nrItem": "0",
   "tipoItem": "KIT",
+  "formula": "AMP KIT GORD LOC COX/C",
   "componentes": [
     {
-      "nome": "CRISINA 30MCG/ML",
+      "codigo": "92376",
+      "nome": "TRIPEPTÍDEO 1 30MCG/ML",
       "ph": "6.5",
-      "lote": "001",
+      "lote": "001/25",
       "fabricacao": "01/25",
       "validade": "03/25"
     },
-    ...
+    {
+      "codigo": "92580",
+      "nome": "SILOX",
+      "ph": "7.0",
+      "lote": "002/25",
+      "fabricacao": "01/25",
+      "validade": "03/25"
+    }
   ]
 }
 ```
-
-### 2. Frontend (tipos e componentes)
-
-**Novo Tipo em requisicao.ts:**
-```typescript
-export interface ComponenteKit {
-  codigo: string;
-  nome: string;
-  ph: string;
-  lote: string;
-  fabricacao: string;
-  validade: string;
-}
-
-export interface RotuloItem {
-  // ... campos existentes ...
-  tipoItem: 'PRODUTO ÚNICO' | 'MESCLA' | 'KIT';
-  componentes?: ComponenteKit[];  // Novo campo para kits
-}
-```
-
-**Atualização do LabelCard.tsx:**
-- Nova função `renderKitContent()` para exibir lista de componentes
-- Cada componente em uma linha com seus metadados
 
 ## Etapas de Implementação
 
 | # | Tarefa | Arquivo |
 |---|--------|---------|
-| 1 | Investigar estrutura FC03100 e tabelas de lotes | servidor.py |
-| 2 | Criar endpoint de debug para componentes | servidor.py |
-| 3 | Modificar endpoint `/api/requisicao` para identificar kits | servidor.py |
-| 4 | Buscar e incluir componentes com metadados na resposta | servidor.py |
-| 5 | Adicionar tipos TypeScript para componentes | requisicao.ts |
-| 6 | Implementar renderização de kits no LabelCard | LabelCard.tsx |
-| 7 | Ajustar layout AMP_CX para kits | layouts.ts |
+| 1 | Criar endpoint de debug para testar FC12111 | servidor.py |
+| 2 | Implementar função `buscar_componentes_kit_fc12111()` | servidor.py |
+| 3 | Modificar endpoint `/api/requisicao` para usar FC12111 | servidor.py |
+| 4 | Buscar nome do componente na FC03000 | servidor.py |
+| 5 | Buscar metadados (pH/lote) na FC06100/FC07100 | servidor.py |
+| 6 | Testar com requisição que contenha kit | Manual |
+
+## Primeiro Passo: Validação
+
+Antes de implementar, criar endpoint de debug para confirmar:
+
+```python
+@app.route('/api/debug/fc12111/<nrrqu>/<serier>')
+def debug_fc12111(nrrqu, serier):
+    # Buscar componentes do kit nesta requisição/barra
+    # Confirmar que retorna os 4 componentes do kit 2499
+```
 
 ## Seção Técnica
 
-### Estrutura de Tabelas Esperada
+### Query Principal
 
-**FC03100 (Componentes):**
-| Coluna | Descrição |
-|--------|-----------|
-| CDPRO_PAI | Código do kit (ex: 2497) |
-| CDPRO | Código do componente (ex: 92763) |
-| DESCR | Descrição do componente |
-
-**FC06xxx ou FC07xxx (Lotes):**
-| Coluna | Descrição |
-|--------|-----------|
-| CDPRO | Código do produto |
-| NRLOT | Número do lote |
-| DTFAB | Data fabricação |
-| DTVAL | Data validade |
-| PH | pH do produto |
-
-### Lógica de Identificação
-
-```python
-# No servidor.py
-def identificar_tipo_item(cdpro, cursor):
-    # Verifica se tem componentes na FC03100
-    cursor.execute("""
-        SELECT COUNT(*) FROM FC03100 
-        WHERE CDPRO = ? OR CDPRO_PAI = ?
-    """, (cdpro, cdpro))
-    
-    tem_componentes = cursor.fetchone()[0] > 0
-    
-    if tem_componentes:
-        return "KIT"
-    # ... lógica existente para MESCLA/PRODUTO ÚNICO
+```sql
+SELECT 
+    c.CDPRO,
+    c.CDPRIN,
+    c.QUANT,
+    c.ORDCAP,
+    p.NOMRED as NOME_COMPONENTE
+FROM FC12111 c
+LEFT JOIN FC03000 p ON c.CDPRO = p.CDPRO
+WHERE c.NRRQU = 89129 
+  AND c.SERIER = 0 
+  AND c.CDFIL = 279
+ORDER BY c.ORDCAP
 ```
 
-### Modificações no Frontend
+### Query de Metadados por Componente
 
-```typescript
-// LabelCard.tsx - nova função
-const renderKitContent = () => {
-  if (!rotulo.componentes || rotulo.componentes.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {rotulo.componentes.map((comp, idx) => (
-        <div key={idx} className="text-[9px] leading-tight">
-          <span className="font-semibold">{comp.nome}</span>
-          {comp.ph && <span> pH:{comp.ph}</span>}
-          <span> L:{comp.lote}</span>
-          <span> V:{comp.validade}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
+```sql
+SELECT PH, NRLOT, DTFAB, DTVAL
+FROM FC07100
+WHERE CDPRO = ? AND CDFIL = ?
+ORDER BY DTVAL DESC
+ROWS 1
 ```
 
-## Próximos Passos após Aprovação
+## Resultado Esperado
 
-1. Investigar colunas exatas da FC03100 via debug
-2. Identificar tabela correta de lotes/metadados
-3. Implementar busca de componentes no backend
-4. Testar com requisição 86483 (barras 0, 1, 2, 3 que são kits)
-5. Implementar renderização no frontend
+Ao buscar requisição 89129:
+- Barra 0 (kit 2499): Retorna `tipoItem: "KIT"` com array de 4 componentes
+- Cada componente com seu próprio pH, lote, fabricação e validade
+- Frontend renderiza lista de componentes no rótulo
