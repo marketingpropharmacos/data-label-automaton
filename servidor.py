@@ -1326,139 +1326,117 @@ def buscar_requisicao(nr_requisicao):
             return nome_completo
         
         # =====================================================
-        # FUNÇÕES PARA DETECÇÃO E BUSCA DE KITS (FC12111)
+        # FUNÇÕES PARA DETECÇÃO E BUSCA DE KITS (FC05000/FC05100)
+        # Estrutura: FC05000 = cabeçalho do kit (CDFRM)
+        #            FC05100 = componentes do kit (CDFRM -> CDPRO/CDSAC)
+        #            FC03140 = lotes (LEFT JOIN - opcional)
         # =====================================================
-        def verificar_se_kit_fc12111(cursor, nrrqu, serier, cdfil):
+        def verificar_se_kit_fc05100(cursor, cdpro):
             """
-            Verifica se um item é um KIT consultando FC12111.
-            FC12111 contém os sub-itens/componentes de kits por requisição.
+            Verifica se um produto é um KIT consultando FC05100.
+            FC05100 contém os componentes de kits vinculados por CDFRM.
+            CDFRM corresponde ao CDPRO do kit na FC03000.
             Retorna True se tiver componentes, False caso contrário.
             """
             try:
-                print(f"  [KIT CHECK] Buscando FC12111 com NRRQU={nrrqu}, SERIER={serier}, CDFIL={cdfil}")
+                print(f"  [KIT CHECK FC05100] Buscando componentes para CDPRO={cdpro}")
                 
-                # Primeiro: verificar se há QUALQUER registro para esta requisição (debug)
+                # Verifica se o CDPRO é um kit (tem componentes na FC05100)
                 cursor.execute("""
-                    SELECT SERIER, COUNT(*) as qtd FROM FC12111 
-                    WHERE NRRQU = ? AND CDFIL = ?
-                    GROUP BY SERIER
-                """, (nrrqu, cdfil))
-                debug_rows = cursor.fetchall()
-                if debug_rows:
-                    print(f"  [KIT DEBUG] Registros FC12111 para NRRQU={nrrqu}:")
-                    for dr in debug_rows:
-                        print(f"    - SERIER={dr[0]}, QTD={dr[1]}")
-                else:
-                    print(f"  [KIT DEBUG] Nenhum registro na FC12111 para NRRQU={nrrqu}")
-                
-                # Agora busca pelo SERIER específico
-                cursor.execute("""
-                    SELECT COUNT(*) FROM FC12111 
-                    WHERE NRRQU = ? AND SERIER = ? AND CDFIL = ?
-                """, (nrrqu, serier, cdfil))
+                    SELECT COUNT(*) FROM FC05100 
+                    WHERE CDFRM = ?
+                """, (cdpro,))
                 count = cursor.fetchone()[0]
-                print(f"  [KIT CHECK] Resultado: {count} componentes encontrados para SERIER={serier}")
+                print(f"  [KIT CHECK FC05100] {count} componentes encontrados para CDFRM={cdpro}")
                 return count > 0
             except Exception as e:
-                print(f"  [KIT CHECK ERRO] {e}")
+                print(f"  [KIT CHECK FC05100 ERRO] {e}")
                 return False
         
-        def buscar_componentes_kit_fc12111(cursor, nrrqu, serier, cdfil):
+        def buscar_componentes_kit_fc05100(cursor, cdpro, cdfil):
             """
-            Busca componentes de um kit na FC12111 (sub-itens de requisição).
-            Para cada componente, busca nome na FC03000 e metadados na FC06100/FC07100.
-            Retorna lista de componentes com seus metadados (ph, lote, fab, val).
+            Busca componentes de um kit na FC05100.
+            CDFRM = código do kit (CDPRO do produto kit)
+            CDSAC ou CDPRO = código de cada componente
+            Para cada componente, busca nome na FC03000 e metadados via LEFT JOIN na FC03140.
+            Lote/fabricação/validade são OPCIONAIS (LEFT JOIN para evitar erro 500).
             """
             componentes = []
             try:
-                # Busca componentes na FC12111
+                # Busca componentes na FC05100 com LEFT JOIN para lotes (FC03140)
+                # CDSAC é o código do componente que vincula ao CDPRO na FC03000
+                print(f"  [KIT FC05100] Buscando componentes para CDFRM={cdpro}")
+                
                 cursor.execute("""
                     SELECT 
-                        c.CDPRO,
-                        c.CDPRIN,
-                        c.QUANT,
-                        c.UNIDADE,
-                        c.ORDCAP,
-                        p.NOMRED
-                    FROM FC12111 c
-                    LEFT JOIN FC03000 p ON c.CDPRO = p.CDPRO
-                    WHERE c.NRRQU = ? AND c.SERIER = ? AND c.CDFIL = ?
-                    ORDER BY c.ORDCAP
-                """, (nrrqu, serier, cdfil))
+                        c.CDSAC,
+                        c.ITEMID,
+                        p.NOMRED,
+                        p.DESCR,
+                        l.NRLOT,
+                        l.DTFAB,
+                        l.DTVAL
+                    FROM FC05100 c
+                    LEFT JOIN FC03000 p ON c.CDSAC = p.CDPRO
+                    LEFT JOIN FC03140 l ON c.CDSAC = l.CDPRO AND l.CDFIL = ?
+                    WHERE c.CDFRM = ?
+                    ORDER BY c.ITEMID
+                """, (cdfil, cdpro))
                 
                 rows = cursor.fetchall()
-                print(f"  [KIT] FC12111 - {len(rows)} componentes encontrados para NRRQU={nrrqu}, SERIER={serier}")
+                print(f"  [KIT FC05100] {len(rows)} componentes encontrados para CDFRM={cdpro}")
                 
                 for row in rows:
-                    cdpro_comp = row[0]  # Código do componente
-                    cdprin_comp = row[1]
-                    quant = row[2]
-                    unidade = row[3]
-                    ordcap = row[4]
-                    nome_comp = row[5] or ""  # NOMRED da FC03000
+                    cdsac = row[0]       # Código do componente
+                    itemid = row[1]      # Ordem do componente
+                    nomred = row[2]      # Nome reduzido (FC03000)
+                    descr = row[3]       # Descrição (FC03000)
+                    lote = row[4]        # Lote (FC03140 - pode ser NULL)
+                    fab = row[5]         # Fabricação (FC03140 - pode ser NULL)
+                    val = row[6]         # Validade (FC03140 - pode ser NULL)
                     
-                    print(f"    [COMP] CDPRO={cdpro_comp}, NOME={nome_comp[:40] if nome_comp else 'N/A'}, ORDCAP={ordcap}")
+                    # Nome do componente: prioriza NOMRED, fallback para DESCR
+                    nome_comp = nomred or descr or f"COMP_{cdsac}"
+                    nome_comp = nome_comp.strip() if nome_comp else ""
                     
-                    # Busca dados do lote/fabricação na FC06100 ou FC07100 para este componente
+                    # Formata datas
+                    lote_str = str(lote).strip() if lote else ""
+                    fab_str = fab.strftime('%m/%y') if fab else ""
+                    val_str = val.strftime('%m/%y') if val else ""
+                    
+                    print(f"    [COMP] CDSAC={cdsac}, NOME={nome_comp[:40]}, LT:{lote_str}, F:{fab_str}, V:{val_str}")
+                    
+                    # Tenta buscar pH na FC06100 se não tiver na FC03140
                     ph = ""
-                    lote = ""
-                    fab = ""
-                    val = ""
-                    
-                    # Tenta buscar na FC06100 (estoque/lotes)
                     try:
                         cursor.execute("""
-                            SELECT FIRST 1 NRLOT, DTFAB, DTVAL, PH
-                            FROM FC06100
+                            SELECT FIRST 1 PH FROM FC06100
                             WHERE CDPRO = ? AND CDFIL = ?
-                            ORDER BY DTVAL DESC
-                        """, (cdpro_comp, cdfil))
-                        lote_row = cursor.fetchone()
-                        if lote_row:
-                            lote = str(lote_row[0]).strip() if lote_row[0] else ""
-                            fab = lote_row[1].strftime('%m/%y') if lote_row[1] else ""
-                            val = lote_row[2].strftime('%m/%y') if lote_row[2] else ""
-                            ph = str(lote_row[3]).strip() if lote_row[3] else ""
-                            print(f"      [LOTE FC06100] L:{lote} F:{fab} V:{val} pH:{ph}")
+                        """, (cdsac, cdfil))
+                        ph_row = cursor.fetchone()
+                        if ph_row and ph_row[0]:
+                            ph = str(ph_row[0]).strip()
                     except Exception as e:
-                        print(f"      [ERRO FC06100] {e}")
-                    
-                    # Se não encontrou na FC06100, tenta FC07100
-                    if not lote:
-                        try:
-                            cursor.execute("""
-                                SELECT FIRST 1 NRLOT, DTFAB, DTVAL
-                                FROM FC07100
-                                WHERE CDPRO = ? AND CDFIL = ?
-                                ORDER BY DTVAL DESC
-                            """, (cdpro_comp, cdfil))
-                            lote_row = cursor.fetchone()
-                            if lote_row:
-                                lote = str(lote_row[0]).strip() if lote_row[0] else ""
-                                fab = lote_row[1].strftime('%m/%y') if lote_row[1] else ""
-                                val = lote_row[2].strftime('%m/%y') if lote_row[2] else ""
-                                print(f"      [LOTE FC07100] L:{lote} F:{fab} V:{val}")
-                        except Exception as e:
-                            print(f"      [ERRO FC07100] {e}")
+                        print(f"      [PH ERRO] {e}")
                     
                     # Remove prefixos do nome (AMP, KIT, etc)
-                    nome_limpo = nome_comp.upper().strip() if nome_comp else f"COMP_{cdpro_comp}"
+                    nome_limpo = nome_comp.upper().strip()
                     for prefixo in ['AMP ', 'CX ', 'KIT ', 'FRS ']:
                         if nome_limpo.startswith(prefixo):
                             nome_limpo = nome_limpo[len(prefixo):]
                             break
                     
                     componentes.append({
-                        "codigo": str(cdpro_comp),
+                        "codigo": str(cdsac),
                         "nome": nome_limpo,
                         "ph": ph,
-                        "lote": lote,
-                        "fabricacao": fab,
-                        "validade": val
+                        "lote": lote_str,
+                        "fabricacao": fab_str,
+                        "validade": val_str
                     })
                 
             except Exception as e:
-                print(f"  [KIT ERRO] {e}")
+                print(f"  [KIT FC05100 ERRO] {e}")
             
             return componentes
         
@@ -1631,14 +1609,15 @@ def buscar_requisicao(nr_requisicao):
                     print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
 
             # =====================================================
-            # VERIFICAÇÃO DE KIT: Usando FC12111 (sub-itens de requisição)
+            # VERIFICAÇÃO DE KIT: Usando FC05100 (componentes de kit)
+            # Verifica se o CDPRO do item é um kit (tem componentes na FC05100)
             # =====================================================
-            e_kit = verificar_se_kit_fc12111(cursor, nr_requisicao, serier, filial)
+            e_kit = verificar_se_kit_fc05100(cursor, cdpro)
             componentes_kit = []
             
             if e_kit:
-                print(f"  -> IDENTIFICADO COMO KIT (via FC12111)!")
-                componentes_kit = buscar_componentes_kit_fc12111(cursor, nr_requisicao, serier, filial)
+                print(f"  -> IDENTIFICADO COMO KIT (via FC05100, CDFRM={cdpro})!")
+                componentes_kit = buscar_componentes_kit_fc05100(cursor, cdpro, filial)
                 print(f"  -> {len(componentes_kit)} componentes encontrados")
 
             # =====================================================
