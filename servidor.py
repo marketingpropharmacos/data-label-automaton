@@ -1582,45 +1582,71 @@ def buscar_requisicao(nr_requisicao):
         
         # =====================================================
         # FUNÇÕES PARA DETECÇÃO E BUSCA DE KITS (FC05000/FC05100)
-        # Estrutura: FC05000 = cabeçalho do kit (CDFRM)
-        #            FC05100 = componentes do kit (CDFRM -> CDPRO/CDSAC)
-        #            FC03140 = lotes (LEFT JOIN - opcional)
+        # 
+        # ESTRUTURA CORRETA (conforme imagem do usuário):
+        # - FC05000: Cabeçalho de kits
+        #   - CDFRM: Código do kit (ex: 2515 = "AMP KIT EMAG (SUG 2) 2ML")
+        #   - CDSEM: Código do produto semi-acabado (C.Semi), que é o CDPRO
+        #     que aparece na requisição (ex: 92487 = "AMP EMAG SUG 2 2ML")
+        # - FC05100: Componentes do kit
+        #   - CDFRM: Código do kit (mesmo da FC05000)
+        #   - CDSAC: Código do componente (vincula ao CDPRO na FC03000)
+        # - FC03140: Lotes de componentes (LEFT JOIN opcional)
+        #
+        # FLUXO:
+        # 1. Produto chega com CDPRO = 92487
+        # 2. Busca FC05000 onde CDSEM = 92487 → encontra CDFRM = 2515
+        # 3. Busca FC05100 onde CDFRM = 2515 → componentes 92494, 92681, etc.
         # =====================================================
-        def verificar_se_kit_fc05100(cursor, cdpro):
+        
+        def buscar_cdfrm_do_kit(cursor, cdpro):
             """
-            Verifica se um produto é um KIT consultando FC05100.
-            FC05100 contém os componentes de kits vinculados por CDFRM.
-            CDFRM corresponde ao CDPRO do kit na FC03000.
-            Retorna True se tiver componentes, False caso contrário.
+            Descobre o código do kit (CDFRM) a partir do CDPRO do produto.
+            Na FC05000, o campo CDSEM (C.Semi) contém o CDPRO do produto semi-acabado.
+            Retorna o CDFRM se for um kit, None caso contrário.
             """
             try:
-                print(f"  [KIT CHECK FC05100] Buscando componentes para CDPRO={cdpro}")
+                print(f"  [KIT FC05000] Buscando CDFRM para CDPRO/CDSEM={cdpro}")
                 
-                # Verifica se o CDPRO é um kit (tem componentes na FC05100)
                 cursor.execute("""
-                    SELECT COUNT(*) FROM FC05100 
-                    WHERE CDFRM = ?
+                    SELECT CDFRM FROM FC05000 
+                    WHERE CDSEM = ?
                 """, (cdpro,))
-                count = cursor.fetchone()[0]
-                print(f"  [KIT CHECK FC05100] {count} componentes encontrados para CDFRM={cdpro}")
-                return count > 0
+                row = cursor.fetchone()
+                
+                if row:
+                    cdfrm = row[0]
+                    print(f"  [KIT FC05000] ENCONTRADO! CDFRM={cdfrm} para CDSEM={cdpro}")
+                    return cdfrm
+                else:
+                    print(f"  [KIT FC05000] Nenhum kit encontrado para CDSEM={cdpro}")
+                    return None
             except Exception as e:
-                print(f"  [KIT CHECK FC05100 ERRO] {e}")
-                return False
+                print(f"  [KIT FC05000 ERRO] {e}")
+                return None
         
-        def buscar_componentes_kit_fc05100(cursor, cdpro, cdfil):
+        def verificar_se_kit(cursor, cdpro):
+            """
+            Verifica se um produto é um KIT.
+            Primeiro busca o CDFRM na FC05000 (via CDSEM = CDPRO).
+            Retorna (True, CDFRM) se for kit, (False, None) caso contrário.
+            """
+            cdfrm = buscar_cdfrm_do_kit(cursor, cdpro)
+            if cdfrm:
+                return (True, cdfrm)
+            return (False, None)
+        
+        def buscar_componentes_kit_fc05100(cursor, cdfrm, cdfil):
             """
             Busca componentes de um kit na FC05100.
-            CDFRM = código do kit (CDPRO do produto kit)
-            CDSAC ou CDPRO = código de cada componente
+            CDFRM = código do kit (obtido da FC05000)
+            CDSAC = código de cada componente
             Para cada componente, busca nome na FC03000 e metadados via LEFT JOIN na FC03140.
             Lote/fabricação/validade são OPCIONAIS (LEFT JOIN para evitar erro 500).
             """
             componentes = []
             try:
-                # Busca componentes na FC05100 com LEFT JOIN para lotes (FC03140)
-                # CDSAC é o código do componente que vincula ao CDPRO na FC03000
-                print(f"  [KIT FC05100] Buscando componentes para CDFRM={cdpro}")
+                print(f"  [KIT FC05100] Buscando componentes para CDFRM={cdfrm}")
                 
                 cursor.execute("""
                     SELECT 
@@ -1636,10 +1662,10 @@ def buscar_requisicao(nr_requisicao):
                     LEFT JOIN FC03140 l ON c.CDSAC = l.CDPRO AND l.CDFIL = ?
                     WHERE c.CDFRM = ?
                     ORDER BY c.ITEMID
-                """, (cdfil, cdpro))
+                """, (cdfil, cdfrm))
                 
                 rows = cursor.fetchall()
-                print(f"  [KIT FC05100] {len(rows)} componentes encontrados para CDFRM={cdpro}")
+                print(f"  [KIT FC05100] {len(rows)} componentes encontrados para CDFRM={cdfrm}")
                 
                 for row in rows:
                     cdsac = row[0]       # Código do componente
@@ -1864,15 +1890,16 @@ def buscar_requisicao(nr_requisicao):
                     print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
 
             # =====================================================
-            # VERIFICAÇÃO DE KIT: Usando FC05100 (componentes de kit)
-            # Verifica se o CDPRO do item é um kit (tem componentes na FC05100)
+            # VERIFICAÇÃO DE KIT: Usando FC05000 (CDSEM) + FC05100 (componentes)
+            # 1. Busca FC05000 onde CDSEM = CDPRO → obtém CDFRM (código do kit)
+            # 2. Busca FC05100 onde CDFRM = código do kit → componentes
             # =====================================================
-            e_kit = verificar_se_kit_fc05100(cursor, cdpro)
+            e_kit, cdfrm_kit = verificar_se_kit(cursor, cdpro)
             componentes_kit = []
             
             if e_kit:
-                print(f"  -> IDENTIFICADO COMO KIT (via FC05100, CDFRM={cdpro})!")
-                componentes_kit = buscar_componentes_kit_fc05100(cursor, cdpro, filial)
+                print(f"  -> IDENTIFICADO COMO KIT! CDPRO={cdpro} -> CDFRM={cdfrm_kit}")
+                componentes_kit = buscar_componentes_kit_fc05100(cursor, cdfrm_kit, filial)
                 print(f"  -> {len(componentes_kit)} componentes encontrados")
 
             # =====================================================
