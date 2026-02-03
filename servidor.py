@@ -1132,6 +1132,261 @@ def debug_tabelas_lotes():
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ============================================
+# DEBUG: FC05000/FC05100 - Estrutura de Kits (Nova lógica)
+# ============================================
+@app.route('/api/debug/estrutura-kit', methods=['GET'])
+def debug_estrutura_kit():
+    """
+    Endpoint de debug para investigar a estrutura das tabelas FC05000 e FC05100.
+    Retorna colunas e exemplos de registros para entender o mapeamento correto.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {}
+        
+        # Analisa FC05000 (tabela de cabeçalho de kits)
+        try:
+            cursor.execute("""
+                SELECT RF.RDB$FIELD_NAME
+                FROM RDB$RELATION_FIELDS RF
+                WHERE RF.RDB$RELATION_NAME = 'FC05000'
+                ORDER BY RF.RDB$FIELD_POSITION
+            """)
+            colunas_fc05000 = [row[0].strip() for row in cursor.fetchall()]
+            
+            cursor.execute("SELECT FIRST 10 * FROM FC05000")
+            cols = [desc[0].strip() for desc in cursor.description]
+            exemplos_fc05000 = []
+            for row in cursor.fetchall():
+                exemplo = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    exemplo[col] = val
+                exemplos_fc05000.append(exemplo)
+            
+            resultado["FC05000"] = {
+                "colunas": colunas_fc05000,
+                "exemplos": exemplos_fc05000
+            }
+        except Exception as e:
+            resultado["FC05000"] = {"erro": str(e)}
+        
+        # Analisa FC05100 (tabela de componentes de kits)
+        try:
+            cursor.execute("""
+                SELECT RF.RDB$FIELD_NAME
+                FROM RDB$RELATION_FIELDS RF
+                WHERE RF.RDB$RELATION_NAME = 'FC05100'
+                ORDER BY RF.RDB$FIELD_POSITION
+            """)
+            colunas_fc05100 = [row[0].strip() for row in cursor.fetchall()]
+            
+            cursor.execute("SELECT FIRST 10 * FROM FC05100")
+            cols = [desc[0].strip() for desc in cursor.description]
+            exemplos_fc05100 = []
+            for row in cursor.fetchall():
+                exemplo = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    exemplo[col] = val
+                exemplos_fc05100.append(exemplo)
+            
+            resultado["FC05100"] = {
+                "colunas": colunas_fc05100,
+                "exemplos": exemplos_fc05100
+            }
+        except Exception as e:
+            resultado["FC05100"] = {"erro": str(e)}
+        
+        # Analisa FC03140 (tabela de lotes - se existir)
+        try:
+            cursor.execute("""
+                SELECT RF.RDB$FIELD_NAME
+                FROM RDB$RELATION_FIELDS RF
+                WHERE RF.RDB$RELATION_NAME = 'FC03140'
+                ORDER BY RF.RDB$FIELD_POSITION
+            """)
+            colunas_fc03140 = [row[0].strip() for row in cursor.fetchall()]
+            
+            cursor.execute("SELECT FIRST 5 * FROM FC03140")
+            cols = [desc[0].strip() for desc in cursor.description]
+            exemplos_fc03140 = []
+            for row in cursor.fetchall():
+                exemplo = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    exemplo[col] = val
+                exemplos_fc03140.append(exemplo)
+            
+            resultado["FC03140"] = {
+                "colunas": colunas_fc03140,
+                "exemplos": exemplos_fc03140
+            }
+        except Exception as e:
+            resultado["FC03140"] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({"success": True, "resultado": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/debug/componentes-kit/<cdpro>', methods=['GET'])
+def debug_componentes_kit_cdpro(cdpro):
+    """
+    Endpoint de debug para buscar componentes de um kit específico por CDPRO.
+    Testa múltiplas estratégias de busca para encontrar os componentes.
+    """
+    filial = request.args.get('filial', '1')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {
+            "cdpro_buscado": cdpro,
+            "filial": filial,
+            "estrategias": []
+        }
+        
+        # ESTRATÉGIA 1: FC05100 com CDFRM = CDPRO
+        try:
+            cursor.execute("""
+                SELECT * FROM FC05100 WHERE CDFRM = ?
+            """, (cdpro,))
+            cols = [desc[0].strip() for desc in cursor.description]
+            rows = cursor.fetchall()
+            registros = []
+            for row in rows:
+                reg = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    reg[col] = val
+                registros.append(reg)
+            resultado["estrategias"].append({
+                "nome": "FC05100 onde CDFRM = CDPRO",
+                "query": f"SELECT * FROM FC05100 WHERE CDFRM = {cdpro}",
+                "total": len(registros),
+                "registros": registros
+            })
+        except Exception as e:
+            resultado["estrategias"].append({
+                "nome": "FC05100 onde CDFRM = CDPRO",
+                "erro": str(e)
+            })
+        
+        # ESTRATÉGIA 2: FC05100 com CDPRO = CDPRO (campo alternativo)
+        try:
+            cursor.execute("""
+                SELECT * FROM FC05100 WHERE CDPRO = ?
+            """, (cdpro,))
+            cols = [desc[0].strip() for desc in cursor.description]
+            rows = cursor.fetchall()
+            registros = []
+            for row in rows:
+                reg = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    reg[col] = val
+                registros.append(reg)
+            resultado["estrategias"].append({
+                "nome": "FC05100 onde CDPRO = CDPRO",
+                "query": f"SELECT * FROM FC05100 WHERE CDPRO = {cdpro}",
+                "total": len(registros),
+                "registros": registros
+            })
+        except Exception as e:
+            resultado["estrategias"].append({
+                "nome": "FC05100 onde CDPRO = CDPRO",
+                "erro": str(e)
+            })
+        
+        # ESTRATÉGIA 3: FC05000 (tabela de cabeçalho de kits)
+        try:
+            cursor.execute("""
+                SELECT * FROM FC05000 WHERE CDFRM = ?
+            """, (cdpro,))
+            cols = [desc[0].strip() for desc in cursor.description]
+            rows = cursor.fetchall()
+            registros = []
+            for row in rows:
+                reg = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif hasattr(val, 'read'):
+                        val = "[BLOB]"
+                    elif val is not None:
+                        val = str(val)[:100]
+                    reg[col] = val
+                registros.append(reg)
+            resultado["estrategias"].append({
+                "nome": "FC05000 onde CDFRM = CDPRO",
+                "query": f"SELECT * FROM FC05000 WHERE CDFRM = {cdpro}",
+                "total": len(registros),
+                "registros": registros
+            })
+        except Exception as e:
+            resultado["estrategias"].append({
+                "nome": "FC05000 onde CDFRM = CDPRO",
+                "erro": str(e)
+            })
+        
+        # ESTRATÉGIA 4: Buscar por DESCR na FC03000 se começa com "KIT"
+        try:
+            cursor.execute("""
+                SELECT CDPRO, DESCR, NOMRED FROM FC03000 WHERE CDPRO = ?
+            """, (cdpro,))
+            row = cursor.fetchone()
+            if row:
+                resultado["produto"] = {
+                    "cdpro": row[0],
+                    "descr": row[1],
+                    "nomred": row[2],
+                    "e_kit_pelo_nome": "KIT" in (row[1] or "").upper() or "KIT" in (row[2] or "").upper()
+                }
+        except Exception as e:
+            resultado["produto"] = {"erro": str(e)}
+        
+        conn.close()
+        return jsonify({"success": True, "resultado": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================
 # DEBUG: FC12111 - Componentes de Kit por Requisição
 # ============================================
 @app.route('/api/debug/fc12111/<nrrqu>/<serier>', methods=['GET'])
