@@ -1751,21 +1751,62 @@ def buscar_requisicao(nr_requisicao):
             try:
                 print(f"  [KIT FC05100] Buscando componentes para CDFRM={cdfrm}")
                 
+                # 1. Descobre colunas reais da FC05100
                 cursor.execute("""
+                    SELECT TRIM(RDB$FIELD_NAME) 
+                    FROM RDB$RELATION_FIELDS 
+                    WHERE RDB$RELATION_NAME = 'FC05100'
+                """)
+                colunas_fc05100 = [row[0] for row in cursor.fetchall()]
+                print(f"  [KIT FC05100] Colunas disponíveis: {colunas_fc05100}")
+                
+                # 2. Identifica coluna do componente (código do produto)
+                col_componente = None
+                for col in ['CDSAC', 'CDPRO', 'CDCOMP', 'CDPRODUTO']:
+                    if col in colunas_fc05100:
+                        col_componente = col
+                        break
+                
+                # 3. Identifica coluna da fórmula (vínculo com FC05000)
+                col_formula = None
+                for col in ['CDFRM', 'CDFORMULA', 'CDKIT']:
+                    if col in colunas_fc05100:
+                        col_formula = col
+                        break
+                
+                # 4. Identifica coluna de ordem/item
+                col_item = None
+                for col in ['ITEMID', 'NRITEM', 'ORDEM', 'SEQUENCIA']:
+                    if col in colunas_fc05100:
+                        col_item = col
+                        break
+                
+                print(f"  [KIT FC05100] Mapeamento: componente={col_componente}, formula={col_formula}, item={col_item}")
+                
+                if not col_componente or not col_formula:
+                    print(f"  [KIT FC05100] ERRO: Colunas essenciais não encontradas!")
+                    return []
+                
+                # 5. Monta query dinâmica
+                order_clause = f"ORDER BY c.{col_item}" if col_item else ""
+                
+                query = f"""
                     SELECT 
-                        c.CDSAC,
-                        c.ITEMID,
+                        c.{col_componente},
+                        {"c." + col_item if col_item else "1"} as ITEMORD,
                         p.NOMRED,
                         p.DESCR,
                         l.NRLOT,
                         l.DTFAB,
                         l.DTVAL
                     FROM FC05100 c
-                    LEFT JOIN FC03000 p ON c.CDSAC = p.CDPRO
-                    LEFT JOIN FC03140 l ON c.CDSAC = l.CDPRO AND l.CDFIL = ?
-                    WHERE c.CDFRM = ?
-                    ORDER BY c.ITEMID
-                """, (cdfil, cdfrm))
+                    LEFT JOIN FC03000 p ON c.{col_componente} = p.CDPRO
+                    LEFT JOIN FC03140 l ON c.{col_componente} = l.CDPRO AND l.CDFIL = ?
+                    WHERE c.{col_formula} = ?
+                    {order_clause}
+                """
+                print(f"  [KIT FC05100] Query: {query.strip()}")
+                cursor.execute(query, (cdfil, cdfrm))
                 
                 rows = cursor.fetchall()
                 print(f"  [KIT FC05100] {len(rows)} componentes encontrados para CDFRM={cdfrm}")
