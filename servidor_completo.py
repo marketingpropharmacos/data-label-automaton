@@ -1537,16 +1537,138 @@ def buscar_requisicao(nr_requisicao):
             "unidadeVolume": row[13] or "",
         }
         
-        # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
-        # SERIER contém a sequência das barras (0, 1, 2...) conforme FórmulaCerta
-        cursor.execute("""
-            SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN, I.ITEMID
-            FROM FC12110 I
-            WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
-            ORDER BY I.SERIER
-        """, (nr_requisicao, filial))
+        # =====================================================
+        # NOVA LÓGICA DE BUSCA DE ITENS (v4)
+        # 
+        # Usa FC12110 com LEFT JOIN em FC03140 para obter lote/datas
+        # diretamente do lote registrado na requisição.
+        # REMOVE dependência de FC05000/CDSEM que causava erros.
+        # 
+        # Para identificar KITs: agrupa itens com mesmo SERIER
+        # =====================================================
         
-        itens = cursor.fetchall()
+        # 1. Descobre colunas da FC03140 para saber quais campos usar
+        colunas_fc03140 = []
+        try:
+            cursor.execute("""
+                SELECT TRIM(RDB$FIELD_NAME) 
+                FROM RDB$RELATION_FIELDS 
+                WHERE RDB$RELATION_NAME = 'FC03140'
+            """)
+            colunas_fc03140 = [row[0] for row in cursor.fetchall()]
+            print(f"[DEBUG] Colunas FC03140: {colunas_fc03140}")
+        except Exception as e:
+            print(f"[DEBUG] Erro ao listar colunas FC03140: {e}")
+        
+        # Identifica coluna de lote na FC03140
+        col_lote_fc03140 = None
+        for col in ['NRLOT', 'CTLOT', 'LOTE']:
+            if col in colunas_fc03140:
+                col_lote_fc03140 = col
+                break
+        
+        # Identifica colunas de data na FC03140
+        col_fab = 'DTFAB' if 'DTFAB' in colunas_fc03140 else None
+        col_val = 'DTVAL' if 'DTVAL' in colunas_fc03140 else None
+        
+        print(f"[DEBUG] FC03140 mapeamento: lote={col_lote_fc03140}, fab={col_fab}, val={col_val}")
+        
+        # 2. Monta query principal com LEFT JOIN dinâmico
+        # Busca itens da requisição com dados do produto e lote
+        if col_lote_fc03140 and (col_fab or col_val):
+            # FC03140 disponível com lote e datas
+            select_datas = f"l.{col_fab}" if col_fab else "NULL"
+            select_val = f"l.{col_val}" if col_val else "NULL"
+            
+            query_itens = f"""
+                SELECT 
+                    i.SERIER,
+                    i.ITEMID,
+                    i.CDPRO,
+                    i.CDPRIN,
+                    i.DESCR,
+                    i.QUANT,
+                    i.UNIDA,
+                    i.NRLOT,
+                    i.CTLOT,
+                    p.DESCR as DESCR_PROD,
+                    p.NOMRED,
+                    {select_datas} as DTFAB,
+                    {select_val} as DTVAL
+                FROM FC12110 i
+                LEFT JOIN FC03000 p ON p.CDPRO = i.CDPRO
+                LEFT JOIN FC03140 l ON l.CDPRO = i.CDPRO 
+                    AND (l.{col_lote_fc03140} = i.NRLOT OR l.{col_lote_fc03140} = i.CTLOT)
+                WHERE i.NRRQU = ? AND i.CDFIL = ? AND i.TPCMP IN ('C', 'S')
+                ORDER BY i.SERIER, i.ITEMID
+            """
+        else:
+            # Fallback sem FC03140
+            query_itens = """
+                SELECT 
+                    i.SERIER,
+                    i.ITEMID,
+                    i.CDPRO,
+                    i.CDPRIN,
+                    i.DESCR,
+                    i.QUANT,
+                    i.UNIDA,
+                    i.NRLOT,
+                    i.CTLOT,
+                    p.DESCR as DESCR_PROD,
+                    p.NOMRED,
+                    NULL as DTFAB,
+                    NULL as DTVAL
+                FROM FC12110 i
+                LEFT JOIN FC03000 p ON p.CDPRO = i.CDPRO
+                WHERE i.NRRQU = ? AND i.CDFIL = ? AND i.TPCMP IN ('C', 'S')
+                ORDER BY i.SERIER, i.ITEMID
+            """
+        
+        print(f"[DEBUG] Query itens: {query_itens.strip()[:200]}...")
+        cursor.execute(query_itens, (nr_requisicao, filial))
+        
+        itens_raw = cursor.fetchall()
+        print(f"[DEBUG] {len(itens_raw)} itens encontrados para requisição {nr_requisicao}")
+        
+        # 3. Agrupa itens por SERIER para identificar KITs
+        # Se múltiplos itens têm o mesmo SERIER, é um KIT
+        from collections import defaultdict
+        itens_por_serier = defaultdict(list)
+        
+        for row in itens_raw:
+            serier = row[0]
+            itemid = row[1]
+            cdpro = row[2]
+            cdprin = row[3]
+            descr = row[4]
+            quant = row[5]
+            unida = row[6]
+            nrlot = row[7]
+            ctlot = row[8]
+            descr_prod = row[9]
+            nomred = row[10]
+            dtfab = row[11]
+            dtval = row[12]
+            
+            itens_por_serier[serier].append({
+                'serier': serier,
+                'itemid': itemid,
+                'cdpro': cdpro,
+                'cdprin': cdprin,
+                'descr': descr or descr_prod or '',
+                'quant': quant,
+                'unida': unida,
+                'nrlot': str(nrlot).strip() if nrlot else '',
+                'ctlot': str(ctlot).strip() if ctlot else '',
+                'nomred': nomred or '',
+                'dtfab': dtfab,
+                'dtval': dtval,
+            })
+        
+        print(f"[DEBUG] {len(itens_por_serier)} grupos por SERIER")
+        for serier, items in itens_por_serier.items():
+            print(f"  SERIER={serier}: {len(items)} item(s)")
         
         # Lista de materiais a excluir da composição (embalagens, veículos, conservantes)
         materiais_excluir = [
@@ -1581,620 +1703,272 @@ def buscar_requisicao(nr_requisicao):
             return nome_completo
         
         # =====================================================
-        # FUNÇÕES PARA DETECÇÃO E BUSCA DE KITS (FC05000/FC05100)
-        # 
-        # ESTRUTURA CORRETA (conforme imagem do usuário):
-        # - FC05000: Cabeçalho de kits
-        #   - CDFRM: Código do kit (ex: 2515 = "AMP KIT EMAG (SUG 2) 2ML")
-        #   - CDSEM: Código do produto semi-acabado (C.Semi), que é o CDPRO
-        #     que aparece na requisição (ex: 92487 = "AMP EMAG SUG 2 2ML")
-        # - FC05100: Componentes do kit
-        #   - CDFRM: Código do kit (mesmo da FC05000)
-        #   - CDSAC: Código do componente (vincula ao CDPRO na FC03000)
-        # - FC03140: Lotes de componentes (LEFT JOIN opcional)
-        #
-        # FLUXO:
-        # 1. Produto chega com CDPRO = 92487
-        # 2. Busca FC05000 onde CDSEM = 92487 → encontra CDFRM = 2515
-        # 3. Busca FC05100 onde CDFRM = 2515 → componentes 92494, 92681, etc.
+        # 4. PROCESSA CADA GRUPO POR SERIER
+        # Se um SERIER tem múltiplos itens, é um KIT
         # =====================================================
+        data = []
         
-        def buscar_cdfrm_do_kit(cursor, cdpro):
-            """
-            Descobre o código do kit (CDFRM) a partir do CDPRO do produto.
-            Na FC05000, o campo CDSEM (C.Semi) contém o CDPRO do produto semi-acabado.
-            Retorna o CDFRM se for um kit, None caso contrário.
+        for serier in sorted(itens_por_serier.keys()):
+            items_grupo = itens_por_serier[serier]
             
-            CORREÇÃO v3: Testa TODAS as estratégias possíveis com debug extenso.
-            """
-            cdpro_str = str(cdpro).strip()
+            # Determina se é KIT: múltiplos itens com mesmo SERIER
+            e_kit = len(items_grupo) > 1
             
-            print(f"\n  ========== BUSCA KIT PARA CDPRO={cdpro_str} ==========")
+            print(f"\n{'='*60}")
+            print(f"PROCESSANDO SERIER={serier} ({len(items_grupo)} item(s)) - {'KIT' if e_kit else 'NORMAL'}")
             
-            try:
-                # ESTRATÉGIA 1: CDSEM = CDPRO (string)
-                print(f"  [KIT] Estratégia 1: FC05000 WHERE CDSEM = '{cdpro_str}'")
-                cursor.execute("""
-                    SELECT CDFRM, CDSEM FROM FC05000 
-                    WHERE CDSEM = ?
-                """, (cdpro_str,))
-                row = cursor.fetchone()
-                if row:
-                    cdfrm = row[0]
-                    print(f"  [KIT] ✓ ENCONTRADO! CDFRM={cdfrm}, CDSEM={row[1]}")
-                    return cdfrm
-                print(f"  [KIT] ✗ Não encontrado")
+            if e_kit:
+                # =====================================================
+                # É KIT: Cria rótulo com componentes
+                # =====================================================
+                # Primeiro item é o "principal" do kit
+                item_principal = items_grupo[0]
+                nome_kit = item_principal['descr']
                 
-                # ESTRATÉGIA 2: CDSEM = CDPRO (numérico)
-                try:
-                    cdpro_int = int(cdpro_str)
-                    print(f"  [KIT] Estratégia 2: FC05000 WHERE CDSEM = {cdpro_int} (int)")
-                    cursor.execute("""
-                        SELECT CDFRM, CDSEM FROM FC05000 
-                        WHERE CDSEM = ?
-                    """, (cdpro_int,))
-                    row = cursor.fetchone()
-                    if row:
-                        cdfrm = row[0]
-                        print(f"  [KIT] ✓ ENCONTRADO! CDFRM={cdfrm}, CDSEM={row[1]}")
-                        return cdfrm
-                    print(f"  [KIT] ✗ Não encontrado")
-                except ValueError:
-                    pass
-                
-                # ESTRATÉGIA 3: CDFRM = CDPRO (talvez o CDPRO JÁ seja o código do kit)
-                print(f"  [KIT] Estratégia 3: FC05000 WHERE CDFRM = '{cdpro_str}'")
-                cursor.execute("""
-                    SELECT CDFRM, CDSEM FROM FC05000 
-                    WHERE CDFRM = ?
-                """, (cdpro_str,))
-                row = cursor.fetchone()
-                if row:
-                    cdfrm = row[0]
-                    print(f"  [KIT] ✓ ENCONTRADO! CDFRM={cdfrm} (CDPRO é o próprio código do kit)")
-                    return cdfrm
-                print(f"  [KIT] ✗ Não encontrado")
-                
-                # ESTRATÉGIA 4: CDFRM = CDPRO (numérico)
-                try:
-                    cdpro_int = int(cdpro_str)
-                    print(f"  [KIT] Estratégia 4: FC05000 WHERE CDFRM = {cdpro_int} (int)")
-                    cursor.execute("""
-                        SELECT CDFRM, CDSEM FROM FC05000 
-                        WHERE CDFRM = ?
-                    """, (cdpro_int,))
-                    row = cursor.fetchone()
-                    if row:
-                        cdfrm = row[0]
-                        print(f"  [KIT] ✓ ENCONTRADO! CDFRM={cdfrm}")
-                        return cdfrm
-                    print(f"  [KIT] ✗ Não encontrado")
-                except ValueError:
-                    pass
-                
-                # ESTRATÉGIA 5: Busca direta na FC05100 (CDSAC = CDPRO)
-                print(f"  [KIT] Estratégia 5: FC05100 WHERE CDSAC = '{cdpro_str}' (componente)")
-                cursor.execute("""
-                    SELECT CDFRM, CDSAC FROM FC05100 
-                    WHERE CDSAC = ?
-                """, (cdpro_str,))
-                row = cursor.fetchone()
-                if row:
-                    cdfrm = row[0]
-                    print(f"  [KIT] ✓ ENCONTRADO via FC05100! CDFRM={cdfrm} (CDPRO é componente)")
-                    return cdfrm
-                print(f"  [KIT] ✗ Não encontrado")
-                
-                # ESTRATÉGIA 6: Verifica se o nome do produto contém "KIT"
-                print(f"  [KIT] Estratégia 6: Verificando nome do produto na FC03000")
-                cursor.execute("""
-                    SELECT DESCR, NOMRED FROM FC03000 WHERE CDPRO = ?
-                """, (cdpro_str,))
-                row = cursor.fetchone()
-                if row:
-                    descr = (row[0] or "").upper()
-                    nomred = (row[1] or "").upper()
-                    print(f"  [KIT] Produto: DESCR='{descr[:50]}', NOMRED='{nomred}'")
-                    if "KIT" in descr or "KIT" in nomred:
-                        print(f"  [KIT] Nome contém 'KIT', buscando componentes diretamente...")
-                        # Tenta buscar como se o CDPRO fosse o CDFRM
-                        cursor.execute("""
-                            SELECT COUNT(*) FROM FC05100 WHERE CDFRM = ?
-                        """, (cdpro_str,))
-                        count_row = cursor.fetchone()
-                        if count_row and count_row[0] > 0:
-                            print(f"  [KIT] ✓ {count_row[0]} componentes encontrados na FC05100!")
-                            return cdpro_str  # O próprio CDPRO é o CDFRM
-                        
-                        # Tenta numérico
-                        try:
-                            cdpro_int = int(cdpro_str)
-                            cursor.execute("""
-                                SELECT COUNT(*) FROM FC05100 WHERE CDFRM = ?
-                            """, (cdpro_int,))
-                            count_row = cursor.fetchone()
-                            if count_row and count_row[0] > 0:
-                                print(f"  [KIT] ✓ {count_row[0]} componentes encontrados na FC05100 (int)!")
-                                return cdpro_int
-                        except ValueError:
-                            pass
-                
-                print(f"  [KIT] ========== NENHUMA ESTRATÉGIA FUNCIONOU ==========\n")
-                return None
-                
-            except Exception as e:
-                print(f"  [KIT ERRO GERAL] {e}")
-                import traceback
-                traceback.print_exc()
-                return None
-        
-        def verificar_se_kit(cursor, cdpro):
-            """
-            Verifica se um produto é um KIT.
-            Primeiro busca o CDFRM na FC05000 (via CDSEM = CDPRO).
-            Retorna (True, CDFRM) se for kit, (False, None) caso contrário.
-            """
-            cdfrm = buscar_cdfrm_do_kit(cursor, cdpro)
-            if cdfrm:
-                return (True, cdfrm)
-            return (False, None)
-        
-        def buscar_componentes_kit_fc05100(cursor, cdfrm, cdfil):
-            """
-            Busca componentes de um kit na FC05100.
-            CDFRM = código do kit (obtido da FC05000)
-            CDSAC = código de cada componente
-            Para cada componente, busca nome na FC03000 e metadados via LEFT JOIN na FC03140.
-            Lote/fabricação/validade são OPCIONAIS (LEFT JOIN para evitar erro 500).
-            """
-            componentes = []
-            try:
-                print(f"  [KIT FC05100] Buscando componentes para CDFRM={cdfrm}")
-                
-                # 1. Descobre colunas reais da FC05100
-                cursor.execute("""
-                    SELECT TRIM(RDB$FIELD_NAME) 
-                    FROM RDB$RELATION_FIELDS 
-                    WHERE RDB$RELATION_NAME = 'FC05100'
-                """)
-                colunas_fc05100 = [row[0] for row in cursor.fetchall()]
-                print(f"  [KIT FC05100] Colunas disponíveis: {colunas_fc05100}")
-                
-                # 2. Identifica coluna do componente (código do produto)
-                col_componente = None
-                for col in ['CDSAC', 'CDPRO', 'CDCOMP', 'CDPRODUTO']:
-                    if col in colunas_fc05100:
-                        col_componente = col
-                        break
-                
-                # 3. Identifica coluna da fórmula (vínculo com FC05000)
-                col_formula = None
-                for col in ['CDFRM', 'CDFORMULA', 'CDKIT']:
-                    if col in colunas_fc05100:
-                        col_formula = col
-                        break
-                
-                # 4. Identifica coluna de ordem/item
-                col_item = None
-                for col in ['ITEMID', 'NRITEM', 'ORDEM', 'SEQUENCIA']:
-                    if col in colunas_fc05100:
-                        col_item = col
-                        break
-                
-                print(f"  [KIT FC05100] Mapeamento: componente={col_componente}, formula={col_formula}, item={col_item}")
-                
-                if not col_componente or not col_formula:
-                    print(f"  [KIT FC05100] ERRO: Colunas essenciais não encontradas!")
-                    return []
-                
-                # 5. Monta query dinâmica
-                order_clause = f"ORDER BY c.{col_item}" if col_item else ""
-                
-                query = f"""
-                    SELECT 
-                        c.{col_componente},
-                        {"c." + col_item if col_item else "1"} as ITEMORD,
-                        p.NOMRED,
-                        p.DESCR,
-                        l.NRLOT,
-                        l.DTFAB,
-                        l.DTVAL
-                    FROM FC05100 c
-                    LEFT JOIN FC03000 p ON c.{col_componente} = p.CDPRO
-                    LEFT JOIN FC03140 l ON c.{col_componente} = l.CDPRO AND l.CDFIL = ?
-                    WHERE c.{col_formula} = ?
-                    {order_clause}
-                """
-                print(f"  [KIT FC05100] Query: {query.strip()}")
-                cursor.execute(query, (cdfil, cdfrm))
-                
-                rows = cursor.fetchall()
-                print(f"  [KIT FC05100] {len(rows)} componentes encontrados para CDFRM={cdfrm}")
-                
-                for row in rows:
-                    cdsac = row[0]       # Código do componente
-                    itemid = row[1]      # Ordem do componente
-                    nomred = row[2]      # Nome reduzido (FC03000)
-                    descr = row[3]       # Descrição (FC03000)
-                    lote = row[4]        # Lote (FC03140 - pode ser NULL)
-                    fab = row[5]         # Fabricação (FC03140 - pode ser NULL)
-                    val = row[6]         # Validade (FC03140 - pode ser NULL)
-                    
-                    # Nome do componente: prioriza NOMRED, fallback para DESCR
-                    nome_comp = nomred or descr or f"COMP_{cdsac}"
-                    nome_comp = nome_comp.strip() if nome_comp else ""
-                    
+                # Monta lista de componentes
+                componentes_kit = []
+                for item in items_grupo:
                     # Formata datas
-                    lote_str = str(lote).strip() if lote else ""
-                    fab_str = fab.strftime('%m/%y') if fab else ""
-                    val_str = val.strftime('%m/%y') if val else ""
+                    fab_str = ""
+                    val_str = ""
+                    if item['dtfab']:
+                        try:
+                            fab_str = item['dtfab'].strftime('%m/%y')
+                        except:
+                            fab_str = str(item['dtfab'])
+                    if item['dtval']:
+                        try:
+                            val_str = item['dtval'].strftime('%m/%y')
+                        except:
+                            val_str = str(item['dtval'])
                     
-                    print(f"    [COMP] CDSAC={cdsac}, NOME={nome_comp[:40]}, LT:{lote_str}, F:{fab_str}, V:{val_str}")
-                    
-                    # Tenta buscar pH na FC06100 se não tiver na FC03140
-                    ph = ""
-                    try:
-                        cursor.execute("""
-                            SELECT FIRST 1 PH FROM FC06100
-                            WHERE CDPRO = ? AND CDFIL = ?
-                        """, (cdsac, cdfil))
-                        ph_row = cursor.fetchone()
-                        if ph_row and ph_row[0]:
-                            ph = str(ph_row[0]).strip()
-                    except Exception as e:
-                        print(f"      [PH ERRO] {e}")
-                    
-                    # Remove prefixos do nome (AMP, KIT, etc)
-                    nome_limpo = nome_comp.upper().strip()
+                    # Remove prefixos do nome
+                    nome_comp = (item['descr'] or item['nomred'] or '').upper().strip()
                     for prefixo in ['AMP ', 'CX ', 'KIT ', 'FRS ']:
-                        if nome_limpo.startswith(prefixo):
-                            nome_limpo = nome_limpo[len(prefixo):]
+                        if nome_comp.startswith(prefixo):
+                            nome_comp = nome_comp[len(prefixo):]
                             break
                     
-                    componentes.append({
-                        "codigo": str(cdsac),
-                        "nome": nome_limpo,
-                        "ph": ph,
-                        "lote": lote_str,
+                    componentes_kit.append({
+                        "codigo": str(item['cdpro']),
+                        "nome": nome_comp,
+                        "ph": "",  # pH não vem da FC03140
+                        "lote": item['nrlot'] or item['ctlot'] or '',
                         "fabricacao": fab_str,
                         "validade": val_str
                     })
+                    print(f"  [COMP] CDPRO={item['cdpro']}, {nome_comp}, LT:{item['nrlot']}, F:{fab_str}, V:{val_str}")
                 
-            except Exception as e:
-                print(f"  [KIT FC05100 ERRO] {e}")
-            
-            return componentes
-        
-        data = []
-        for idx, item in enumerate(itens):
-            serier = item[0]  # SERIER - número da barra (0, 1, 2...) direto do banco
-            cdpro = item[5]
-            cdprin = item[6]  # CDPRIN - código do produto principal (base para mesclas)
-            # ITEMID - identificador do item na FC12110 (com fallback seguro)
-            item_id = item[7] if len(item) > 7 else None
-            nome_produto = item[1] or ""  # DESCR da FC12110
-            
-            # =====================================================
-            # PRIORIDADE: Busca dados na FC99999 usando CDPRIN quando disponível
-            # CDPRIN contém o código do produto base (ex: 92779 para TRISH)
-            # CDPRO contém o código do produto específico (ex: 92781 para SKINBOOSTER)
-            # =====================================================
-            print(f"\n{'='*60}")
-            print(f"DEBUG FC99999 - Barra {serier} (SERIER)")
-            print(f"  CDPRO: '{cdpro}'")
-            print(f"  CDPRIN: '{cdprin}'")
-            print(f"  NOME PRODUTO: '{nome_produto}'")
-            
-            # Determina qual código usar para buscar composição
-            # Se CDPRIN existe e é diferente de CDPRO, usa CDPRIN (é uma mescla/derivado)
-            cdprin_str = str(cdprin).strip() if cdprin else ""
-            cdpro_str = str(cdpro).strip()
-            
-            if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
-                codigo_busca = cdprin_str
-                print(f"  -> USANDO CDPRIN ({cdprin_str}) para buscar composição (MESCLA/DERIVADO)")
+                # Usa dados do primeiro item para o rótulo
+                rotulo = {
+                    **dados_base,
+                    "nrItem": str(serier),
+                    "formula": simplificar_nome_mescla(nome_kit),
+                    "volume": str(item_principal['quant']) if item_principal['quant'] else dados_base["volume"],
+                    "unidadeVolume": item_principal['unida'] or dados_base["unidadeVolume"],
+                    "lote": "",  # KIT não tem lote único - cada componente tem o seu
+                    "quantidade": str(int(item_principal['quant'])) if item_principal['quant'] else "",
+                    "composicao": "",
+                    "aplicacao": "",
+                    "descricaoProduto": nome_kit,
+                    "observacoes": "",
+                    "tipoItem": "KIT",
+                    "componentes": componentes_kit
+                }
+                
+                print(f"  -> Rótulo KIT com {len(componentes_kit)} componentes")
+                data.append(rotulo)
+                
             else:
-                codigo_busca = cdpro_str
-                print(f"  -> USANDO CDPRO ({cdpro_str}) para buscar composição")
-            
-            codigo_busca_padded = codigo_busca.zfill(8)  # Ex: '00092779'
-            
-            print(f"  Código buscado: '{codigo_busca}'")
-            print(f"  Código padded: '{codigo_busca_padded}'")
-            
-            # Query com match exato em múltiplos formatos usando codigo_busca (CDPRIN ou CDPRO)
-            cursor.execute("""
-                SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
-                FROM FC99999 
-                WHERE ARGUMENTO = ? 
-                   OR ARGUMENTO = ?
-                   OR ARGUMENTO = ?
-                   OR ARGUMENTO = ?
-                ORDER BY SUBARGUM
-            """, (codigo_busca, codigo_busca_padded, f'OBSFIC{codigo_busca}', f'OBSFIC{codigo_busca_padded}'))
-            todos_args_exato = cursor.fetchall()
-            print(f"  Argumentos EXATOS encontrados: {len(todos_args_exato)}")
-            
-            # Se não encontrou com exato, tenta CONTAINING com validação
-            if not todos_args_exato:
-                print(f"  -> Nenhum match exato. Tentando CONTAINING com validação...")
-                cursor.execute("""
-                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
-                    FROM FC99999 
-                    WHERE ARGUMENTO CONTAINING ?
-                    ORDER BY ARGUMENTO, SUBARGUM
-                """, (codigo_busca,))
-                todos_args_containing = cursor.fetchall()
-                
-                # Filtra registros que contêm o código buscado (correção: aceita sufixos)
-                todos_args = []
-                for arg in todos_args_containing:
-                    argumento = arg[0].strip() if arg[0] else ""
-                    # Remove prefixo OBSFIC para comparação
-                    codigo_no_arg = argumento.replace("OBSFIC", "").strip()
-                    
-                    # Aceita se o código buscado está CONTIDO no argumento (não só terminando)
-                    # Ex: OBSFIC9244614 -> extrai "9244614" -> contém "92446"? -> ACEITA
-                    if (codigo_busca in codigo_no_arg or 
-                        codigo_busca_padded in codigo_no_arg or
-                        argumento.endswith(codigo_busca) or 
-                        argumento.endswith(codigo_busca_padded)):
-                        todos_args.append(arg)
-                        print(f"    VALIDADO: '{argumento}' (código contido em '{codigo_no_arg}')")
-                    else:
-                        print(f"    REJEITADO: '{argumento}' (não corresponde ao código)")
-                print(f"  Argumentos VALIDADOS após CONTAINING: {len(todos_args)}")
-            else:
-                todos_args = todos_args_exato
-            
-            # =====================================================
-            # BUSCA EM CASCATA: Se não encontrou com CDPRIN, tenta CDPRO
-            # =====================================================
-            if not todos_args and cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
-                print(f"  -> Sem resultados com CDPRIN. Tentando CDPRO ({cdpro_str})...")
-                cdpro_padded = cdpro_str.zfill(8)
-                
-                cursor.execute("""
-                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
-                    FROM FC99999 
-                    WHERE ARGUMENTO CONTAINING ?
-                    ORDER BY ARGUMENTO, SUBARGUM
-                """, (cdpro_str,))
-                todos_args_cdpro = cursor.fetchall()
-                
-                # Valida os resultados da busca por CDPRO
-                for arg in todos_args_cdpro:
-                    argumento = arg[0].strip() if arg[0] else ""
-                    codigo_no_arg = argumento.replace("OBSFIC", "").strip()
-                    
-                    if (cdpro_str in codigo_no_arg or 
-                        cdpro_padded in codigo_no_arg or
-                        argumento.endswith(cdpro_str) or 
-                        argumento.endswith(cdpro_padded)):
-                        todos_args.append(arg)
-                        print(f"    VALIDADO (CDPRO): '{argumento}'")
-                
-                print(f"  Argumentos encontrados via CDPRO: {len(todos_args)}")
-            
-            # Inicializa variáveis para dados da FC99999
-            ativos_mescla = []
-            aplicacao_fc99999 = ""
-            
-            # Lista de prefixos/palavras que indicam que NÃO é um ativo real
-            IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO', 'INSTRUC', 'AVISO']
-            
-            # Processa TODOS os registros encontrados
-            for arg in todos_args:
-                argumento = arg[0]
-                subargum = str(arg[1]).strip().zfill(5)
-                texto = arg[2]
-                
-                # Trata BLOB se necessário
-                if texto and hasattr(texto, 'read'):
-                    texto = texto.read().decode('latin-1')
-                texto = texto.strip() if texto else ""
-                
-                if not texto:
-                    continue
-                
-                param_preview = texto[:80] if texto else 'NULL'
-                print(f"    - ARG: {argumento}, SUB: {subargum}, PARAM: {param_preview}...")
-                
-                texto_upper = texto.upper()
-                
-                # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
-                if "APLICA" in texto_upper and ":" in texto:
-                    aplicacao_fc99999 = texto.split(":", 1)[1].strip()
-                    print(f"  -> APLICAÇÃO encontrada: '{aplicacao_fc99999}'")
-                    continue
-                
                 # =====================================================
-                # EXPANDIDO: Aceita QUALQUER SUBARGUM para ativos
-                # (antes só aceitava 00001 e 00002)
+                # ITEM ÚNICO: Processa normalmente
                 # =====================================================
-                # Ignora se contém palavra de exclusão
-                if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
-                    print(f"    IGNORADO (não é ativo): '{texto[:50]}...'")
-                    continue
+                item = items_grupo[0]
+                cdpro = item['cdpro']
+                cdprin = item['cdprin']
+                nome_produto = item['descr']
+                item_id = item['itemid']
                 
-                # Ignora se parece ser instrução ou texto muito longo sem vírgula
-                if len(texto) > 200 and ',' not in texto:
-                    print(f"    IGNORADO (texto muito longo sem ativos): '{texto[:50]}...'")
-                    continue
+                print(f"  CDPRO: '{cdpro}'")
+                print(f"  CDPRIN: '{cdprin}'")
+                print(f"  NOME PRODUTO: '{nome_produto}'")
                 
-                # Remove prefixo OBS: se existir
-                texto_limpo = texto
-                if texto_upper.startswith("OBS:"):
-                    texto_limpo = texto[4:].strip()
-                elif texto_upper.startswith("OBS :"):
-                    texto_limpo = texto[5:].strip()
+                # Determina qual código usar para buscar composição
+                cdprin_str = str(cdprin).strip() if cdprin else ""
+                cdpro_str = str(cdpro).strip()
                 
-                if texto_limpo.strip():
-                    ativos_mescla.append(texto_limpo)
-                    print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
-
-            # =====================================================
-            # VERIFICAÇÃO DE KIT: Usando FC05000 (CDSEM) + FC05100 (componentes)
-            # 1. Busca FC05000 onde CDSEM = CDPRO → obtém CDFRM (código do kit)
-            # 2. Busca FC05100 onde CDFRM = código do kit → componentes
-            # =====================================================
-            e_kit, cdfrm_kit = verificar_se_kit(cursor, cdpro)
-            componentes_kit = []
-            
-            if e_kit:
-                print(f"  -> IDENTIFICADO COMO KIT! CDPRO={cdpro} -> CDFRM={cdfrm_kit}")
-                componentes_kit = buscar_componentes_kit_fc05100(cursor, cdfrm_kit, filial)
-                print(f"  -> {len(componentes_kit)} componentes encontrados")
-
-            # =====================================================
-            # LÓGICA: PRODUTO ÚNICO vs MESCLA vs KIT
-            # =====================================================
-            # Compara nome do produto com os ativos encontrados na FC99999
-            nome_produto_upper = nome_produto.upper()
-            
-            e_mescla = False
-            composicao = ""
-            nome_formula = nome_produto  # Padrão: usa nome original
-            
-            if ativos_mescla:
-                primeiro_ativo = ativos_mescla[0] if ativos_mescla else ""
-                
-                # =====================================================
-                # NOVA LÓGICA DE CLASSIFICAÇÃO (mais confiável)
-                # =====================================================
-                
-                # CRITÉRIO 1: CDPRIN diferente de CDPRO indica derivado/mescla
                 if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
-                    e_mescla = True
-                    print(f"  -> MESCLA (CDPRIN {cdprin_str} diferente de CDPRO {cdpro_str})")
-                
-                # CRITÉRIO 2: Primeiro ativo contém vírgula (lista de componentes)
-                elif ',' in primeiro_ativo:
-                    e_mescla = True
-                    print(f"  -> MESCLA (ativos com vírgula = múltiplos componentes)")
-                
-                # CRITÉRIO 3: Nome do produto NÃO está contido no ativo
-                elif primeiro_ativo and nome_produto_upper not in primeiro_ativo.upper():
-                    # Verifica se é realmente diferente usando palavras-chave
-                    palavras_produto = [p for p in nome_produto_upper.split() if len(p) > 3]
-                    if not any(p in primeiro_ativo.upper() for p in palavras_produto[:2]):
-                        e_mescla = True
-                        print(f"  -> MESCLA (ativo diferente do nome do produto)")
-                
-                if e_mescla:
-                    # É MESCLA: usa o primeiro ativo como composição (geralmente é a lista completa)
-                    composicao = primeiro_ativo
-                    # Remove prefixo AMP do nome se houver
-                    nome_formula = nome_produto.replace("AMP ", "").strip()
-                    print(f"  -> TIPO: MESCLA")
-                    print(f"  -> COMPOSIÇÃO: '{composicao[:60]}...'")
+                    codigo_busca = cdprin_str
+                    print(f"  -> USANDO CDPRIN ({cdprin_str}) para buscar composição")
                 else:
-                    # É PRODUTO ÚNICO: sem composição extra
-                    composicao = ""
-                    print(f"  -> TIPO: PRODUTO ÚNICO")
-            else:
-                # Fallback: busca matérias-primas (R) do mesmo ITEMID (se disponível)
-                # NOTA: item_id foi definido na linha 1453 deste mesmo loop
-                materias_primas = []
-                if item_id is not None:
-                    cursor.execute("""
-                        SELECT DESCR
-                        FROM FC12110
-                        WHERE NRRQU = ? AND CDFIL = ? AND ITEMID = ? AND TPCMP = 'R'
-                        ORDER BY DESCR
-                    """, (nr_requisicao, filial, item_id))
-                    materias_primas = cursor.fetchall()
+                    codigo_busca = cdpro_str
+                    print(f"  -> USANDO CDPRO ({cdpro_str}) para buscar composição")
                 
-                # Filtra apenas ativos (exclui embalagens e veículos)
-                ativos = []
-                for mp in materias_primas:
-                    descr = mp[0] or ""
-                    descr_upper = descr.upper()
-                    
-                    # Verifica se é material a excluir
-                    excluir = False
-                    for excl in materiais_excluir:
-                        if excl in descr_upper:
-                            excluir = True
-                            break
-                    
-                    if not excluir and descr.strip():
-                        # Evita duplicatas
-                        if descr.strip() not in ativos:
-                            ativos.append(descr.strip())
+                codigo_busca_padded = codigo_busca.zfill(8)
                 
-                # Se encontrou múltiplos ativos diferentes, pode ser mescla
-                if len(ativos) > 1:
-                    composicao = " + ".join(ativos)
-                    e_mescla = True
-                    nome_formula = simplificar_nome_mescla(nome_produto)
-            
-            # =====================================================
-            # APLICAÇÃO: Prioriza FC99999, fallback para FC03300
-            # =====================================================
-            aplicacao = aplicacao_fc99999
-            descricao_produto = ""
-            
-            # Fallback para FC03300 se não encontrou aplicação na FC99999
-            if not aplicacao:
+                # Query FC99999 para composição
                 cursor.execute("""
-                    SELECT CDICP, OBSER 
-                    FROM FC03300 
-                    WHERE CDPRO = ?
-                    ORDER BY CDICP
-                """, (cdpro,))
+                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                    FROM FC99999 
+                    WHERE ARGUMENTO = ? 
+                       OR ARGUMENTO = ?
+                       OR ARGUMENTO = ?
+                       OR ARGUMENTO = ?
+                    ORDER BY SUBARGUM
+                """, (codigo_busca, codigo_busca_padded, f'OBSFIC{codigo_busca}', f'OBSFIC{codigo_busca_padded}'))
+                todos_args_exato = cursor.fetchall()
                 
-                observacoes = cursor.fetchall()
+                todos_args = todos_args_exato
                 
-                for obs in observacoes:
-                    cdicp = str(obs[0]).strip().zfill(5)
-                    texto = obs[1]
+                # Se não encontrou com exato, tenta CONTAINING
+                if not todos_args:
+                    cursor.execute("""
+                        SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                        FROM FC99999 
+                        WHERE ARGUMENTO CONTAINING ?
+                        ORDER BY ARGUMENTO, SUBARGUM
+                    """, (codigo_busca,))
+                    todos_args_containing = cursor.fetchall()
+                    
+                    for arg in todos_args_containing:
+                        argumento = arg[0].strip() if arg[0] else ""
+                        codigo_no_arg = argumento.replace("OBSFIC", "").strip()
+                        
+                        if (codigo_busca in codigo_no_arg or 
+                            codigo_busca_padded in codigo_no_arg or
+                            argumento.endswith(codigo_busca) or 
+                            argumento.endswith(codigo_busca_padded)):
+                            todos_args.append(arg)
+                
+                # Processa registros encontrados
+                ativos_mescla = []
+                aplicacao_fc99999 = ""
+                IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO', 'INSTRUC', 'AVISO']
+                
+                for arg in todos_args:
+                    texto = arg[2]
                     if texto and hasattr(texto, 'read'):
                         texto = texto.read().decode('latin-1')
                     texto = texto.strip() if texto else ""
                     
+                    if not texto:
+                        continue
+                    
                     texto_upper = texto.upper()
-                    if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
-                        if texto_upper.startswith("APLICAÇÃO:"):
+                    
+                    if "APLICA" in texto_upper and ":" in texto:
+                        aplicacao_fc99999 = texto.split(":", 1)[1].strip()
+                        continue
+                    
+                    if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
+                        continue
+                    
+                    if len(texto) > 200 and ',' not in texto:
+                        continue
+                    
+                    texto_limpo = texto
+                    if texto_upper.startswith("OBS:"):
+                        texto_limpo = texto[4:].strip()
+                    elif texto_upper.startswith("OBS :"):
+                        texto_limpo = texto[5:].strip()
+                    
+                    if texto_limpo.strip():
+                        ativos_mescla.append(texto_limpo)
+                
+                # Determina se é MESCLA
+                nome_produto_upper = nome_produto.upper() if nome_produto else ""
+                e_mescla = False
+                composicao = ""
+                nome_formula = nome_produto
+                
+                if ativos_mescla:
+                    primeiro_ativo = ativos_mescla[0]
+                    
+                    if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
+                        e_mescla = True
+                    elif ',' in primeiro_ativo:
+                        e_mescla = True
+                    elif primeiro_ativo and nome_produto_upper not in primeiro_ativo.upper():
+                        palavras_produto = [p for p in nome_produto_upper.split() if len(p) > 3]
+                        if not any(p in primeiro_ativo.upper() for p in palavras_produto[:2]):
+                            e_mescla = True
+                    
+                    if e_mescla:
+                        composicao = primeiro_ativo
+                        nome_formula = nome_produto.replace("AMP ", "").strip() if nome_produto else ""
+                
+                # Busca aplicação na FC03300 se não encontrou na FC99999
+                aplicacao = aplicacao_fc99999
+                descricao_produto = ""
+                
+                if not aplicacao:
+                    cursor.execute("""
+                        SELECT CDICP, OBSER 
+                        FROM FC03300 
+                        WHERE CDPRO = ?
+                        ORDER BY CDICP
+                    """, (cdpro,))
+                    
+                    observacoes = cursor.fetchall()
+                    
+                    for obs in observacoes:
+                        cdicp = str(obs[0]).strip().zfill(5)
+                        texto = obs[1]
+                        if texto and hasattr(texto, 'read'):
+                            texto = texto.read().decode('latin-1')
+                        texto = texto.strip() if texto else ""
+                        
+                        texto_upper = texto.upper()
+                        if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
                             aplicacao = texto[10:].strip()
-                        else:
-                            aplicacao = texto[10:].strip()
-                    elif cdicp == '00004' and not descricao_produto:
-                        descricao_produto = texto
-            
-            # Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
-            if len(aplicacao) > 30 or ',' in aplicacao:
-                aplicacao = ""
-            
-            # Determina tipoItem: KIT > MESCLA > PRODUTO ÚNICO
-            if e_kit and len(componentes_kit) > 0:
-                tipo_item = "KIT"
-            elif e_mescla:
-                tipo_item = "MESCLA"
-            else:
-                tipo_item = "PRODUTO ÚNICO"
-            
-            rotulo = {
-                **dados_base,
-                "nrItem": str(serier),  # Usa SERIER do banco - número exato da barra no FórmulaCerta
-                "formula": nome_formula,  # Nome simplificado para mesclas
-                "volume": str(item[2]) if item[2] else dados_base["volume"],
-                "unidadeVolume": item[3] or dados_base["unidadeVolume"],
-                "lote": (item[4] or "").strip(),
-                "quantidade": str(int(item[2])) if item[2] else "",
-                "composicao": composicao,
-                "aplicacao": aplicacao,
-                "descricaoProduto": descricao_produto,
-                "observacoes": composicao,
-                "tipoItem": tipo_item,
-            }
-            
-            # Se é KIT, adiciona componentes ao rótulo
-            if tipo_item == "KIT":
-                rotulo["componentes"] = componentes_kit
-                print(f"  -> Rótulo KIT com {len(componentes_kit)} componentes")
-            
-            data.append(rotulo)
+                        elif cdicp == '00004' and not descricao_produto:
+                            descricao_produto = texto
+                
+                # Limpa aplicação se for muito longa
+                if len(aplicacao) > 30 or ',' in aplicacao:
+                    aplicacao = ""
+                
+                # Formata datas do item
+                fab_str = ""
+                val_str = ""
+                if item['dtfab']:
+                    try:
+                        fab_str = item['dtfab'].strftime('%d/%m/%Y')
+                    except:
+                        fab_str = str(item['dtfab'])
+                if item['dtval']:
+                    try:
+                        val_str = item['dtval'].strftime('%d/%m/%Y')
+                    except:
+                        val_str = str(item['dtval'])
+                
+                # Se não tem datas do lote, usa as datas base da requisição
+                if not fab_str:
+                    fab_str = dados_base.get("dataFabricacao", "")
+                if not val_str:
+                    val_str = dados_base.get("dataValidade", "")
+                
+                tipo_item = "MESCLA" if e_mescla else "PRODUTO ÚNICO"
+                
+                rotulo = {
+                    **dados_base,
+                    "nrItem": str(serier),
+                    "formula": nome_formula,
+                    "volume": str(item['quant']) if item['quant'] else dados_base["volume"],
+                    "unidadeVolume": item['unida'] or dados_base["unidadeVolume"],
+                    "lote": item['nrlot'] or item['ctlot'] or '',
+                    "quantidade": str(int(item['quant'])) if item['quant'] else "",
+                    "composicao": composicao,
+                    "aplicacao": aplicacao,
+                    "descricaoProduto": descricao_produto,
+                    "observacoes": composicao,
+                    "tipoItem": tipo_item,
+                    "dataFabricacao": fab_str,
+                    "dataValidade": val_str,
+                }
+                
+                print(f"  -> TIPO: {tipo_item}")
+                data.append(rotulo)
         
         conn.close()
         
