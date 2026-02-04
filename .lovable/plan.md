@@ -1,122 +1,107 @@
 
+# Plano: Detecção de KITs via FC05000.CDSAC (IMPLEMENTADO)
 
-# Plano: Corrigir Identificacao de KITs com Descoberta Dinamica de Colunas
-
-## Diagnostico do Problema
-
-Os logs mostram claramente:
+## Vínculos Corretos (confirmados via SQL)
 
 ```text
-[KIT] Estratégia 1: FC05000 WHERE CDSEM = '92487'
-[KIT ERRO GERAL] Column unknown: CDSEM
--> TIPO: PRODUTO ÚNICO
+FC05000.CDSAC = CDPRO do item na requisição (produto kit/semi-acabado)
+FC05000.CDFRM = código da fórmula do kit
+FC05100.CDFRM → lista de componentes (CDPRO dos ativos)
+FC03000.DESCR/NOMRED = descrição do produto
+FC03140 = lotes/datas
 ```
 
-Dois problemas identificados:
+## Funções Implementadas
 
-1. **Arquivo local desatualizado**: A funcao `verificar_kit_fc12111()` foi adicionada ao arquivo servidor.py aqui no Lovable, mas o servidor local NAO foi atualizado. Por isso, os logs nao mostram `[FC12111] Verificando KIT...` - esse codigo simplesmente nao esta sendo executado.
+### 1. `detecta_kit(cursor, cdpro, tpforma=None)`
+- Query: `SELECT FIRST 1 CDFRM, CDSAC, DESCRFRM, TPFORMAFARMA FROM FC05000 WHERE CDSAC = ?`
+- Retorna dict com `{cdfrm, cdsac, descrfrm, tpforma}` se for kit, None caso contrário
 
-2. **Coluna CDSEM nao existe**: A funcao `buscar_cdfrm_do_kit()` usa a coluna `CDSEM` diretamente, mas essa coluna nao existe neste banco de dados. Precisa de descoberta dinamica de colunas.
+### 2. `componentes_do_kit(cursor, cdfrm)`
+- Query: `SELECT k.CDPRO, p.DESCR, p.NOMRED FROM FC05100 k LEFT JOIN FC03000 p ON p.CDPRO = k.CDPRO WHERE k.CDFRM = ? ORDER BY p.DESCR`
+- Retorna lista de dicts com `{cdpro, descr, nomred}`
 
-## Solucao
+### 3. `resolve_lote_componente(cursor, cdfil, cdpro)`
+- Query: `SELECT FIRST 1 CTLOT, NRLOT, DTFAB, DTVAL FROM FC03140 WHERE CDFIL = ? AND CDPRO = ? AND (DTVAL IS NULL OR DTVAL >= CURRENT_DATE) ORDER BY DTVAL DESC, DTFAB DESC`
+- Retorna dict com `{lote, dtFab, dtVal}`
 
-### Parte 1: Confirmar que as funcoes FC12111 existem
+### 4. `tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier)`
+- Verifica se FC12111 tem registros para a requisição
+- Se encontrar, retorna componentes na ordem de ORDCAP
+- Fallback para FC05100 se não encontrar
 
-As funcoes ja foram adicionadas ao servidor.py:
-- `verificar_kit_fc12111()` (linhas 1596-1622) - verifica se e KIT contando registros na FC12111
-- `buscar_componentes_kit_fc12111()` (linhas 1624-1723) - busca componentes com lote/fab/val
-- `buscar_lote_componente()` (linhas 1725-1738) - busca lote mais recente na FC03140
+### 5. `montar_kit_expandido(cursor, cdpro, cdfil, nrrqu, serier)`
+- Função principal que encapsula toda a lógica
+- Usa FC12111 como prioridade, fallback para FC05100
+- Resolve lotes via FC03140
 
-E a chamada esta no lugar correto (linha 2184):
-```python
-e_kit_fc12111 = verificar_kit_fc12111(cursor, nr_requisicao, serier, filial)
+## Endpoint de Debug
+
+```
+GET /api/debug/kit/<cdsac>?filial=279
 ```
 
-### Parte 2: Corrigir funcao buscar_cdfrm_do_kit (fallback)
-
-A funcao `buscar_cdfrm_do_kit()` precisa usar descoberta dinamica de colunas para evitar erros quando CDSEM nao existe.
-
-Mudanca na linha 1752-1758:
-
-**Antes**:
-```python
-cursor.execute("""
-    SELECT CDFRM, CDSEM FROM FC05000 
-    WHERE CDSEM = ?
-""", (cdpro_str,))
+Retorna:
+```json
+{
+  "success": true,
+  "data": {
+    "cdsac": "92487",
+    "filial": "279",
+    "isKit": true,
+    "kitInfo": {
+      "cdfrm": 2515,
+      "cdsac": 92487,
+      "descrfrm": "...",
+      "tpforma": "..."
+    },
+    "componentes": [
+      {"cdpro": 92494, "descr": "...", "lote": "...", "dtFab": "...", "dtVal": "..."},
+      ...
+    ],
+    "sql_tests": [...]
+  }
+}
 ```
 
-**Depois**:
-```python
-# Descobre colunas da FC05000
-cursor.execute("""
-    SELECT TRIM(RDB$FIELD_NAME) 
-    FROM RDB$RELATION_FIELDS 
-    WHERE RDB$RELATION_NAME = 'FC05000'
-""")
-colunas_fc05000 = [row[0] for row in cursor.fetchall()]
+## Formato de Saída JSON (endpoint /api/requisicao)
 
-# Identifica coluna do produto semi-acabado
-col_semi = None
-for col in ['CDSEM', 'CDPRO', 'CDSEMI', 'CDPRODUTO']:
-    if col in colunas_fc05000:
-        col_semi = col
-        break
-
-# Executa query apenas se coluna existir
-if col_semi:
-    cursor.execute(f"SELECT CDFRM FROM FC05000 WHERE {col_semi} = ?", (cdpro_str,))
+```json
+{
+  "nrItem": "8",
+  "formula": "AMP REDUTOR GORD LOC LIPO KIT",
+  "tipoItem": "KIT",
+  "isKit": true,
+  "componentes": [
+    {"codigo": "92636", "nome": "BENZOPIRONA", "lote": "110", "fabricacao": "01/01/2025", "validade": "01/01/2026"},
+    ...
+  ],
+  "kit": {
+    "cdsac": 92761,
+    "cdfrm": 4043,
+    "descricaoKit": "...",
+    "componentes": [
+      {"cdpro": 92636, "descr": "AMP BENZOPIRONA 0,5MG/ML 2ML", "lote": "110", "dtFab": "01/01/2025", "dtVal": "01/01/2026"},
+      ...
+    ]
+  }
+}
 ```
 
-### Parte 3: Usuario precisa atualizar o arquivo local
-
-Apos eu fazer as correcoes, o usuario precisa:
-1. Copiar o conteudo atualizado do servidor.py
-2. Substituir o arquivo em `C:\ServidorRotulos\servidor.py`
-3. Reiniciar o servidor Flask
-
-## Mudancas no Codigo
-
-| Arquivo | Localizacao | Mudanca |
-|---------|-------------|---------|
-| servidor.py | Linhas 1752-1812 | Adicionar descoberta dinamica de colunas em `buscar_cdfrm_do_kit()` |
-
-## Fluxo de Identificacao (atual correto)
+## Logs Esperados
 
 ```text
-ITEM (SERIER=9)
-     |
-     v
-verificar_kit_fc12111() -- [PRIORIDADE 1]
-     |
-   count > 0?
-     |
-  SIM: KIT
-     |
-  NAO: Fallback para buscar_cdfrm_do_kit() -- [PRIORIDADE 2]
-             |
-          Usa descoberta dinamica de colunas
-             |
-          Encontrou CDFRM? -> KIT via FC05100
-             |
-          NAO encontrou -> PRODUTO UNICO ou MESCLA
+[DETECTA_KIT] Verificando CDPRO=92487 na FC05000.CDSAC
+[DETECTA_KIT] ✓ KIT ENCONTRADO! CDFRM=2515, CDSAC=92487
+[COMPONENTES_KIT] Buscando componentes para CDFRM=2515
+[COMPONENTES_KIT] 8 componentes encontrados
+  [COMP] CDPRO=92494, DESCR=AMP...
+  [LOTE] CDPRO=92494: LT=110, F=01/01/2025, V=01/01/2026
+[KIT] ✓ SERIER=8 detectado via FC05000.CDSAC com 8 componentes
 ```
 
-## Logs Esperados (apos correcao)
+## Status: ✅ IMPLEMENTADO
 
-Para SERIER=9 (CDPRO=92487):
-```text
-[FC12111] Verificando KIT: NRRQU=89489, SERIER=9, CDFIL=279
-[FC12111] count=4 => KIT
-[FC12111] Buscando componentes: NRRQU=89489, SERIER=9, CDFIL=279
-[FC12111] 4 componentes encontrados
-  -> IDENTIFICADO COMO KIT via FC12111!
-```
-
-## Resultado Esperado
-
-Apos aplicar as correcoes e reiniciar o servidor:
-- Barras 8 e 9 serao identificadas como KIT
-- Cada KIT tera seus componentes com lote/fabricacao/validade
-- Frontend exibira os ativos de cada kit corretamente
-
+Funções adicionadas ao início do `servidor.py` (após `get_db_connection`).
+Endpoint de debug `/api/debug/kit/<cdsac>` adicionado.
+Integração no endpoint `/api/requisicao/<nr>` realizada.

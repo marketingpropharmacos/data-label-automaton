@@ -31,6 +31,506 @@ def get_db_connection():
         charset='WIN1252'
     )
 
+# =====================================================
+# FUNÇÕES AUXILIARES PARA DETECÇÃO DE KITS (FC05000 + FC05100)
+# VÍNCULOS CORRETOS:
+#   - FC05000.CDSAC = CDPRO do item na requisição (produto kit/semi-acabado)
+#   - FC05000.CDFRM = código da fórmula do kit
+#   - FC05100.CDFRM -> lista de componentes (CDPRO dos ativos)
+# =====================================================
+
+def detecta_kit(cursor, cdpro, tpforma=None):
+    """
+    Detecta se um produto é um KIT usando FC05000.
+    Query: SELECT CDFRM, DESCRFRM, CDSAC, TPFORMAFARMA FROM FC05000 WHERE CDSAC = ?
+    
+    Args:
+        cursor: Cursor do banco Firebird
+        cdpro: Código do produto (CDSAC na FC05000)
+        tpforma: Tipo de forma farmacêutica (opcional, para filtro adicional)
+    
+    Returns:
+        dict com {cdfrm, descrfrm, cdsac, tpforma} se for kit, None caso contrário
+    """
+    cdpro_str = str(cdpro).strip()
+    
+    print(f"\n  [DETECTA_KIT] Verificando CDPRO={cdpro_str} na FC05000.CDSAC")
+    
+    try:
+        # Descoberta dinâmica de colunas da FC05000
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME) 
+            FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC05000'
+        """)
+        colunas_fc05000 = [row[0] for row in cursor.fetchall()]
+        
+        # Verifica se CDSAC existe
+        tem_cdsac = 'CDSAC' in colunas_fc05000
+        tem_descrfrm = 'DESCRFRM' in colunas_fc05000
+        tem_tpforma = 'TPFORMAFARMA' in colunas_fc05000
+        
+        if not tem_cdsac:
+            print(f"  [DETECTA_KIT] ERRO: Coluna CDSAC não existe na FC05000")
+            print(f"  [DETECTA_KIT] Colunas disponíveis: {colunas_fc05000}")
+            return None
+        
+        # Monta query dinâmica
+        select_cols = ["CDFRM", "CDSAC"]
+        if tem_descrfrm:
+            select_cols.append("DESCRFRM")
+        if tem_tpforma:
+            select_cols.append("TPFORMAFARMA")
+        
+        # ESTRATÉGIA 1: CDSAC = CDPRO (string)
+        query = f"""
+            SELECT FIRST 1 {', '.join(select_cols)}
+            FROM FC05000 
+            WHERE CDSAC = ?
+        """
+        cursor.execute(query, (cdpro_str,))
+        row = cursor.fetchone()
+        
+        if row:
+            kit_info = {
+                "cdfrm": row[0],
+                "cdsac": row[1],
+                "descrfrm": row[2] if tem_descrfrm and len(row) > 2 else "",
+                "tpforma": row[3] if tem_tpforma and len(row) > 3 else ""
+            }
+            print(f"  [DETECTA_KIT] ✓ KIT ENCONTRADO! CDFRM={kit_info['cdfrm']}, CDSAC={kit_info['cdsac']}")
+            return kit_info
+        
+        # ESTRATÉGIA 2: CDSAC = CDPRO (inteiro)
+        try:
+            cdpro_int = int(cdpro_str)
+            cursor.execute(query, (cdpro_int,))
+            row = cursor.fetchone()
+            
+            if row:
+                kit_info = {
+                    "cdfrm": row[0],
+                    "cdsac": row[1],
+                    "descrfrm": row[2] if tem_descrfrm and len(row) > 2 else "",
+                    "tpforma": row[3] if tem_tpforma and len(row) > 3 else ""
+                }
+                print(f"  [DETECTA_KIT] ✓ KIT ENCONTRADO (int)! CDFRM={kit_info['cdfrm']}, CDSAC={kit_info['cdsac']}")
+                return kit_info
+        except ValueError:
+            pass
+        
+        print(f"  [DETECTA_KIT] ✗ Produto {cdpro_str} não é KIT (não encontrado na FC05000.CDSAC)")
+        return None
+        
+    except Exception as e:
+        print(f"  [DETECTA_KIT ERRO] {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def componentes_do_kit(cursor, cdfrm):
+    """
+    Busca componentes de um kit na FC05100.
+    Query: SELECT k.CDPRO, p.DESCR, (p.NOMRED) FROM FC05100 k LEFT JOIN FC03000 p ON p.CDPRO = k.CDPRO WHERE k.CDFRM = ?
+    
+    Args:
+        cursor: Cursor do banco Firebird
+        cdfrm: Código da fórmula do kit (obtido de detecta_kit)
+    
+    Returns:
+        Lista de dicts com {cdpro, descr, nomred}
+    """
+    componentes = []
+    cdfrm_val = cdfrm  # Pode ser string ou int
+    
+    print(f"  [COMPONENTES_KIT] Buscando componentes para CDFRM={cdfrm_val}")
+    
+    try:
+        # Descoberta dinâmica: FC05100
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME) 
+            FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC05100'
+        """)
+        colunas_fc05100 = [row[0] for row in cursor.fetchall()]
+        print(f"  [COMPONENTES_KIT] Colunas FC05100: {colunas_fc05100[:10]}...")
+        
+        # Descoberta dinâmica: FC03000
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME) 
+            FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC03000'
+        """)
+        colunas_fc03000 = [row[0] for row in cursor.fetchall()]
+        
+        tem_nomred = 'NOMRED' in colunas_fc03000
+        if not tem_nomred:
+            print(f"  [COMPONENTES_KIT] FC03000 sem NOMRED; usando NULL")
+        
+        # Identifica coluna do componente na FC05100 (CDPRO)
+        col_cdpro = None
+        for col in ['CDPRO', 'CDCOMP', 'CDPRODUTO', 'CDSAC']:
+            if col in colunas_fc05100:
+                col_cdpro = col
+                break
+        
+        if not col_cdpro:
+            print(f"  [COMPONENTES_KIT] ERRO: Coluna de produto não encontrada na FC05100")
+            return []
+        
+        # Monta query
+        nomred_col = "p.NOMRED" if tem_nomred else "NULL as NOMRED"
+        query = f"""
+            SELECT k.{col_cdpro}, p.DESCR, {nomred_col}
+            FROM FC05100 k
+            LEFT JOIN FC03000 p ON p.CDPRO = k.{col_cdpro}
+            WHERE k.CDFRM = ?
+            ORDER BY p.DESCR
+        """
+        
+        print(f"  [COMPONENTES_KIT] Query: {query.strip()}")
+        
+        # Tenta como fornecido
+        cursor.execute(query, (cdfrm_val,))
+        rows = cursor.fetchall()
+        
+        # Se não encontrou, tenta converter tipo
+        if not rows:
+            try:
+                cdfrm_int = int(cdfrm_val)
+                cursor.execute(query, (cdfrm_int,))
+                rows = cursor.fetchall()
+            except ValueError:
+                pass
+        
+        print(f"  [COMPONENTES_KIT] {len(rows)} componentes encontrados")
+        
+        for row in rows:
+            cdpro = row[0]
+            descr = row[1] or ""
+            nomred = row[2] or ""
+            
+            # Trata BLOB
+            if hasattr(descr, 'read'):
+                descr = descr.read().decode('latin-1')
+            if hasattr(nomred, 'read'):
+                nomred = nomred.read().decode('latin-1')
+            
+            componentes.append({
+                "cdpro": cdpro,
+                "descr": descr.strip() if descr else "",
+                "nomred": nomred.strip() if nomred else ""
+            })
+            print(f"    [COMP] CDPRO={cdpro}, DESCR={descr[:40] if descr else 'N/A'}")
+        
+        return componentes
+        
+    except Exception as e:
+        print(f"  [COMPONENTES_KIT ERRO] {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def resolve_lote_componente(cursor, cdfil, cdpro):
+    """
+    Resolve lote/fabricação/validade de um componente via FC03140.
+    Busca o lote mais recente/válido.
+    
+    Query:
+        SELECT FIRST 1 CTLOT, NRLOT, DTFAB, DTVAL, STLOT
+        FROM FC03140
+        WHERE CDFIL = ? AND CDPRO = ?
+          AND (DTVAL IS NULL OR DTVAL >= CURRENT_DATE)
+        ORDER BY DTVAL DESC, DTFAB DESC
+    
+    Returns:
+        dict com {lote, dtFab, dtVal} ou dict vazio se não encontrar
+    """
+    try:
+        cdpro_int = int(cdpro) if cdpro else 0
+        cdfil_int = int(cdfil)
+        
+        # Verifica se FC03140 tem a coluna STLOT
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME) 
+            FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC03140'
+        """)
+        colunas_fc03140 = [row[0] for row in cursor.fetchall()]
+        tem_stlot = 'STLOT' in colunas_fc03140
+        
+        # Query para buscar lote mais recente válido
+        cursor.execute("""
+            SELECT FIRST 1 CTLOT, NRLOT, DTFAB, DTVAL
+            FROM FC03140 
+            WHERE CDFIL = ? AND CDPRO = ?
+              AND (DTVAL IS NULL OR DTVAL >= CURRENT_DATE)
+            ORDER BY DTVAL DESC, DTFAB DESC
+        """, (cdfil_int, cdpro_int))
+        
+        row = cursor.fetchone()
+        if row:
+            ctlot = row[0]
+            nrlot = row[1]
+            dtfab = row[2]
+            dtval = row[3]
+            
+            # Prioriza CTLOT, fallback NRLOT
+            lote = str(ctlot or nrlot or "").strip()
+            fab_str = dtfab.strftime('%d/%m/%Y') if dtfab else ""
+            val_str = dtval.strftime('%d/%m/%Y') if dtval else ""
+            
+            print(f"      [LOTE] CDPRO={cdpro_int}: LT={lote}, F={fab_str}, V={val_str}")
+            return {"lote": lote, "dtFab": fab_str, "dtVal": val_str}
+        
+        # Fallback: busca qualquer lote (mesmo vencido)
+        cursor.execute("""
+            SELECT FIRST 1 CTLOT, NRLOT, DTFAB, DTVAL
+            FROM FC03140 
+            WHERE CDFIL = ? AND CDPRO = ?
+            ORDER BY DTVAL DESC, DTFAB DESC
+        """, (cdfil_int, cdpro_int))
+        
+        row = cursor.fetchone()
+        if row:
+            lote = str(row[0] or row[1] or "").strip()
+            fab_str = row[2].strftime('%d/%m/%Y') if row[2] else ""
+            val_str = row[3].strftime('%d/%m/%Y') if row[3] else ""
+            print(f"      [LOTE FALLBACK] CDPRO={cdpro_int}: LT={lote}, F={fab_str}, V={val_str}")
+            return {"lote": lote, "dtFab": fab_str, "dtVal": val_str}
+        
+        print(f"      [LOTE] CDPRO={cdpro_int}: Nenhum lote encontrado")
+        return {"lote": "", "dtFab": "", "dtVal": ""}
+        
+    except Exception as e:
+        print(f"      [LOTE ERRO] CDPRO={cdpro}: {e}")
+        return {"lote": "", "dtFab": "", "dtVal": ""}
+
+
+def tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier):
+    """
+    Tenta buscar componentes do kit via FC12111 (explosão da requisição).
+    Se encontrar, retorna componentes na ordem de ORDCAP.
+    Se não encontrar, retorna lista vazia (fallback para FC05100).
+    
+    Returns:
+        Lista de dicts com {cdpro, descr, quant, unida, ordcap, lote, dtFab, dtVal}
+    """
+    componentes = []
+    try:
+        nrrqu_int = int(nrrqu)
+        cdfil_int = int(cdfil)
+        serier_int = int(serier)
+        
+        print(f"  [FC12111_CHECK] Verificando componentes: NRRQU={nrrqu_int}, SERIER={serier_int}, CDFIL={cdfil_int}")
+        
+        # Descoberta dinâmica de colunas da FC12111
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME) 
+            FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC12111'
+        """)
+        colunas = [row[0] for row in cursor.fetchall()]
+        
+        # Se FC12111 não existir ou não tiver as colunas básicas
+        colunas_obrigatorias = ['NRRQU', 'SERIER', 'CDFIL', 'CDPRO']
+        if not all(col in colunas for col in colunas_obrigatorias):
+            print(f"  [FC12111_CHECK] Tabela incompleta, pulando. Colunas: {colunas}")
+            return []
+        
+        # Verifica colunas opcionais
+        tem_ordcap = 'ORDCAP' in colunas
+        tem_nrlot = 'NRLOT' in colunas
+        tem_ctlot = 'CTLOT' in colunas
+        tem_quant = 'QUANT' in colunas
+        tem_unidade = 'UNIDADE' in colunas
+        tem_descr = 'DESCR' in colunas
+        
+        # Monta SELECT dinâmico
+        select_cols = ["c.CDPRO"]
+        if tem_descr:
+            select_cols.append("c.DESCR")
+        else:
+            select_cols.append("NULL as DESCR")
+        if tem_quant:
+            select_cols.append("c.QUANT")
+        else:
+            select_cols.append("NULL as QUANT")
+        if tem_unidade:
+            select_cols.append("c.UNIDADE")
+        else:
+            select_cols.append("NULL as UNIDADE")
+        if tem_ordcap:
+            select_cols.append("c.ORDCAP")
+        else:
+            select_cols.append("NULL as ORDCAP")
+        if tem_nrlot:
+            select_cols.append("c.NRLOT")
+        else:
+            select_cols.append("NULL as NRLOT")
+        if tem_ctlot:
+            select_cols.append("c.CTLOT")
+        else:
+            select_cols.append("NULL as CTLOT")
+        
+        order_clause = "ORDER BY c.ORDCAP" if tem_ordcap else ""
+        
+        query = f"""
+            SELECT {', '.join(select_cols)}
+            FROM FC12111 c
+            WHERE c.NRRQU = ? AND c.SERIER = ? AND c.CDFIL = ?
+            {order_clause}
+        """
+        
+        cursor.execute(query, (nrrqu_int, serier_int, cdfil_int))
+        rows = cursor.fetchall()
+        
+        if not rows:
+            print(f"  [FC12111_CHECK] Nenhum componente encontrado")
+            return []
+        
+        print(f"  [FC12111_CHECK] {len(rows)} componentes encontrados via FC12111!")
+        
+        for row in rows:
+            cdpro = row[0]
+            descr = row[1] or ""
+            quant = row[2]
+            unidade = row[3] or ""
+            ordcap = row[4]
+            nrlot = row[5]
+            ctlot = row[6]
+            
+            # Trata BLOB
+            if hasattr(descr, 'read'):
+                descr = descr.read().decode('latin-1')
+            
+            # Lote da requisição
+            lote_req = str(nrlot or ctlot or "").strip()
+            
+            componentes.append({
+                "cdpro": cdpro,
+                "descr": descr.strip() if descr else "",
+                "quant": str(quant) if quant else "",
+                "unida": unidade.strip() if unidade else "",
+                "ordcap": ordcap,
+                "lote_req": lote_req  # Lote registrado na requisição
+            })
+        
+        return componentes
+        
+    except Exception as e:
+        print(f"  [FC12111_CHECK ERRO] {e}")
+        return []
+
+
+def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
+    """
+    Função principal para montar o kit expandido.
+    
+    ESTRATÉGIA 1: Tenta FC12111 (componentes da requisição)
+    ESTRATÉGIA 2: Fallback para FC05000/FC05100 (estrutura do kit)
+    
+    Para cada componente, resolve lote via FC03140.
+    
+    Returns:
+        dict com kit expandido ou None se não for kit
+    """
+    print(f"\n  {'='*50}")
+    print(f"  [MONTAR_KIT] CDPRO={cdpro}, CDFIL={cdfil}, NRRQU={nrrqu}, SERIER={serier}")
+    
+    # PASSO 1: Detecta se é kit via FC05000
+    kit_info = detecta_kit(cursor, cdpro)
+    
+    if not kit_info:
+        print(f"  [MONTAR_KIT] ✗ Produto {cdpro} não é kit")
+        return None
+    
+    cdfrm = kit_info["cdfrm"]
+    descr_kit = kit_info.get("descrfrm", "")
+    
+    print(f"  [MONTAR_KIT] ✓ Kit detectado! CDFRM={cdfrm}, DESCRFRM={descr_kit[:40] if descr_kit else 'N/A'}")
+    
+    # PASSO 2: Tenta buscar componentes via FC12111 (ordem da requisição)
+    componentes_fc12111 = []
+    if nrrqu and serier:
+        componentes_fc12111 = tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier)
+    
+    componentes_final = []
+    
+    if componentes_fc12111:
+        print(f"  [MONTAR_KIT] Usando {len(componentes_fc12111)} componentes da FC12111")
+        
+        # Usa FC12111 como base, complementa lote com FC03140 se necessário
+        for comp in componentes_fc12111:
+            cdpro_comp = comp["cdpro"]
+            
+            # Se tiver lote da requisição, usa ele para buscar datas
+            lote_req = comp.get("lote_req", "")
+            
+            if lote_req:
+                # Busca datas específicas do lote
+                cursor.execute("""
+                    SELECT FIRST 1 DTFAB, DTVAL
+                    FROM FC03140 
+                    WHERE CDPRO = ? AND CDFIL = ?
+                      AND (CAST(NRLOT AS VARCHAR(50)) = ? OR CAST(CTLOT AS VARCHAR(50)) = ?)
+                    ORDER BY DTVAL DESC
+                """, (int(cdpro_comp), int(cdfil), lote_req, lote_req))
+                
+                row = cursor.fetchone()
+                if row:
+                    fab_str = row[0].strftime('%d/%m/%Y') if row[0] else ""
+                    val_str = row[1].strftime('%d/%m/%Y') if row[1] else ""
+                else:
+                    fab_str = ""
+                    val_str = ""
+                
+                lote_final = lote_req
+            else:
+                # Fallback: busca lote mais recente
+                lote_data = resolve_lote_componente(cursor, cdfil, cdpro_comp)
+                lote_final = lote_data.get("lote", "")
+                fab_str = lote_data.get("dtFab", "")
+                val_str = lote_data.get("dtVal", "")
+            
+            componentes_final.append({
+                "cdpro": cdpro_comp,
+                "descr": comp.get("descr", ""),
+                "lote": lote_final,
+                "dtFab": fab_str,
+                "dtVal": val_str
+            })
+    else:
+        # FALLBACK: Busca componentes via FC05100
+        print(f"  [MONTAR_KIT] Usando fallback FC05100 para CDFRM={cdfrm}")
+        componentes_fc05100 = componentes_do_kit(cursor, cdfrm)
+        
+        for comp in componentes_fc05100:
+            cdpro_comp = comp["cdpro"]
+            
+            # Resolve lote via FC03140
+            lote_data = resolve_lote_componente(cursor, cdfil, cdpro_comp)
+            
+            componentes_final.append({
+                "cdpro": cdpro_comp,
+                "descr": comp.get("descr", "") or comp.get("nomred", ""),
+                "lote": lote_data.get("lote", ""),
+                "dtFab": lote_data.get("dtFab", ""),
+                "dtVal": lote_data.get("dtVal", "")
+            })
+    
+    print(f"  [MONTAR_KIT] Kit montado com {len(componentes_final)} componentes")
+    
+    return {
+        "cdsac": cdpro,
+        "cdfrm": cdfrm,
+        "descricaoKit": descr_kit,
+        "componentes": componentes_final
+    }
+
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({"status": "ok"})
@@ -304,6 +804,89 @@ def debug_estrutura_fc03300():
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================
+# DEBUG: ENDPOINT DE KIT (FC05000 + FC05100)
+# ============================================
+@app.route('/api/debug/kit/<cdsac>', methods=['GET'])
+def debug_kit(cdsac):
+    """
+    Endpoint de debug para validar detecção de KIT.
+    
+    Retorna:
+        - kitInfo: dados do kit (CDFRM, CDSAC, DESCRFRM)
+        - componentes: lista de componentes com lote/fab/val
+        - sql_tests: queries SQL executadas para debug
+    
+    Uso: GET /api/debug/kit/92487?filial=279
+    """
+    filial = request.args.get('filial', '1')
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {
+            "cdsac": cdsac,
+            "filial": filial,
+            "isKit": False,
+            "kitInfo": None,
+            "componentes": [],
+            "sql_tests": []
+        }
+        
+        # TESTE 1: Verifica se CDSAC existe na FC05000
+        resultado["sql_tests"].append({
+            "descricao": "Verifica vínculo FC05000.CDSAC -> CDFRM",
+            "query": f"SELECT CDFRM, DESCRFRM, CDSAC FROM FC05000 WHERE CDSAC IN ({cdsac})"
+        })
+        
+        kit_info = detecta_kit(cursor, cdsac)
+        
+        if kit_info:
+            resultado["isKit"] = True
+            resultado["kitInfo"] = kit_info
+            
+            cdfrm = kit_info["cdfrm"]
+            
+            # TESTE 2: Busca componentes na FC05100
+            resultado["sql_tests"].append({
+                "descricao": "Busca componentes FC05100",
+                "query": f"SELECT k.CDFRM, k.CDPRO, p.DESCR FROM FC05100 k LEFT JOIN FC03000 p ON p.CDPRO=k.CDPRO WHERE k.CDFRM={cdfrm} ORDER BY p.DESCR"
+            })
+            
+            componentes = componentes_do_kit(cursor, cdfrm)
+            
+            # Resolve lotes para cada componente
+            for comp in componentes:
+                cdpro_comp = comp["cdpro"]
+                
+                # TESTE 3: Busca lote
+                resultado["sql_tests"].append({
+                    "descricao": f"Busca lote para CDPRO={cdpro_comp}",
+                    "query": f"SELECT FIRST 5 * FROM FC03140 WHERE CDFIL={filial} AND CDPRO={cdpro_comp} ORDER BY DTVAL DESC"
+                })
+                
+                lote_data = resolve_lote_componente(cursor, filial, cdpro_comp)
+                
+                resultado["componentes"].append({
+                    "cdpro": cdpro_comp,
+                    "descr": comp.get("descr", "") or comp.get("nomred", ""),
+                    "lote": lote_data.get("lote", ""),
+                    "dtFab": lote_data.get("dtFab", ""),
+                    "dtVal": lote_data.get("dtVal", "")
+                })
+        
+        conn.close()
+        return jsonify({"success": True, "data": resultado})
+        
+    except Exception as e:
+        print(f"[DEBUG KIT ERRO] {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # Debug: lista últimas requisições
 @app.route('/api/debug/ultimas-requisicoes', methods=['GET'])
@@ -2288,31 +2871,42 @@ def buscar_requisicao(nr_requisicao):
                     print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
 
             # =====================================================
-            # VERIFICAÇÃO DE KIT: PRIORIDADE FC12111 (fonte definitiva)
-            # FC12111 contém a "explosão" do kit na requisição.
-            # Se existir registro, é DEFINITIVAMENTE um kit.
-            # Fallback: FC05000/FC05100 se FC12111 não tiver dados.
+            # VERIFICAÇÃO DE KIT: NOVA LÓGICA VIA FC05000.CDSAC
+            # 
+            # FLUXO:
+            # 1. detecta_kit(cdpro) → verifica se FC05000.CDSAC = cdpro
+            # 2. Se for kit, busca componentes via FC05100.CDFRM
+            # 3. Para cada componente, resolve lote via FC03140
+            # 4. Se FC12111 tiver dados, usa como ordem alternativa
+            #
+            # VÍNCULOS:
+            #   FC05000.CDSAC = CDPRO do item (produto kit/semi-acabado)
+            #   FC05000.CDFRM = código da fórmula do kit
+            #   FC05100.CDFRM = lista de componentes (CDPRO dos ativos)
             # =====================================================
             e_kit = False
             componentes_kit = []
+            kit_expandido = None
             
-            # ESTRATÉGIA 1: Verifica via FC12111 (fonte definitiva)
-            e_kit_fc12111 = verificar_kit_fc12111(cursor, nr_requisicao, serier, filial)
+            # Usa função principal que encapsula toda a lógica
+            kit_expandido = montar_kit_expandido(cursor, cdpro, filial, nr_requisicao, serier)
             
-            if e_kit_fc12111:
-                print(f"  -> IDENTIFICADO COMO KIT via FC12111! NRRQU={nr_requisicao}, SERIER={serier}")
-                componentes_kit = buscar_componentes_kit_fc12111(cursor, nr_requisicao, serier, filial)
-                e_kit = len(componentes_kit) > 0
-                print(f"  -> {len(componentes_kit)} componentes encontrados via FC12111")
-            
-            # ESTRATÉGIA 2: Fallback para FC05000/FC05100 se FC12111 não retornou componentes
-            if not e_kit:
-                e_kit_legacy, cdfrm_kit = verificar_se_kit(cursor, cdpro)
-                if e_kit_legacy:
-                    print(f"  -> FALLBACK: Tentando FC05100 com CDFRM={cdfrm_kit}")
-                    componentes_kit = buscar_componentes_kit_fc05100(cursor, cdfrm_kit, filial)
-                    e_kit = len(componentes_kit) > 0
-                    print(f"  -> {len(componentes_kit)} componentes encontrados via FC05100")
+            if kit_expandido and len(kit_expandido.get("componentes", [])) > 0:
+                e_kit = True
+                # Converte para formato esperado pelo frontend
+                componentes_kit = []
+                for comp in kit_expandido["componentes"]:
+                    componentes_kit.append({
+                        "codigo": str(comp.get("cdpro", "")),
+                        "nome": comp.get("descr", ""),
+                        "ph": "",  # pH será preenchido manualmente
+                        "lote": comp.get("lote", ""),
+                        "fabricacao": comp.get("dtFab", ""),
+                        "validade": comp.get("dtVal", "")
+                    })
+                print(f"  [KIT] ✓ SERIER={serier} detectado via FC05000.CDSAC com {len(componentes_kit)} componentes")
+            else:
+                print(f"  [KIT] ✗ SERIER={serier} não é KIT (FC05000.CDSAC não encontrado para CDPRO={cdpro})")
 
             # =====================================================
             # LÓGICA: PRODUTO ÚNICO vs MESCLA vs KIT
@@ -2457,10 +3051,32 @@ def buscar_requisicao(nr_requisicao):
                 "tipoItem": tipo_item,
             }
             
-            # Se é KIT, adiciona componentes ao rótulo
+            # Se é KIT, adiciona dados completos ao rótulo
             if tipo_item == "KIT":
+                rotulo["isKit"] = True
                 rotulo["componentes"] = componentes_kit
+                
+                # Adiciona objeto kit expandido conforme especificação
+                if kit_expandido:
+                    rotulo["kit"] = {
+                        "cdsac": kit_expandido.get("cdsac", cdpro),
+                        "cdfrm": kit_expandido.get("cdfrm", ""),
+                        "descricaoKit": kit_expandido.get("descricaoKit", ""),
+                        "componentes": [
+                            {
+                                "cdpro": comp.get("cdpro", ""),
+                                "descr": comp.get("descr", ""),
+                                "lote": comp.get("lote", ""),
+                                "dtFab": comp.get("dtFab", ""),
+                                "dtVal": comp.get("dtVal", "")
+                            }
+                            for comp in kit_expandido.get("componentes", [])
+                        ]
+                    }
+                
                 print(f"  -> Rótulo KIT com {len(componentes_kit)} componentes")
+            else:
+                rotulo["isKit"] = False
             
             data.append(rotulo)
         
