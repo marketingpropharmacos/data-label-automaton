@@ -1132,6 +1132,184 @@ def debug_tabelas_lotes():
         return jsonify({"success": False, "error": str(e)}), 500
 
 # ============================================
+# DEBUG: Testar identificação de KIT (Nova lógica multi-camada)
+# ============================================
+@app.route('/api/debug/testar-kit/<cdpro>', methods=['GET'])
+def debug_testar_kit(cdpro):
+    """
+    Endpoint de debug para testar a identificação de KIT com a nova lógica multi-camada.
+    Testa todas as estratégias e retorna o resultado de cada uma.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        resultado = {
+            "cdpro": cdpro,
+            "estrategias": []
+        }
+        
+        # 1. Busca descrição do produto
+        descr_produto = ""
+        try:
+            cursor.execute("""
+                SELECT DESCR, NOMRED FROM FC03000 WHERE CDPRO = ?
+            """, (cdpro,))
+            row = cursor.fetchone()
+            if row:
+                descr_produto = row[0] or ""
+                resultado["produto"] = {
+                    "descr": row[0],
+                    "nomred": row[1],
+                    "contem_kit_no_nome": "KIT" in (row[0] or "").upper() or "KIT" in (row[1] or "").upper()
+                }
+        except Exception as e:
+            resultado["erro_produto"] = str(e)
+        
+        # 2. ESTRATÉGIA: FC05000 (CDSEM = CDPRO) → CDFRM
+        try:
+            cursor.execute("""
+                SELECT * FROM FC05000 WHERE CDSEM = ?
+            """, (cdpro,))
+            cols = [desc[0].strip() for desc in cursor.description]
+            rows = cursor.fetchall()
+            
+            registros = []
+            cdfrm_encontrado = None
+            for row in rows:
+                reg = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif val is not None:
+                        val = str(val)[:100]
+                    reg[col] = val
+                    if col == 'CDFRM':
+                        cdfrm_encontrado = row[i]
+                registros.append(reg)
+            
+            resultado["estrategias"].append({
+                "nome": "FC05000 onde CDSEM = CDPRO",
+                "query": f"SELECT * FROM FC05000 WHERE CDSEM = {cdpro}",
+                "total": len(registros),
+                "cdfrm_encontrado": cdfrm_encontrado,
+                "registros": registros
+            })
+            
+            # 3. Se encontrou CDFRM, busca componentes na FC05100
+            if cdfrm_encontrado:
+                cursor.execute("""
+                    SELECT * FROM FC05100 WHERE CDFRM = ?
+                """, (cdfrm_encontrado,))
+                cols2 = [desc[0].strip() for desc in cursor.description]
+                rows2 = cursor.fetchall()
+                
+                componentes = []
+                for row2 in rows2:
+                    comp = {}
+                    for i, col in enumerate(cols2):
+                        val = row2[i]
+                        if hasattr(val, 'strftime'):
+                            val = val.strftime('%d/%m/%Y')
+                        elif val is not None:
+                            val = str(val)[:100]
+                        comp[col] = val
+                    
+                    # Busca nome do componente
+                    cdsac = None
+                    for key in ['CDSAC', 'CDPRO', 'CDCOMP']:
+                        if key in comp:
+                            cdsac = comp[key]
+                            break
+                    
+                    if cdsac:
+                        try:
+                            cursor.execute("SELECT DESCR FROM FC03000 WHERE CDPRO = ?", (cdsac,))
+                            nome_row = cursor.fetchone()
+                            if nome_row:
+                                comp["NOME_COMPONENTE"] = nome_row[0]
+                        except:
+                            pass
+                    
+                    componentes.append(comp)
+                
+                resultado["estrategias"].append({
+                    "nome": f"FC05100 onde CDFRM = {cdfrm_encontrado}",
+                    "query": f"SELECT * FROM FC05100 WHERE CDFRM = {cdfrm_encontrado}",
+                    "total": len(componentes),
+                    "componentes": componentes
+                })
+        
+        except Exception as e:
+            resultado["estrategias"].append({
+                "nome": "FC05000 onde CDSEM = CDPRO",
+                "erro": str(e)
+            })
+        
+        # 4. ESTRATÉGIA: FC03600 (TPASS contém 'KIT')
+        try:
+            cursor.execute("""
+                SELECT * FROM FC03600 WHERE CDPRO = ? AND UPPER(TPASS) CONTAINING 'KIT'
+            """, (cdpro,))
+            cols = [desc[0].strip() for desc in cursor.description]
+            rows = cursor.fetchall()
+            
+            registros = []
+            for row in rows:
+                reg = {}
+                for i, col in enumerate(cols):
+                    val = row[i]
+                    if hasattr(val, 'strftime'):
+                        val = val.strftime('%d/%m/%Y')
+                    elif val is not None:
+                        val = str(val)[:100]
+                    reg[col] = val
+                registros.append(reg)
+            
+            resultado["estrategias"].append({
+                "nome": "FC03600 onde CDPRO = CDPRO e TPASS contém KIT",
+                "query": f"SELECT * FROM FC03600 WHERE CDPRO = {cdpro} AND UPPER(TPASS) CONTAINING 'KIT'",
+                "total": len(registros),
+                "registros": registros
+            })
+        except Exception as e:
+            resultado["estrategias"].append({
+                "nome": "FC03600 onde CDPRO = CDPRO e TPASS contém KIT",
+                "erro": str(e)
+            })
+        
+        # 5. Veredicto final
+        e_kit = False
+        motivo = ""
+        
+        for est in resultado["estrategias"]:
+            if est.get("total", 0) > 0:
+                if "FC05100" in est.get("nome", ""):
+                    e_kit = True
+                    motivo = "Componentes encontrados via FC05000/FC05100"
+                    break
+                elif "FC03600" in est.get("nome", ""):
+                    e_kit = True
+                    motivo = "Componentes encontrados via FC03600"
+                    break
+        
+        if not e_kit and resultado.get("produto", {}).get("contem_kit_no_nome"):
+            e_kit = True
+            motivo = "Identificado pelo nome (contém 'KIT')"
+        
+        resultado["veredicto"] = {
+            "e_kit": e_kit,
+            "motivo": motivo if e_kit else "Nenhuma estratégia encontrou componentes"
+        }
+        
+        conn.close()
+        return jsonify({"success": True, "resultado": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================
 # DEBUG: FC05000/FC05100 - Estrutura de Kits (Nova lógica)
 # ============================================
 @app.route('/api/debug/estrutura-kit', methods=['GET'])
@@ -1613,29 +1791,117 @@ def buscar_requisicao(nr_requisicao):
         print(f"[DEBUG] FC03000 tem NOMRED: {tem_nomred}")
         
         # =====================================================
-        # 2. Função para verificar se um CDPRO é KIT via FC03600
+        # 2. Função para verificar se um CDPRO é KIT
+        # ESTRATÉGIA MULTI-CAMADA:
+        #   1) Verifica se DESCR contém "KIT" (mais confiável)
+        #   2) Busca componentes via FC05000/FC05100
+        #   3) Fallback: FC03600 (associações)
         # =====================================================
-        def verificar_kit_fc03600(cdpro_check):
-            """Verifica se um produto é KIT consultando FC03600"""
-            if not tem_fc03600_kit:
-                return False, []
+        def verificar_kit_completo(cdpro_check, descr_produto=""):
+            """
+            Verifica se um produto é KIT usando múltiplas estratégias.
+            Retorna (e_kit: bool, componentes: list[dict])
+            """
+            componentes = []
             
+            # ESTRATÉGIA 1: Verificar se descrição contém "KIT"
+            descr_upper = (descr_produto or "").upper()
+            e_kit_por_nome = "KIT" in descr_upper
+            
+            if e_kit_por_nome:
+                print(f"[KIT DETECT] CDPRO={cdpro_check} identificado por nome: '{descr_produto}'")
+            
+            # ESTRATÉGIA 2: Buscar componentes via FC05000 + FC05100
+            # FC05000: CDSEM = CDPRO → obtém CDFRM (código interno da fórmula)
+            # FC05100: CDFRM → CDSAC (códigos dos componentes)
             try:
+                # 2a) Busca CDFRM na FC05000 usando CDSEM = CDPRO
                 cursor.execute("""
-                    SELECT CDASSDO 
-                    FROM FC03600 
-                    WHERE CDPRO = ? AND UPPER(TPASS) CONTAINING 'KIT'
+                    SELECT CDFRM FROM FC05000 WHERE CDSEM = ?
                 """, (cdpro_check,))
-                componentes = [row[0] for row in cursor.fetchall()]
+                row_frm = cursor.fetchone()
                 
-                if componentes:
-                    print(f"[KIT FC03600] CDPRO={cdpro_check} é KIT com {len(componentes)} componentes: {componentes}")
-                    return True, componentes
-                else:
-                    return False, []
+                if row_frm:
+                    cdfrm = row_frm[0]
+                    print(f"[KIT FC05000] CDPRO={cdpro_check} → CDFRM={cdfrm}")
+                    
+                    # 2b) Busca componentes na FC05100 usando CDFRM
+                    cursor.execute("""
+                        SELECT CDSAC FROM FC05100 WHERE CDFRM = ?
+                    """, (cdfrm,))
+                    comp_rows = cursor.fetchall()
+                    
+                    if comp_rows:
+                        for comp_row in comp_rows:
+                            cdsac = comp_row[0]
+                            
+                            # Busca nome do componente na FC03000
+                            nome_comp = ""
+                            try:
+                                cursor.execute("""
+                                    SELECT DESCR FROM FC03000 WHERE CDPRO = ?
+                                """, (cdsac,))
+                                nome_row = cursor.fetchone()
+                                if nome_row:
+                                    nome_comp = (nome_row[0] or "").strip()
+                            except:
+                                pass
+                            
+                            componentes.append({
+                                "cdpro": cdsac,
+                                "nome": nome_comp
+                            })
+                        
+                        print(f"[KIT FC05100] CDFRM={cdfrm} → {len(componentes)} componentes: {[c['cdpro'] for c in componentes]}")
+                        return True, componentes
+                
             except Exception as e:
-                print(f"[DEBUG] Erro ao verificar KIT em FC03600: {e}")
-                return False, []
+                print(f"[KIT DEBUG] Erro FC05000/FC05100: {e}")
+            
+            # ESTRATÉGIA 3: Fallback para FC03600 (associações)
+            if tem_fc03600_kit:
+                try:
+                    cursor.execute("""
+                        SELECT CDASSDO 
+                        FROM FC03600 
+                        WHERE CDPRO = ? AND UPPER(TPASS) CONTAINING 'KIT'
+                    """, (cdpro_check,))
+                    comp_fc03600 = cursor.fetchall()
+                    
+                    if comp_fc03600:
+                        for comp_row in comp_fc03600:
+                            cdassdo = comp_row[0]
+                            
+                            # Busca nome do componente
+                            nome_comp = ""
+                            try:
+                                cursor.execute("""
+                                    SELECT DESCR FROM FC03000 WHERE CDPRO = ?
+                                """, (cdassdo,))
+                                nome_row = cursor.fetchone()
+                                if nome_row:
+                                    nome_comp = (nome_row[0] or "").strip()
+                            except:
+                                pass
+                            
+                            componentes.append({
+                                "cdpro": cdassdo,
+                                "nome": nome_comp
+                            })
+                        
+                        print(f"[KIT FC03600] CDPRO={cdpro_check} → {len(componentes)} componentes: {[c['cdpro'] for c in componentes]}")
+                        return True, componentes
+                        
+                except Exception as e:
+                    print(f"[KIT DEBUG] Erro FC03600: {e}")
+            
+            # ESTRATÉGIA 4: Se foi identificado por nome mas não achou componentes,
+            # retorna como kit mesmo assim (os componentes serão editados manualmente)
+            if e_kit_por_nome:
+                print(f"[KIT NOME] CDPRO={cdpro_check} é KIT por nome mas sem componentes no banco")
+                return True, []
+            
+            return False, []
         
         # =====================================================
         # 3. Função para buscar dados de lote de um componente
@@ -1807,49 +2073,42 @@ def buscar_requisicao(nr_requisicao):
             # Pega o primeiro item do grupo para análise
             item_principal = items_grupo[0]
             cdpro_principal = item_principal['cdpro']
+            descr_principal = item_principal['descr']
             
             print(f"\n{'='*60}")
             print(f"PROCESSANDO SERIER={serier} ({len(items_grupo)} item(s))")
             print(f"  CDPRO principal: {cdpro_principal}")
+            print(f"  DESCR principal: {descr_principal}")
             
             # =====================================================
-            # Verifica se é KIT via FC03600 (associações)
+            # Verifica se é KIT usando a função multi-estratégia
             # =====================================================
-            e_kit, componentes_cdpro = verificar_kit_fc03600(cdpro_principal)
+            e_kit, componentes_info = verificar_kit_completo(cdpro_principal, descr_principal)
             
-            if e_kit and len(componentes_cdpro) > 0:
+            if e_kit:
                 # =====================================================
-                # É KIT: Busca componentes via FC03600.CDASSDO
+                # É KIT: Monta rótulo com componentes
                 # =====================================================
-                print(f"  -> KIT identificado via FC03600 com {len(componentes_cdpro)} componentes")
+                print(f"  -> KIT identificado com {len(componentes_info)} componentes")
                 
-                nome_kit = item_principal['descr']
+                nome_kit = descr_principal
                 ctlot_req = item_principal['ctlot'] or item_principal['nrlot'] or ''
                 
-                # Monta lista de componentes
+                # Monta lista de componentes formatada
                 componentes_kit = []
                 
-                for cdpro_comp in componentes_cdpro:
-                    # Busca nome do componente na FC03000
-                    nome_comp = ""
-                    try:
-                        cursor.execute("""
-                            SELECT DESCR FROM FC03000 WHERE CDPRO = ?
-                        """, (cdpro_comp,))
-                        row_nome = cursor.fetchone()
-                        if row_nome:
-                            nome_comp = (row_nome[0] or '').upper().strip()
-                    except Exception as e:
-                        print(f"  [ERRO] Buscar nome componente {cdpro_comp}: {e}")
+                for comp_info in componentes_info:
+                    cdpro_comp = comp_info['cdpro']
+                    nome_comp = comp_info['nome'] or f"COMP-{cdpro_comp}"
                     
                     # Remove prefixos do nome
+                    nome_upper = nome_comp.upper()
                     for prefixo in ['AMP ', 'CX ', 'KIT ', 'FRS ']:
-                        if nome_comp.startswith(prefixo):
+                        if nome_upper.startswith(prefixo):
                             nome_comp = nome_comp[len(prefixo):]
                             break
                     
                     # Busca lote e datas do componente via FC03140
-                    # Usa CTLOT da requisição para localizar o lote
                     dtfab, dtval = buscar_dados_lote(cdpro_comp, ctlot_req)
                     
                     # Formata datas
@@ -1868,14 +2127,13 @@ def buscar_requisicao(nr_requisicao):
                     
                     componentes_kit.append({
                         "codigo": str(cdpro_comp),
-                        "nome": nome_comp or f"COMP-{cdpro_comp}",
-                        "ph": "",  # pH não vem da FC03140
+                        "nome": nome_comp.upper(),
+                        "ph": "",  # pH será preenchido manualmente
                         "lote": ctlot_req,
                         "fabricacao": fab_str,
                         "validade": val_str
                     })
                     print(f"  [COMP] CDPRO={cdpro_comp}, {nome_comp}, LT:{ctlot_req}, F:{fab_str}, V:{val_str}")
-                
                 # Usa dados do primeiro item para o rótulo
                 rotulo = {
                     **dados_base,
