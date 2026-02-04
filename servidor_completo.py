@@ -1538,16 +1538,20 @@ def buscar_requisicao(nr_requisicao):
         }
         
         # =====================================================
-        # NOVA LÓGICA DE BUSCA DE ITENS (v4)
+        # NOVA LÓGICA DE BUSCA DE ITENS (v5)
         # 
         # Usa FC12110 com LEFT JOIN em FC03140 para obter lote/datas
         # diretamente do lote registrado na requisição.
-        # REMOVE dependência de FC05000/CDSEM que causava erros.
         # 
-        # Para identificar KITs: agrupa itens com mesmo SERIER
+        # Para identificar KITs: usa FC03600 (associações)
+        # - FC03600.TPASS indica tipo (contém 'KIT')
+        # - FC03600.CDPRO é o produto principal (kit)
+        # - FC03600.CDASSDO são os componentes do kit
         # =====================================================
         
-        # 1. Descobre colunas da FC03140 para saber quais campos usar
+        # 1. Descobre colunas das tabelas relevantes
+        
+        # FC03140 - lotes e datas
         colunas_fc03140 = []
         try:
             cursor.execute("""
@@ -1560,7 +1564,7 @@ def buscar_requisicao(nr_requisicao):
         except Exception as e:
             print(f"[DEBUG] Erro ao listar colunas FC03140: {e}")
         
-        # Descobre colunas da FC03000 para saber se NOMRED existe
+        # FC03000 - produtos
         colunas_fc03000 = []
         try:
             cursor.execute("""
@@ -1573,9 +1577,26 @@ def buscar_requisicao(nr_requisicao):
         except Exception as e:
             print(f"[DEBUG] Erro ao listar colunas FC03000: {e}")
         
+        # FC03600 - associações (KITs)
+        colunas_fc03600 = []
+        try:
+            cursor.execute("""
+                SELECT TRIM(RDB$FIELD_NAME) 
+                FROM RDB$RELATION_FIELDS 
+                WHERE RDB$RELATION_NAME = 'FC03600'
+            """)
+            colunas_fc03600 = [row[0] for row in cursor.fetchall()]
+            print(f"[DEBUG] Colunas FC03600: {colunas_fc03600}")
+        except Exception as e:
+            print(f"[DEBUG] Erro ao listar colunas FC03600: {e}")
+        
         # Verifica se NOMRED existe na FC03000
         tem_nomred = 'NOMRED' in colunas_fc03000
         select_nomred = "p.NOMRED" if tem_nomred else "NULL as NOMRED"
+        
+        # Verifica se FC03600 tem as colunas necessárias para KIT
+        tem_fc03600_kit = 'TPASS' in colunas_fc03600 and 'CDASSDO' in colunas_fc03600
+        print(f"[DEBUG] FC03600 suporta KIT (TPASS + CDASSDO): {tem_fc03600_kit}")
         
         # Identifica coluna de lote na FC03140
         col_lote_fc03140 = None
@@ -1590,6 +1611,57 @@ def buscar_requisicao(nr_requisicao):
         
         print(f"[DEBUG] FC03140 mapeamento: lote={col_lote_fc03140}, fab={col_fab}, val={col_val}")
         print(f"[DEBUG] FC03000 tem NOMRED: {tem_nomred}")
+        
+        # =====================================================
+        # 2. Função para verificar se um CDPRO é KIT via FC03600
+        # =====================================================
+        def verificar_kit_fc03600(cdpro_check):
+            """Verifica se um produto é KIT consultando FC03600"""
+            if not tem_fc03600_kit:
+                return False, []
+            
+            try:
+                cursor.execute("""
+                    SELECT CDASSDO 
+                    FROM FC03600 
+                    WHERE CDPRO = ? AND UPPER(TPASS) CONTAINING 'KIT'
+                """, (cdpro_check,))
+                componentes = [row[0] for row in cursor.fetchall()]
+                
+                if componentes:
+                    print(f"[KIT FC03600] CDPRO={cdpro_check} é KIT com {len(componentes)} componentes: {componentes}")
+                    return True, componentes
+                else:
+                    return False, []
+            except Exception as e:
+                print(f"[DEBUG] Erro ao verificar KIT em FC03600: {e}")
+                return False, []
+        
+        # =====================================================
+        # 3. Função para buscar dados de lote de um componente
+        # =====================================================
+        def buscar_dados_lote(cdpro_comp, ctlot_req):
+            """Busca DTFAB e DTVAL do componente via FC03140"""
+            if not col_lote_fc03140 or not (col_fab or col_val):
+                return None, None
+            
+            try:
+                select_fab = f"l.{col_fab}" if col_fab else "NULL"
+                select_val_q = f"l.{col_val}" if col_val else "NULL"
+                
+                cursor.execute(f"""
+                    SELECT {select_fab}, {select_val_q}, l.{col_lote_fc03140}
+                    FROM FC03140 l
+                    WHERE l.CDPRO = ? AND l.{col_lote_fc03140} = ?
+                """, (cdpro_comp, ctlot_req))
+                row = cursor.fetchone()
+                
+                if row:
+                    return row[0], row[1]  # DTFAB, DTVAL
+                return None, None
+            except Exception as e:
+                print(f"[DEBUG] Erro ao buscar lote FC03140: {e}")
+                return None, None
         
         # 2. Monta query principal com LEFT JOIN dinâmico
         # Busca itens da requisição com dados do produto e lote
@@ -1725,60 +1797,84 @@ def buscar_requisicao(nr_requisicao):
         
         # =====================================================
         # 4. PROCESSA CADA GRUPO POR SERIER
-        # Se um SERIER tem múltiplos itens, é um KIT
+        # Para cada item: verifica se é KIT via FC03600
         # =====================================================
         data = []
         
         for serier in sorted(itens_por_serier.keys()):
             items_grupo = itens_por_serier[serier]
             
-            # Determina se é KIT: múltiplos itens com mesmo SERIER
-            e_kit = len(items_grupo) > 1
+            # Pega o primeiro item do grupo para análise
+            item_principal = items_grupo[0]
+            cdpro_principal = item_principal['cdpro']
             
             print(f"\n{'='*60}")
-            print(f"PROCESSANDO SERIER={serier} ({len(items_grupo)} item(s)) - {'KIT' if e_kit else 'NORMAL'}")
+            print(f"PROCESSANDO SERIER={serier} ({len(items_grupo)} item(s))")
+            print(f"  CDPRO principal: {cdpro_principal}")
             
-            if e_kit:
+            # =====================================================
+            # Verifica se é KIT via FC03600 (associações)
+            # =====================================================
+            e_kit, componentes_cdpro = verificar_kit_fc03600(cdpro_principal)
+            
+            if e_kit and len(componentes_cdpro) > 0:
                 # =====================================================
-                # É KIT: Cria rótulo com componentes
+                # É KIT: Busca componentes via FC03600.CDASSDO
                 # =====================================================
-                # Primeiro item é o "principal" do kit
-                item_principal = items_grupo[0]
+                print(f"  -> KIT identificado via FC03600 com {len(componentes_cdpro)} componentes")
+                
                 nome_kit = item_principal['descr']
+                ctlot_req = item_principal['ctlot'] or item_principal['nrlot'] or ''
                 
                 # Monta lista de componentes
                 componentes_kit = []
-                for item in items_grupo:
-                    # Formata datas
-                    fab_str = ""
-                    val_str = ""
-                    if item['dtfab']:
-                        try:
-                            fab_str = item['dtfab'].strftime('%m/%y')
-                        except:
-                            fab_str = str(item['dtfab'])
-                    if item['dtval']:
-                        try:
-                            val_str = item['dtval'].strftime('%m/%y')
-                        except:
-                            val_str = str(item['dtval'])
+                
+                for cdpro_comp in componentes_cdpro:
+                    # Busca nome do componente na FC03000
+                    nome_comp = ""
+                    try:
+                        cursor.execute("""
+                            SELECT DESCR FROM FC03000 WHERE CDPRO = ?
+                        """, (cdpro_comp,))
+                        row_nome = cursor.fetchone()
+                        if row_nome:
+                            nome_comp = (row_nome[0] or '').upper().strip()
+                    except Exception as e:
+                        print(f"  [ERRO] Buscar nome componente {cdpro_comp}: {e}")
                     
                     # Remove prefixos do nome
-                    nome_comp = (item['descr'] or item['nomred'] or '').upper().strip()
                     for prefixo in ['AMP ', 'CX ', 'KIT ', 'FRS ']:
                         if nome_comp.startswith(prefixo):
                             nome_comp = nome_comp[len(prefixo):]
                             break
                     
+                    # Busca lote e datas do componente via FC03140
+                    # Usa CTLOT da requisição para localizar o lote
+                    dtfab, dtval = buscar_dados_lote(cdpro_comp, ctlot_req)
+                    
+                    # Formata datas
+                    fab_str = ""
+                    val_str = ""
+                    if dtfab:
+                        try:
+                            fab_str = dtfab.strftime('%m/%y')
+                        except:
+                            fab_str = str(dtfab)
+                    if dtval:
+                        try:
+                            val_str = dtval.strftime('%m/%y')
+                        except:
+                            val_str = str(dtval)
+                    
                     componentes_kit.append({
-                        "codigo": str(item['cdpro']),
-                        "nome": nome_comp,
+                        "codigo": str(cdpro_comp),
+                        "nome": nome_comp or f"COMP-{cdpro_comp}",
                         "ph": "",  # pH não vem da FC03140
-                        "lote": item['nrlot'] or item['ctlot'] or '',
+                        "lote": ctlot_req,
                         "fabricacao": fab_str,
                         "validade": val_str
                     })
-                    print(f"  [COMP] CDPRO={item['cdpro']}, {nome_comp}, LT:{item['nrlot']}, F:{fab_str}, V:{val_str}")
+                    print(f"  [COMP] CDPRO={cdpro_comp}, {nome_comp}, LT:{ctlot_req}, F:{fab_str}, V:{val_str}")
                 
                 # Usa dados do primeiro item para o rótulo
                 rotulo = {
