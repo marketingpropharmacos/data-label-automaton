@@ -1625,6 +1625,11 @@ def buscar_requisicao(nr_requisicao):
             """
             Busca componentes de um KIT na FC12111.
             Retorna lista de dicts com código, nome, lote, fab, val.
+            
+            DESCOBERTA DINÂMICA:
+            - FC03000.NOMRED pode não existir em alguns bancos
+            - FC12111.NRLOT/CTLOT podem não existir em alguns bancos
+            - Usa lote da FC12111 (requisição) quando disponível, senão fallback FC03140
             """
             componentes = []
             try:
@@ -1635,7 +1640,19 @@ def buscar_requisicao(nr_requisicao):
                 
                 print(f"  [FC12111] Buscando componentes: NRRQU={nrrqu_int}, SERIER={serier_int}, CDFIL={cdfil_int}")
                 
-                # Descobre colunas disponíveis na FC12111
+                # ========== DESCOBERTA DINÂMICA DE COLUNAS DA FC03000 ==========
+                cursor.execute("""
+                    SELECT TRIM(RDB$FIELD_NAME) 
+                    FROM RDB$RELATION_FIELDS 
+                    WHERE RDB$RELATION_NAME = 'FC03000'
+                """)
+                colunas_fc03000 = [row[0] for row in cursor.fetchall()]
+                
+                tem_nomred = 'NOMRED' in colunas_fc03000
+                if not tem_nomred:
+                    print(f"  [KIT] FC03000 sem NOMRED; usando NULL")
+                
+                # ========== DESCOBERTA DINÂMICA DE COLUNAS DA FC12111 ==========
                 cursor.execute("""
                     SELECT TRIM(RDB$FIELD_NAME) 
                     FROM RDB$RELATION_FIELDS 
@@ -1643,6 +1660,12 @@ def buscar_requisicao(nr_requisicao):
                 """)
                 colunas_fc12111 = [row[0] for row in cursor.fetchall()]
                 print(f"  [FC12111] Colunas disponíveis: {colunas_fc12111}")
+                
+                tem_nrlot = 'NRLOT' in colunas_fc12111
+                tem_ctlot = 'CTLOT' in colunas_fc12111
+                
+                if not tem_nrlot and not tem_ctlot:
+                    print(f"  [KIT] FC12111 sem campos de lote; usando fallback FC03140")
                 
                 # Identifica coluna de ordem
                 col_ordem = None
@@ -1653,9 +1676,27 @@ def buscar_requisicao(nr_requisicao):
                 
                 order_clause = f"ORDER BY c.{col_ordem}" if col_ordem else ""
                 
-                # Query para buscar componentes com nome
+                # Monta SELECT dinâmico
+                select_cols = ["c.CDPRO", "c.CDPRIN", "c.QUANT", "c.UNIDADE", "c.TPCMP", "p.DESCR"]
+                
+                if tem_nomred:
+                    select_cols.append("p.NOMRED")
+                else:
+                    select_cols.append("NULL as NOMRED")
+                
+                if tem_nrlot:
+                    select_cols.append("c.NRLOT")
+                else:
+                    select_cols.append("NULL as NRLOT")
+                    
+                if tem_ctlot:
+                    select_cols.append("c.CTLOT")
+                else:
+                    select_cols.append("NULL as CTLOT")
+                
+                # Query para buscar componentes
                 query = f"""
-                    SELECT c.CDPRO, p.DESCR, p.NOMRED
+                    SELECT {', '.join(select_cols)}
                     FROM FC12111 c
                     LEFT JOIN FC03000 p ON c.CDPRO = p.CDPRO
                     WHERE c.NRRQU = ? AND c.SERIER = ? AND c.CDFIL = ?
@@ -1668,9 +1709,16 @@ def buscar_requisicao(nr_requisicao):
                 print(f"  [FC12111] {len(rows)} componentes encontrados")
                 
                 for row in rows:
+                    # Índices: 0=CDPRO, 1=CDPRIN, 2=QUANT, 3=UNIDADE, 4=TPCMP, 5=DESCR, 6=NOMRED, 7=NRLOT, 8=CTLOT
                     cdpro_comp = row[0]
-                    descr = row[1] or ""
-                    nomred = row[2] or ""
+                    cdprin_comp = row[1]
+                    quant_comp = row[2]
+                    unida_comp = row[3]
+                    tpcmp_comp = row[4]
+                    descr = row[5] or ""
+                    nomred = row[6] or ""
+                    nrlot_fc12111 = row[7]
+                    ctlot_fc12111 = row[8]
                     
                     # Nome: prioriza NOMRED, fallback DESCR
                     nome_comp = (nomred.strip() or descr.strip() or f"COMP_{cdpro_comp}")
@@ -1682,8 +1730,15 @@ def buscar_requisicao(nr_requisicao):
                             nome_limpo = nome_limpo[len(prefixo):]
                             break
                     
+                    # Determina lote a usar (prioriza FC12111)
+                    lote_usar = None
+                    if nrlot_fc12111:
+                        lote_usar = str(nrlot_fc12111).strip()
+                    elif ctlot_fc12111:
+                        lote_usar = str(ctlot_fc12111).strip()
+                    
                     # Busca lote/fab/val para o componente
-                    lote_str, fab_str, val_str = buscar_lote_componente(cursor, cdpro_comp, cdfil_int)
+                    lote_str, fab_str, val_str = buscar_lote_componente(cursor, cdpro_comp, cdfil_int, lote_usar)
                     
                     print(f"    [COMP] CDPRO={cdpro_comp}, NOME={nome_limpo[:40]}, LT:{lote_str}, F:{fab_str}, V:{val_str}")
                     
@@ -1703,18 +1758,45 @@ def buscar_requisicao(nr_requisicao):
             
             return componentes
         
-        def buscar_lote_componente(cursor, cdpro, cdfil):
+        def buscar_lote_componente(cursor, cdpro, cdfil, lote_usar=None):
             """
             Busca lote/fabricação/validade de um componente na FC03140.
-            Estratégia: busca o lote mais recente (ORDER BY DTVAL DESC).
+            
+            Estratégias:
+            A) Se lote_usar fornecido (da FC12111): busca esse lote específico
+            B) Fallback: busca o lote mais recente (ORDER BY DTVAL DESC)
+            
             Retorna (lote, fabricacao, validade) como strings.
             """
             try:
                 cdpro_int = int(cdpro) if cdpro else 0
                 cdfil_int = int(cdfil)
                 
+                if lote_usar:
+                    # ESTRATÉGIA A: Busca lote específico da requisição
+                    cursor.execute("""
+                        SELECT FIRST 1 NRLOT, CTLOT, DTFAB, DTVAL
+                        FROM FC03140 
+                        WHERE CDPRO = ? AND CDFIL = ?
+                          AND (CAST(NRLOT AS VARCHAR(50)) = ? OR CAST(CTLOT AS VARCHAR(50)) = ?)
+                        ORDER BY DTVAL DESC
+                    """, (cdpro_int, cdfil_int, lote_usar, lote_usar))
+                    
+                    row = cursor.fetchone()
+                    if row:
+                        lote = str(row[0] or row[1] or lote_usar).strip()
+                        fab = row[2].strftime('%m/%y') if row[2] else ""
+                        val = row[3].strftime('%m/%y') if row[3] else ""
+                        print(f"      [LOTE] Encontrado via FC12111: {lote} (A)")
+                        return (lote, fab, val)
+                    else:
+                        # Não achou o lote específico, usa o lote_usar sem datas
+                        print(f"      [LOTE] Lote {lote_usar} não encontrado na FC03140, usando sem datas")
+                        return (lote_usar, "", "")
+                
+                # ESTRATÉGIA B: Fallback - busca lote mais recente
                 cursor.execute("""
-                    SELECT FIRST 1 NRLOT, DTFAB, DTVAL
+                    SELECT FIRST 1 NRLOT, CTLOT, DTFAB, DTVAL
                     FROM FC03140 
                     WHERE CDPRO = ? AND CDFIL = ?
                     ORDER BY DTVAL DESC
@@ -1722,9 +1804,10 @@ def buscar_requisicao(nr_requisicao):
                 
                 row = cursor.fetchone()
                 if row:
-                    lote = str(row[0]).strip() if row[0] else ""
-                    fab = row[1].strftime('%m/%y') if row[1] else ""
-                    val = row[2].strftime('%m/%y') if row[2] else ""
+                    lote = str(row[0] or row[1] or "").strip()
+                    fab = row[2].strftime('%m/%y') if row[2] else ""
+                    val = row[3].strftime('%m/%y') if row[3] else ""
+                    print(f"      [LOTE] Encontrado via fallback FC03140: {lote} (B)")
                     return (lote, fab, val)
                     
             except Exception as e:
