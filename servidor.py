@@ -36,10 +36,16 @@ def get_db_connection():
 # Usada apenas para ATIVOS ÚNICOS e MESCLAS
 # =====================================================
 
+import unicodedata
+
 def buscar_aplicacao_nao_kit(cursor, cdpro_int):
     """
     Busca APLICAÇÃO na FC99999 para itens NÃO-KIT.
     Retorna string com a aplicação ou None se não encontrar.
+    
+    IMPORTANTE: O filtro SQL foi removido porque o Firebird não lida
+    corretamente com acentos (ex: APLICAÇÃO vs APLICACAO).
+    Agora busca TODOS os registros e filtra no Python com normalização Unicode.
     """
     if not cdpro_int:
         return None
@@ -53,17 +59,18 @@ def buscar_aplicacao_nao_kit(cursor, cdpro_int):
     
     try:
         print(f"  [APLICAÇÃO NÃO-KIT] Tentando ARGUMENTO STARTING WITH '{argumento}'")
+        
+        # Busca TODOS os registros (sem filtro CONTAINING no SQL)
+        # O filtro será feito no Python com normalização Unicode
         cursor.execute("""
-            SELECT FIRST 10 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+            SELECT FIRST 50 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
             FROM FC99999
             WHERE ARGUMENTO STARTING WITH ?
-              AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
-                   OR UPPER(DESCRPAR) CONTAINING 'APLIC')
             ORDER BY ARGUMENTO, SUBARGUM
         """, (argumento,))
         
         registros = cursor.fetchall()
-        print(f"  [APLICAÇÃO NÃO-KIT] Encontrados {len(registros)} registros")
+        print(f"  [APLICAÇÃO NÃO-KIT] Encontrados {len(registros)} registros no total")
         
         for reg in registros:
             # PARAMETRO (índice 2)
@@ -78,20 +85,26 @@ def buscar_aplicacao_nao_kit(cursor, cdpro_int):
                 descrpar = descrpar.read().decode('latin-1')
             descrpar = (descrpar or "").strip()
             
-            # Extrai valor após "APLICAÇÃO:" ou "APLICACAO:"
+            # Processa cada campo com normalização Unicode
             for campo in [texto, descrpar]:
                 if not campo:
                     continue
-                campo_upper = campo.upper()
                 
-                if 'APLIC' in campo_upper:
+                # Normaliza removendo acentos para comparação (APLICAÇÃO -> APLICACAO)
+                campo_normalizado = ''.join(
+                    c for c in unicodedata.normalize('NFD', campo.upper()) 
+                    if unicodedata.category(c) != 'Mn'
+                )
+                
+                if 'APLICAC' in campo_normalizado:
                     # Tenta extrair após ":"
                     if ':' in campo:
                         valor = campo.split(':', 1)[1].strip()
                     else:
                         valor = campo.strip()
                     
-                    if valor and valor not in aplicacoes:
+                    # Validação: ignora se for lista de ativos (contém vírgula ou é muito longo)
+                    if valor and len(valor) <= 50 and ',' not in valor and valor not in aplicacoes:
                         aplicacoes.append(valor)
                         print(f"  [APLICAÇÃO NÃO-KIT] Encontrado: '{valor}' em {reg[0]}")
                     
