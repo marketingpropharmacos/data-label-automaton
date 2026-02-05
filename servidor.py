@@ -32,6 +32,85 @@ def get_db_connection():
     )
 
 # =====================================================
+# FUNÇÃO ISOLADA: BUSCAR APLICAÇÃO PARA NÃO-KIT
+# Usada apenas para ATIVOS ÚNICOS e MESCLAS
+# =====================================================
+
+def buscar_aplicacao_nao_kit(cursor, cdpro_int):
+    """
+    Busca APLICAÇÃO na FC99999 para itens NÃO-KIT.
+    Retorna string com a aplicação ou None se não encontrar.
+    """
+    if not cdpro_int:
+        return None
+    
+    cdpro_str = str(cdpro_int).replace('.', '').strip()
+    
+    # Variações do argumento OBSFIC (com diferentes padding de zeros)
+    argumentos_tentar = [
+        f"OBSFIC{cdpro_str}",
+        f"OBSFIC0{cdpro_str}",
+        f"OBSFIC00{cdpro_str}",
+    ]
+    
+    aplicacoes = []
+    
+    for argumento in argumentos_tentar:
+        try:
+            cursor.execute("""
+                SELECT FIRST 5 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+                FROM FC99999
+                WHERE ARGUMENTO = ?
+                  AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
+                       OR UPPER(DESCRPAR) CONTAINING 'APLIC')
+                ORDER BY SUBARGUM
+            """, (argumento,))
+            
+            registros = cursor.fetchall()
+            
+            for reg in registros:
+                # PARAMETRO (índice 2)
+                texto = reg[2]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                texto = (texto or "").strip()
+                
+                # DESCRPAR (índice 3)
+                descrpar = reg[3]
+                if descrpar and hasattr(descrpar, 'read'):
+                    descrpar = descrpar.read().decode('latin-1')
+                descrpar = (descrpar or "").strip()
+                
+                # Extrai valor após "APLICAÇÃO:" ou "APLICACAO:"
+                for campo in [texto, descrpar]:
+                    if not campo:
+                        continue
+                    campo_upper = campo.upper()
+                    
+                    if 'APLIC' in campo_upper:
+                        # Tenta extrair após ":"
+                        if ':' in campo:
+                            valor = campo.split(':', 1)[1].strip()
+                        else:
+                            valor = campo.strip()
+                        
+                        if valor and valor not in aplicacoes:
+                            aplicacoes.append(valor)
+                            print(f"  [APLICAÇÃO NÃO-KIT] Encontrado: '{valor}' em {argumento}")
+            
+            if aplicacoes:
+                break  # Encontrou, não precisa tentar próximas variações
+                
+        except Exception as e:
+            print(f"  [APLICAÇÃO NÃO-KIT] Erro ao buscar {argumento}: {e}")
+            continue
+    
+    if aplicacoes:
+        return " | ".join(aplicacoes)
+    
+    return None
+
+# =====================================================
 # FUNÇÕES AUXILIARES PARA DETECÇÃO DE KITS (FC05000 + FC05100)
 # VÍNCULOS CORRETOS:
 #   - FC05000.CDSAC = CDPRO do item na requisição (produto kit/semi-acabado)
@@ -3037,7 +3116,21 @@ def buscar_requisicao(nr_requisicao):
             # =====================================================
             # FC03300: Extrai APLICAÇÃO + OBSERVAÇÕES (ativos adicionais)
             # =====================================================
-            aplicacao = aplicacao_fc99999
+            # APLICAÇÃO: usa busca específica apenas para NÃO-KIT
+            if not e_kit:
+                # Tenta busca específica para não-kit (OBSFIC + APLIC)
+                aplicacao_nao_kit = buscar_aplicacao_nao_kit(cursor, cdpro)
+                if aplicacao_nao_kit:
+                    aplicacao = aplicacao_nao_kit
+                    print(f"  [APLICAÇÃO] Usando busca não-kit: '{aplicacao}'")
+                else:
+                    # Fallback para busca já existente
+                    aplicacao = aplicacao_fc99999
+                    print(f"  [APLICAÇÃO] Usando fallback FC99999: '{aplicacao}'")
+            else:
+                # KIT: mantém comportamento atual (não alterar!)
+                aplicacao = aplicacao_fc99999
+            
             descricao_produto = ""
             observacoes_fc03300 = []  # Lista de ativos/observações relevantes
             
