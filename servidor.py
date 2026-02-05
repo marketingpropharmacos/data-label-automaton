@@ -2817,10 +2817,45 @@ def buscar_requisicao(nr_requisicao):
             ativos_mescla = []
             aplicacao_fc99999 = ""
             
+            # =====================================================
+            # BUSCA ESPECÍFICA DE APLICAÇÃO NA FC99999
+            # Tenta encontrar registros com ARGUMENTO contendo "APLICA"
+            # =====================================================
+            for codigo_aplicacao_busca in [cdpro_str, cdprin_str]:
+                if not codigo_aplicacao_busca or codigo_aplicacao_busca == '0':
+                    continue
+                    
+                # Tenta formatos comuns: APLICA+codigo, APLICACAO+codigo
+                for prefixo_aplica in ['APLICA', 'APLICACAO', 'VIA']:
+                    argumento_aplica = f"{prefixo_aplica}{codigo_aplicacao_busca}"
+                    cursor.execute("""
+                        SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                        FROM FC99999 
+                        WHERE ARGUMENTO = ? OR ARGUMENTO CONTAINING ?
+                        ORDER BY SUBARGUM
+                    """, (argumento_aplica, argumento_aplica))
+                    
+                    aplica_registros = cursor.fetchall()
+                    if aplica_registros:
+                        print(f"  [APLICAÇÃO FC99999] Encontrou {len(aplica_registros)} registros com ARGUMENTO='{argumento_aplica}'")
+                        for reg in aplica_registros:
+                            texto = reg[2]
+                            if texto and hasattr(texto, 'read'):
+                                texto = texto.read().decode('latin-1')
+                            texto = texto.strip() if texto else ""
+                            if texto:
+                                aplicacao_fc99999 = texto.split(":", 1)[-1].strip() if ":" in texto else texto
+                                print(f"    -> APLICAÇÃO extraída: '{aplicacao_fc99999}'")
+                                break
+                        if aplicacao_fc99999:
+                            break
+                if aplicacao_fc99999:
+                    break
+            
             # Lista de prefixos/palavras que indicam que NÃO é um ativo real
             IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO', 'INSTRUC', 'AVISO']
             
-            # Processa TODOS os registros encontrados
+            # Processa TODOS os registros encontrados (OBSFIC)
             for arg in todos_args:
                 argumento = arg[0]
                 subargum = str(arg[1]).strip().zfill(5)
@@ -2839,11 +2874,19 @@ def buscar_requisicao(nr_requisicao):
                 
                 texto_upper = texto.upper()
                 
-                # Verifica se é APLICAÇÃO (pode estar em qualquer SUBARGUM)
-                if "APLICA" in texto_upper and ":" in texto:
-                    aplicacao_fc99999 = texto.split(":", 1)[1].strip()
-                    print(f"  -> APLICAÇÃO encontrada: '{aplicacao_fc99999}'")
-                    continue
+                # Verifica se é APLICAÇÃO inline (texto contém "APLICAÇÃO:" ou "APLICACAO:")
+                if not aplicacao_fc99999:
+                    import unicodedata
+                    texto_normalizado = ''.join(
+                        c for c in unicodedata.normalize('NFD', texto_upper) 
+                        if unicodedata.category(c) != 'Mn'
+                    )
+                    if ("APLICACAO:" in texto_normalizado or "APLICAÇÃO:" in texto_upper):
+                        pos = texto.find(':')
+                        if pos > 0:
+                            aplicacao_fc99999 = texto[pos+1:].strip()
+                            print(f"  -> APLICAÇÃO inline encontrada: '{aplicacao_fc99999}'")
+                            continue
                 
                 # =====================================================
                 # EXPANDIDO: Aceita QUALQUER SUBARGUM para ativos
