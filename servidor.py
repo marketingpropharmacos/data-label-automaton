@@ -3002,28 +3002,56 @@ def buscar_requisicao(nr_requisicao):
             if not aplicacao:
                 codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro
                 cursor.execute("""
-                    SELECT CDICP, OBSER 
+                    SELECT FRFAR, CDICP, OBSER 
                     FROM FC03300 
                     WHERE CDPRO = ?
-                    ORDER BY CDICP
+                    ORDER BY FRFAR, CDICP
                 """, (codigo_aplicacao,))
                 
                 observacoes = cursor.fetchall()
                 
                 for obs in observacoes:
-                    cdicp = str(obs[0]).strip().zfill(5)
-                    texto = obs[1]
+                    frfar = str(obs[0]).strip() if obs[0] else ""
+                    cdicp = str(obs[1]).strip().zfill(5)
+                    texto = obs[2]
                     if texto and hasattr(texto, 'read'):
                         texto = texto.read().decode('latin-1')
                     texto = texto.strip() if texto else ""
                     
+                    if not texto:
+                        continue
+                    
                     texto_upper = texto.upper()
-                    if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
-                        if texto_upper.startswith("APLICAÇÃO:"):
+                    
+                    # =====================================================
+                    # IGNORA campos que contêm ETIQUETA, CATALOGO, etc.
+                    # =====================================================
+                    IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO']
+                    if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
+                        print(f"    FC03300 IGNORADO: '{texto[:40]}...'")
+                        continue
+                    
+                    # =====================================================
+                    # EXTRAI APLICAÇÃO
+                    # Prioridade 1: Texto começa com "APLICAÇÃO:" ou "APLICACAO:"
+                    # Prioridade 2: Forma farmacêutica numérica (14, 1, etc.) com via direta
+                    # =====================================================
+                    if not aplicacao:
+                        if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
                             aplicacao = texto[10:].strip()
-                        else:
-                            aplicacao = texto[10:].strip()
-                    elif cdicp == '00004' and not descricao_produto:
+                            print(f"  -> APLICAÇÃO (prefixo): '{aplicacao}'")
+                        elif frfar.isdigit():  # Forma farmacêutica numérica (ex: 14)
+                            # Verifica se é via de administração direta
+                            vias_conhecidas = ['SC', 'IM', 'IV', 'ID', 'EV', 'IDSC', 'ID/SC', 'IM/SC', 
+                                               'SUBCUTANEA', 'INTRAMUSCULAR', 'INTRAVENOSA']
+                            for via in vias_conhecidas:
+                                if via in texto_upper:
+                                    aplicacao = via
+                                    print(f"  -> APLICAÇÃO (via direta em FRFAR={frfar}): '{aplicacao}'")
+                                    break
+                    
+                    # Campo 00004 = descrição do produto
+                    if cdicp == '00004' and not descricao_produto:
                         descricao_produto = texto
             
             # Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
