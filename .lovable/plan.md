@@ -1,133 +1,136 @@
 
-# Plano: Corrigir Extração de APLICAÇÃO para Não-Kits
+# Plano: Corrigir Extração de APLICAÇÃO - Remover Filtro SQL
 
-## Diagnóstico do Problema Real
+## Diagnóstico
 
-Analisando a imagem do DBeaver (imagem-280) e o código:
+Analisando as imagens e o código, o problema está na função `buscar_aplicacao_nao_kit()`:
 
-| Campo na FC99999 | Conteúdo |
-|------------------|----------|
-| `ARGUMENTO` | OBSFIC9263814 |
-| `PARAMETRO` | (vazio ou texto dos ativos) |
-| **`DESCRPAR`** | **APLICACAO: ID, APLICACAO: SC, etc.** |
-
-**Problema 1:** A query que busca ativos (linhas 2815-2823) **não inclui o campo DESCRPAR**:
+1. **Query atual (linha 56-63):**
 ```sql
-SELECT ARGUMENTO, SUBARGUM, PARAMETRO  -- FALTA DESCRPAR!
-FROM FC99999
+WHERE ARGUMENTO STARTING WITH ?
+  AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
+       OR UPPER(DESCRPAR) CONTAINING 'APLIC')
 ```
 
-**Problema 2:** O loop que processa os resultados (linha 2934) só lê `arg[2]` (PARAMETRO), ignorando completamente o `DESCRPAR` onde está a aplicação.
+2. **Problema:** O texto no banco é "**APLICAÇÃO: SC**" com cedilha (Ç). O Firebird pode não converter "Ç" para "C" corretamente no `UPPER()`, fazendo o filtro `CONTAINING 'APLIC'` falhar.
 
-**Problema 3:** A função `buscar_aplicacao_nao_kit` faz uma query separada que até inclui DESCRPAR, mas usa `STARTING WITH 'OBSFIC{cdpro}'` onde cdpro tem 5 dígitos, enquanto os ARGUMENTOs reais têm 7+ dígitos (ex: OBSFIC9263814 vs OBSFIC92638).
+3. **Evidência:** A imagem mostra que os ativos (XANTAGOSIL, CAFEINA, etc.) estão sendo extraídos corretamente do mesmo registro, mas a linha com "Forma Farmacêutica = 14" que contém "APLICAÇÃO: SC" não está sendo capturada.
 
 ---
 
 ## Solução
 
-### Alteração 1: Incluir DESCRPAR na query principal (linhas 2815-2823)
+Modificar a função `buscar_aplicacao_nao_kit()` para:
 
-**Antes:**
-```sql
-SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
-FROM FC99999 
-```
-
-**Depois:**
-```sql
-SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
-FROM FC99999 
-```
-
-### Alteração 2: Processar DESCRPAR para extrair APLICAÇÃO (linhas 2930-2961)
-
-Adicionar leitura de `arg[3]` (DESCRPAR) e extrair aplicação quando conter "APLICAC":
-
-```python
-for arg in todos_args:
-    argumento = arg[0]
-    subargum = str(arg[1]).strip().zfill(5)
-    texto = arg[2]  # PARAMETRO
-    descrpar = arg[3] if len(arg) > 3 else None  # DESCRPAR (NOVO!)
-    
-    # Trata BLOB se necessário
-    if texto and hasattr(texto, 'read'):
-        texto = texto.read().decode('latin-1')
-    texto = texto.strip() if texto else ""
-    
-    # NOVO: Trata DESCRPAR (também pode ser BLOB)
-    if descrpar and hasattr(descrpar, 'read'):
-        descrpar = descrpar.read().decode('latin-1')
-    descrpar = descrpar.strip() if descrpar else ""
-    
-    # NOVO: Extrai APLICAÇÃO do campo DESCRPAR
-    if not aplicacao_fc99999 and descrpar:
-        descrpar_upper = descrpar.upper()
-        if 'APLICAC' in descrpar_upper:
-            if ':' in descrpar:
-                aplicacao_fc99999 = descrpar.split(':', 1)[1].strip()
-            else:
-                aplicacao_fc99999 = descrpar.strip()
-            print(f"  -> APLICAÇÃO extraída de DESCRPAR: '{aplicacao_fc99999}'")
-```
-
-### Alteração 3: Atualizar todas as queries que usam FC99999
-
-Também atualizar as queries de fallback (linhas 2830-2835, 2866-2871) para incluir DESCRPAR:
-
-```sql
-SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
-FROM FC99999 
-WHERE ...
-```
+1. **Buscar TODOS os registros** do ARGUMENTO (sem filtro `CONTAINING 'APLIC'`)
+2. **Filtrar no Python** usando normalização Unicode (que já funciona para os ativos)
 
 ---
 
-## Arquivos Alterados
+## Alterações no servidor.py
 
-| Arquivo | Linha | Alteração |
-|---------|-------|-----------|
-| `servidor.py` | 2815-2823 | Adicionar `DESCRPAR` à query principal |
-| `servidor.py` | 2830-2835 | Adicionar `DESCRPAR` à query CONTAINING |
-| `servidor.py` | 2866-2871 | Adicionar `DESCRPAR` à query fallback CDPRO |
-| `servidor.py` | 2930-2961 | Processar `arg[3]` (DESCRPAR) e extrair aplicação |
+### Função `buscar_aplicacao_nao_kit` (linhas 56-100)
+
+**Antes:**
+```python
+cursor.execute("""
+    SELECT FIRST 10 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+    FROM FC99999
+    WHERE ARGUMENTO STARTING WITH ?
+      AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
+           OR UPPER(DESCRPAR) CONTAINING 'APLIC')
+    ORDER BY ARGUMENTO, SUBARGUM
+""", (argumento,))
+```
+
+**Depois:**
+```python
+# Busca TODOS os registros do ARGUMENTO (sem filtro SQL)
+# O filtro será feito no Python com normalização Unicode
+cursor.execute("""
+    SELECT FIRST 50 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+    FROM FC99999
+    WHERE ARGUMENTO STARTING WITH ?
+    ORDER BY ARGUMENTO, SUBARGUM
+""", (argumento,))
+```
+
+### Adicionar normalização Unicode no filtro Python (linhas 82-96)
+
+```python
+import unicodedata
+
+for reg in registros:
+    # ... (processamento de BLOB)
+    
+    # Normaliza texto removendo acentos para comparação
+    for campo in [texto, descrpar]:
+        if not campo:
+            continue
+        
+        # Normalização para remover acentos (APLICAÇÃO -> APLICACAO)
+        campo_normalizado = ''.join(
+            c for c in unicodedata.normalize('NFD', campo.upper()) 
+            if unicodedata.category(c) != 'Mn'
+        )
+        
+        if 'APLICAC' in campo_normalizado:
+            # Extrai após ":"
+            if ':' in campo:
+                valor = campo.split(':', 1)[1].strip()
+            else:
+                valor = campo.strip()
+            
+            if valor and valor not in aplicacoes:
+                aplicacoes.append(valor)
+                print(f"  [APLICAÇÃO NÃO-KIT] Encontrado: '{valor}'")
+```
 
 ---
 
 ## Fluxo Corrigido
 
 ```text
-Query FC99999 com ARGUMENTO CONTAINING '{cdpro}'
+Requisição 89489 (Mescla)
       │
-      └─► Retorna: ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+      └─► buscar_aplicacao_nao_kit(cursor, 92602)
               │
-              └─► Loop em cada registro:
+              └─► Query: WHERE ARGUMENTO STARTING WITH 'OBSFIC92602'
                       │
-                      ├─► arg[2] = PARAMETRO → Extrai ativos/composição
-                      │
-                      └─► arg[3] = DESCRPAR → Se contém "APLICAC" → Extrai aplicação
+                      └─► Retorna TODOS os registros (sem filtro SQL)
+                              │
+                              ├─► SUBARGUM=14, PARAMETRO="APLICAÇÃO: SC"
+                              │       │
+                              │       └─► Normaliza: "APLICACAO: SC"
+                              │               └─► Contém "APLICAC"? SIM → Extrai "SC"
+                              │
+                              ├─► SUBARGUM=T, PARAMETRO="XANTAGOSIL..."
+                              │       └─► Não contém "APLICAC" → Ignora
+                              │
+                              └─► ... outros registros
 ```
 
 ---
 
-## Garantias de Não-Regressão
+## Arquivos Alterados
 
-- Não altera nada relacionado a KIT
-- Usa a mesma lógica de busca que já funciona para ativos (CONTAINING)
-- Apenas adiciona processamento do campo DESCRPAR que já vem na mesma query
-- A função `buscar_aplicacao_nao_kit` pode ser removida ou mantida como fallback
+| Arquivo | Alteração |
+|---------|-----------|
+| `servidor.py` | Modificar função `buscar_aplicacao_nao_kit` (linhas 56-100) |
 
 ---
 
 ## Resultado Esperado
 
-Após implementação, o console Flask mostrará:
+Console Flask mostrará:
 ```
-    - ARG: OBSFIC9263814, SUB: 00001, PARAM: ...
-  -> APLICAÇÃO extraída de DESCRPAR: 'SC'
+  [APLICAÇÃO NÃO-KIT] Tentando ARGUMENTO STARTING WITH 'OBSFIC92602'
+  [APLICAÇÃO NÃO-KIT] Encontrados 15 registros
+  [APLICAÇÃO NÃO-KIT] Encontrado: 'SC' em OBSFIC9260214
+  [APLICAÇÃO] Usando busca não-kit: 'SC'
 ```
 
-E o rótulo exibirá:
+Rótulo exibirá:
 ```
 APLICAÇÃO: SC
 ```
