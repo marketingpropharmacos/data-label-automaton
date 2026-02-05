@@ -2998,17 +2998,28 @@ def buscar_requisicao(nr_requisicao):
             descricao_produto = ""
             
             # Fallback para FC03300 se não encontrou aplicação na FC99999
-            # Usa CDPRIN (código base) se disponível, senão CDPRO
+            # ESTRATÉGIA: Busca primeiro no CDPRO específico, depois no CDPRIN (código base)
             if not aplicacao:
-                codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro_str
-                cursor.execute("""
-                    SELECT FRFAR, CDICP, OBSER 
-                    FROM FC03300 
-                    WHERE CDPRO = ?
-                    ORDER BY FRFAR, CDICP
-                """, (codigo_aplicacao,))
+                codigos_buscar = [cdpro_str]  # Sempre busca no código específico primeiro
+                if cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str:
+                    codigos_buscar.append(cdprin_str)  # Adiciona código base como fallback
                 
-                observacoes = cursor.fetchall()
+                observacoes = []
+                for codigo_aplicacao in codigos_buscar:
+                    cursor.execute("""
+                        SELECT FRFAR, CDICP, OBSER 
+                        FROM FC03300 
+                        WHERE CDPRO = ?
+                        ORDER BY FRFAR, CDICP
+                    """, (codigo_aplicacao,))
+                    
+                    obs_encontradas = cursor.fetchall()
+                    if obs_encontradas:
+                        observacoes = obs_encontradas
+                        print(f"\n  DEBUG FC03300 - Encontrou dados em CDPRO={codigo_aplicacao}")
+                        break
+                    else:
+                        print(f"\n  DEBUG FC03300 - Nada em CDPRO={codigo_aplicacao}, tentando próximo...")
                 
                 # DEBUG: Log da busca FC03300
                 print(f"\n  DEBUG FC03300 - Buscando aplicação em CDPRO={codigo_aplicacao}")
