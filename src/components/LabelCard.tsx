@@ -348,7 +348,8 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         if (/^\d+$/.test(tipoUsoValor)) return "";
         return tipoUsoValor || "";
       case 'aplicacao':
-        return aplicacao ? `APLICAÇÃO: ${aplicacao}` : "";
+        // Sempre exibir "APLICAÇÃO:" mesmo sem valor - permite edição manual
+        return `APLICAÇÃO: ${aplicacao || ""}`;
       case 'contem':
         // Sempre exibir "CONTÉM:" mesmo sem valor - permite edição manual
         return `CONTÉM: ${rotulo.contem || ""}`;
@@ -373,7 +374,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     if (!config?.visible) return false;
     
     // Campos que sempre aparecem (para edição manual)
-    const camposSempreVisiveis: LabelFieldId[] = ['ph', 'contem'];
+    const camposSempreVisiveis: LabelFieldId[] = ['ph', 'contem', 'aplicacao'];
     if (camposSempreVisiveis.includes(fieldId)) return true;
     
     const content = getFieldContent(fieldId);
