@@ -80,7 +80,7 @@ export const buscarRequisicao = async (numeroRequisicao: string): Promise<ApiRes
     // DEBUG: Log dos dados brutos recebidos do backend
     console.log("[DEBUG] Dados brutos do backend:", formulas);
     formulas.forEach((item, idx) => {
-      console.log(`[DEBUG] Item ${idx}: tipoItem=${item.tipoItem}, componentes=${JSON.stringify(item.componentes)}`);
+      console.log(`[DEBUG] Item ${idx}: tipoItem=${item.tipoItem}, aplicacao="${item.aplicacao}", composicao="${item.composicao}"`);
     });
     
     // Mapeia cada fórmula preservando o nrItem original do backend
