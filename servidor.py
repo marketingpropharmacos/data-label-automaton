@@ -3006,12 +3006,20 @@ def buscar_requisicao(nr_requisicao):
             observacoes_raw = []
             codigo_encontrado = None
             for codigo_aplicacao in codigos_buscar:
+                # Converte para inteiro para compatibilidade com campos numéricos no Firebird
+                try:
+                    codigo_int = int(codigo_aplicacao)
+                except:
+                    codigo_int = 0
+                
+                print(f"\n  DEBUG FC03300 - Buscando CDPRO={codigo_aplicacao} (str) ou {codigo_int} (int)")
+                
                 cursor.execute("""
                     SELECT FRFAR, CDICP, OBSER 
                     FROM FC03300 
-                    WHERE CDPRO = ?
+                    WHERE CDPRO = ? OR CDPRO = ?
                     ORDER BY FRFAR, CDICP
-                """, (codigo_aplicacao,))
+                """, (codigo_int, codigo_aplicacao))
                 
                 obs_encontradas = cursor.fetchall()
                 if obs_encontradas:
