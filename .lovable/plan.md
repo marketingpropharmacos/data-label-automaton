@@ -1,85 +1,188 @@
 
-# Diagnostico: Servidor Local NAO Foi Atualizado
+# Plano: Correções no Frontend e Backend para Mesclas e KITs
 
-## Problema Identificado
+## Resumo das Alterações
 
-Os lotes exibidos nos rotulos (L:110, L:196, L:36, L:158, L:73, L:113, L:93, L:189) sao claramente **CTLOT** (IDs internos pequenos), NAO os **NRLOT** (numeros comerciais grandes como 10416, 10160).
+Este plano aborda três problemas identificados:
 
-Isso indica que **o arquivo servidor.py no seu computador ainda esta com a versao antiga**.
+1. Remover prefixo "AMP" dos nomes de componentes de KIT no frontend
+2. Exibir TODAS as observações/ativos das mesclas (não apenas a primeira)
+3. Garantir que a APLICAÇÃO apareça para todos os tipos: mesclas, kits e produtos únicos
 
-## Verificacao Necessaria
+---
 
-O codigo no Lovable esta 100% correto. As correcoes foram aplicadas em:
+## Alteração 1: Remover "AMP" dos Nomes de Componentes de KIT
 
-| Linha | Funcao | Codigo Correto |
-|-------|--------|----------------|
-| 281 | resolve_lote_componente | `lote = str(nrlot or ctlot or "").strip()` |
-| 298 | fallback de lote | `lote = str(row[1] or row[0] or "").strip()` |
-| 410 | tenta_fc12111_componentes | `lote_req = str(nrlot or ctlot or "").strip()` |
-| 2318-2321 | buscar_componentes_kit_fc12111 | `if nrlot_fc12111: ... elif ctlot_fc12111:` |
-| 2370, 2390 | buscar_lote_componente | `lote = str(row[0] or row[1] or "")` |
+### Arquivo: `src/components/LabelCard.tsx`
 
-## O Que Fazer
+O frontend já possui a função `formatarFormula()` que remove o prefixo "AMP", mas ela não está sendo usada para os nomes de componentes de kit. 
 
-### Passo 1: Verificar Versao Local
+### Implementação
 
-Abra o arquivo `C:\ServidorRotulos\servidor.py` e procure pela linha 280-282.
+Criar uma nova função auxiliar para limpar nomes de componentes:
 
-**Se mostrar assim (ERRADO):**
+```typescript
+// Nova função para limpar nome de componente (remove "AMP", "FRS", etc.)
+const formatarNomeComponente = (nome: string): string => {
+  if (!nome) return "";
+  let limpo = nome.trim().toUpperCase();
+  
+  // Remove prefixos de embalagem comuns
+  const prefixos = ["AMP ", "FRS ", "FR ", "BIS ", "ENV "];
+  for (const prefixo of prefixos) {
+    if (limpo.startsWith(prefixo)) {
+      limpo = limpo.substring(prefixo.length);
+      break;
+    }
+  }
+  
+  return limpo;
+};
+```
+
+### Locais de Uso
+
+1. **`generateKitText()`** (linha 197-198):
+   - Antes: `const compLine: string[] = [comp.nome.toUpperCase()];`
+   - Depois: `const compLine: string[] = [formatarNomeComponente(comp.nome)];`
+
+2. **`renderKitContent()`** (linha 401):
+   - Antes: `<span className="font-semibold uppercase">{comp.nome}</span>`
+   - Depois: `<span className="font-semibold uppercase">{formatarNomeComponente(comp.nome)}</span>`
+
+---
+
+## Alteração 2: Exibir TODAS as Observações da Mescla
+
+### Arquivo: `servidor.py`
+
+### Problema Atual
+
+Na linha 2948, quando o item é classificado como mescla, o sistema usa apenas o primeiro ativo:
+
 ```python
-# Prioriza CTLOT, fallback NRLOT
-lote = str(ctlot or nrlot or "").strip()
+composicao = primeiro_ativo  # Só usa o primeiro!
 ```
 
-**Deveria mostrar assim (CORRETO):**
+### Implementação
+
+Alterar para concatenar TODOS os ativos encontrados na FC99999:
+
 ```python
-# Prioriza NRLOT (numero comercial), fallback CTLOT (ID interno)
-lote = str(nrlot or ctlot or "").strip()
+# Em vez de usar só o primeiro ativo:
+# composicao = primeiro_ativo
+
+# Concatena TODOS os ativos separados por vírgula
+composicao = ", ".join(ativos_mescla)
 ```
 
-### Passo 2: Baixar Arquivo Atualizado
+### Localização
 
-Voce precisa baixar o servidor.py atualizado do Lovable e substituir o arquivo local.
+Linhas 2946-2952 do `servidor.py` - dentro do bloco `if e_mescla:`
 
-### Opcao 1 - Download Direto:
-1. No Lovable, clique em "servidor.py" na arvore de arquivos
-2. Copie TODO o conteudo (Ctrl+A, Ctrl+C)
-3. Abra `C:\ServidorRotulos\servidor.py` no Notepad++
-4. Apague tudo e cole o novo conteudo
-5. Salve (Ctrl+S)
-6. Reinicie o servidor Flask
+---
 
-### Opcao 2 - Verificacao Rapida:
-Procure no arquivo local pela string `nrlot or ctlot`:
-- Se NAO encontrar, o arquivo esta desatualizado
-- Se encontrar, verifique se esta nas linhas 281, 298, 410, 2318, 2370, 2390
+## Alteração 3: Garantir Aplicação para Mesclas, KITs e Produtos Únicos
 
-### Passo 3: Reiniciar Flask
+### Problema Atual
 
-Apos substituir o arquivo:
-```
-Ctrl+C (para parar o servidor)
-python servidor.py
-```
+1. A aplicação é buscada na FC99999 e FC03300
+2. Porém, linhas 3027-3029 limpam a aplicação se tiver mais de 30 caracteres ou vírgulas:
+   ```python
+   if len(aplicacao) > 30 or ',' in aplicacao:
+       aplicacao = ""
+   ```
+3. Isso pode estar removendo aplicações válidas
 
-## Confirmacao Visual
+### Arquivo: `servidor.py`
 
-Apos reiniciar, consulte a requisicao 89489 novamente. Os lotes devem aparecer assim:
+### Implementação
 
-**Antes (errado):**
-```
-L:110 V:30/01/2026
-L:196 V:14/01/2026
-L:36 V:31/12/2024
+1. **Flexibilizar a regra de limpeza** (linha 3027-3029):
+   - Aumentar o limite de 30 para 50 caracteres
+   - Manter validação de vírgulas (indica lista de ativos, não aplicação)
+
+```python
+# Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
+# Aumentado limite de 30 para 50 caracteres
+if len(aplicacao) > 50 or ',' in aplicacao:
+    aplicacao = ""
 ```
 
-**Depois (correto):**
-```
-L:10416 V:30/01/2026
-L:10160 V:14/01/2026
-L:10395 V:31/12/2024
+2. **Verificar busca de aplicação para mesclas usando CDPRIN**:
+
+   Atualmente a busca em FC03300 (linhas 3002-3007) usa apenas CDPRO:
+   ```python
+   cursor.execute("""
+       SELECT CDICP, OBSER 
+       FROM FC03300 
+       WHERE CDPRO = ?
+   """, (cdpro,))
+   ```
+
+   Alterar para priorizar CDPRIN (código base) quando disponível:
+   ```python
+   # Usa CDPRIN se disponível, senão CDPRO
+   codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro
+   
+   cursor.execute("""
+       SELECT CDICP, OBSER 
+       FROM FC03300 
+       WHERE CDPRO = ?
+       ORDER BY CDICP
+   """, (codigo_aplicacao,))
+   ```
+
+---
+
+## Resumo das Mudanças por Arquivo
+
+### `src/components/LabelCard.tsx`
+| Linha | Alteração |
+|-------|-----------|
+| ~138 | Adicionar função `formatarNomeComponente()` |
+| ~198 | Usar `formatarNomeComponente(comp.nome)` em `generateKitText()` |
+| ~401 | Usar `formatarNomeComponente(comp.nome)` em `renderKitContent()` |
+
+### `servidor.py`
+| Linha | Alteração |
+|-------|-----------|
+| 2948 | Mudar `composicao = primeiro_ativo` para `composicao = ", ".join(ativos_mescla)` |
+| 3001-3007 | Usar CDPRIN para buscar aplicação em FC03300 |
+| 3028 | Aumentar limite de 30 para 50 caracteres |
+
+---
+
+## Resultado Esperado
+
+### KITs (antes/depois)
+```text
+ANTES:                              DEPOIS:
+AMP BENZOPIRONA 0,5MG/ML 2ML       BENZOPIRONA 0,5MG/ML 2ML
+AMP L CARNITINA 600MG/2ML          L CARNITINA 600MG/2ML
+AMP LIP. DESOXICOLATO 60MG         LIP. DESOXICOLATO 60MG
 ```
 
-## Arquivo de Referencia
+### Mesclas (antes/depois)
+```text
+ANTES (só 1 observação):
+TRIPEPTÍDEO 1%, LIPOSSOMAS DE AC. DEOXICÓLICO 30MG,
 
-O servidor.py no Lovable tem **3310 linhas**. Verifique se o arquivo local tem esse numero de linhas. Se tiver menos, esta desatualizado.
+DEPOIS (todas as observações):
+TRIPEPTÍDEO 1%, LIPOSSOMAS DE AC. DEOXICÓLICO 30MG, SILÍCIO 0,5%, PENTOXIFILINA 20MG
+```
+
+### Aplicação (para todos os tipos)
+```text
+APLICAÇÃO: SC
+APLICAÇÃO: IM
+```
+
+---
+
+## Observações Técnicas
+
+1. A lógica de KIT permanece inalterada conforme solicitado
+2. As mudanças no frontend afetam apenas a exibição, não a estrutura de dados
+3. As mudanças no backend melhoram a extração de dados sem quebrar compatibilidade
+4. A função `formatarNomeComponente()` é similar à existente `formatarFormula()` mas focada em componentes
