@@ -2992,103 +2992,128 @@ def buscar_requisicao(nr_requisicao):
                     nome_formula = simplificar_nome_mescla(nome_produto)
             
             # =====================================================
-            # APLICAÇÃO: Prioriza FC99999, fallback para FC03300
+            # FC03300: Extrai APLICAÇÃO + OBSERVAÇÕES (ativos adicionais)
             # =====================================================
             aplicacao = aplicacao_fc99999
             descricao_produto = ""
+            observacoes_fc03300 = []  # Lista de ativos/observações relevantes
             
-            # Fallback para FC03300 se não encontrou aplicação na FC99999
-            # ESTRATÉGIA: Busca primeiro no CDPRO específico, depois no CDPRIN (código base)
-            if not aplicacao:
-                codigos_buscar = [cdpro_str]  # Sempre busca no código específico primeiro
-                if cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str:
-                    codigos_buscar.append(cdprin_str)  # Adiciona código base como fallback
-                
-                observacoes = []
-                for codigo_aplicacao in codigos_buscar:
-                    cursor.execute("""
-                        SELECT FRFAR, CDICP, OBSER 
-                        FROM FC03300 
-                        WHERE CDPRO = ?
-                        ORDER BY FRFAR, CDICP
-                    """, (codigo_aplicacao,))
-                    
-                    obs_encontradas = cursor.fetchall()
-                    if obs_encontradas:
-                        observacoes = obs_encontradas
-                        print(f"\n  DEBUG FC03300 - Encontrou dados em CDPRO={codigo_aplicacao}")
-                        break
-                    else:
-                        print(f"\n  DEBUG FC03300 - Nada em CDPRO={codigo_aplicacao}, tentando próximo...")
-                
-                # DEBUG: Log da busca FC03300
-                print(f"\n  DEBUG FC03300 - Buscando aplicação em CDPRO={codigo_aplicacao}")
-                print(f"    Observações encontradas: {len(observacoes)}")
-                for obs_debug in observacoes:
-                    obs_texto = str(obs_debug[2])[:50] if obs_debug[2] else ""
-                    print(f"    - FRFAR={obs_debug[0]}, CDICP={obs_debug[1]}, OBSER={obs_texto}...")
-                
-                for obs in observacoes:
-                    frfar = str(obs[0]).strip() if obs[0] else ""
-                    cdicp = str(obs[1]).strip().zfill(5)
-                    texto = obs[2]
-                    if texto and hasattr(texto, 'read'):
-                        texto = texto.read().decode('latin-1')
-                    texto = texto.strip() if texto else ""
-                    
-                    if not texto:
-                        continue
-                    
-                    texto_upper = texto.upper()
-                    
-                    # =====================================================
-                    # IGNORA campos que contêm ETIQUETA, CATALOGO, etc.
-                    # =====================================================
-                    IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO']
-                    if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
-                        print(f"    FC03300 IGNORADO: '{texto[:40]}...'")
-                        continue
-                    
-                    # =====================================================
-                    # EXTRAI APLICAÇÃO
-                    # Prioridade 1: Texto começa com "APLICAÇÃO:" ou "APLICACAO:"
-                    # Prioridade 2: Forma farmacêutica numérica (14, 1, etc.) com via direta
-                    # =====================================================
-                    if not aplicacao:
-                        # Normaliza texto removendo acentos para comparação robusta
-                        import unicodedata
-                        texto_normalizado = ''.join(
-                            c for c in unicodedata.normalize('NFD', texto_upper) 
-                            if unicodedata.category(c) != 'Mn'
-                        )
-                        
-                        # Verifica prefixos COM e SEM acento
-                        if (texto_upper.startswith("APLICAÇÃO:") or 
-                            texto_upper.startswith("APLICACAO:") or
-                            texto_normalizado.startswith("APLICACAO:")):
-                            # Encontra posição do : para extrair o valor de forma robusta
-                            pos_dois_pontos = texto.find(':')
-                            if pos_dois_pontos > 0:
-                                aplicacao = texto[pos_dois_pontos + 1:].strip()
-                                print(f"  -> APLICAÇÃO (prefixo): '{aplicacao}'")
-                        elif frfar.isdigit():  # Forma farmacêutica numérica (ex: 14)
-                            # Verifica se é via de administração direta
-                            vias_conhecidas = ['SC', 'IM', 'IV', 'ID', 'EV', 'IDSC', 'ID/SC', 'IM/SC', 
-                                               'SUBCUTANEA', 'INTRAMUSCULAR', 'INTRAVENOSA']
-                            for via in vias_conhecidas:
-                                if via in texto_upper:
-                                    aplicacao = via
-                                    print(f"  -> APLICAÇÃO (via direta em FRFAR={frfar}): '{aplicacao}'")
-                                    break
-                    
-                    # Campo 00004 = descrição do produto
-                    if cdicp == '00004' and not descricao_produto:
-                        descricao_produto = texto
+            # Busca em FC03300 - primeiro CDPRO específico, depois CDPRIN
+            codigos_buscar = [cdpro_str]  # Sempre busca no código específico primeiro
+            if cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str:
+                codigos_buscar.append(cdprin_str)  # Adiciona código base como fallback
             
-            # Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
-            # Aumentado limite de 30 para 50 caracteres para não perder aplicações válidas
+            observacoes_raw = []
+            codigo_encontrado = None
+            for codigo_aplicacao in codigos_buscar:
+                cursor.execute("""
+                    SELECT FRFAR, CDICP, OBSER 
+                    FROM FC03300 
+                    WHERE CDPRO = ?
+                    ORDER BY FRFAR, CDICP
+                """, (codigo_aplicacao,))
+                
+                obs_encontradas = cursor.fetchall()
+                if obs_encontradas:
+                    observacoes_raw = obs_encontradas
+                    codigo_encontrado = codigo_aplicacao
+                    print(f"\n  DEBUG FC03300 - Encontrou {len(obs_encontradas)} registros em CDPRO={codigo_aplicacao}")
+                    break
+                else:
+                    print(f"\n  DEBUG FC03300 - Nada em CDPRO={codigo_aplicacao}, tentando próximo...")
+            
+            # Termos a ignorar completamente
+            IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO', 'AMPOLA', 'INSTRUC', 'AVISO']
+            
+            for obs in observacoes_raw:
+                frfar = str(obs[0]).strip() if obs[0] else ""
+                cdicp = str(obs[1]).strip().zfill(5)
+                texto = obs[2]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                texto = texto.strip() if texto else ""
+                
+                if not texto:
+                    continue
+                
+                texto_upper = texto.upper()
+                print(f"    - FRFAR={frfar}, CDICP={cdicp}: '{texto[:60]}...'")
+                
+                # Verifica se deve ignorar
+                if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
+                    print(f"      -> IGNORADO (termo bloqueado)")
+                    continue
+                
+                # =====================================================
+                # 1. EXTRAI APLICAÇÃO (prefixo "APLICAÇÃO:")
+                # =====================================================
+                if not aplicacao:
+                    import unicodedata
+                    texto_normalizado = ''.join(
+                        c for c in unicodedata.normalize('NFD', texto_upper) 
+                        if unicodedata.category(c) != 'Mn'
+                    )
+                    
+                    if (texto_upper.startswith("APLICAÇÃO:") or 
+                        texto_upper.startswith("APLICACAO:") or
+                        texto_normalizado.startswith("APLICACAO:")):
+                        pos_dois_pontos = texto.find(':')
+                        if pos_dois_pontos > 0:
+                            aplicacao = texto[pos_dois_pontos + 1:].strip()
+                            print(f"      -> APLICAÇÃO extraída: '{aplicacao}'")
+                            continue  # Não adiciona à lista de observações
+                    elif frfar.isdigit():
+                        vias_conhecidas = ['SC', 'IM', 'IV', 'ID', 'EV', 'IDSC', 'ID/SC', 'IM/SC', 
+                                           'SUBCUTANEA', 'INTRAMUSCULAR', 'INTRAVENOSA']
+                        for via in vias_conhecidas:
+                            if texto_upper == via or texto_upper.startswith(via + ' '):
+                                aplicacao = via
+                                print(f"      -> APLICAÇÃO (via direta): '{aplicacao}'")
+                                break
+                        if aplicacao:
+                            continue
+                
+                # =====================================================
+                # 2. EXTRAI OBSERVAÇÕES/ATIVOS (textos úteis)
+                # =====================================================
+                # Ignora textos muito longos (>200 chars) ou que são descrições do produto
+                if len(texto) > 200:
+                    print(f"      -> IGNORADO (muito longo)")
+                    continue
+                
+                # Campo 00004 = descrição do produto (não adicionar à lista)
+                if cdicp == '00004':
+                    descricao_produto = texto
+                    print(f"      -> DESCRIÇÃO DO PRODUTO")
+                    continue
+                
+                # Adiciona observação relevante (ativos, composição, etc.)
+                # Remove prefixos desnecessários
+                texto_limpo = texto
+                if texto_upper.startswith("CONTÉM:"):
+                    texto_limpo = texto[7:].strip()
+                
+                if texto_limpo and texto_limpo not in observacoes_fc03300:
+                    observacoes_fc03300.append(texto_limpo)
+                    print(f"      -> ADICIONADO às observações")
+            
+            # Limpa aplicação se for muito longa ou contiver vírgulas
             if len(aplicacao) > 50 or ',' in aplicacao:
+                print(f"  -> Aplicação limpa (muito longa ou com vírgulas)")
                 aplicacao = ""
+            
+            # =====================================================
+            # MERGE: Combina composição FC99999 com observações FC03300
+            # =====================================================
+            if observacoes_fc03300:
+                obs_texto = " | ".join(observacoes_fc03300)
+                if composicao:
+                    # Adiciona observações à composição existente
+                    composicao = composicao + " | " + obs_texto
+                else:
+                    composicao = obs_texto
+                e_mescla = True
+                print(f"  -> COMPOSIÇÃO FINAL: '{composicao[:100]}...'")
             
             # Determina tipoItem: KIT > MESCLA > PRODUTO ÚNICO
             if e_kit and len(componentes_kit) > 0:
