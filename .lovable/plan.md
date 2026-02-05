@@ -1,188 +1,112 @@
 
-# Plano: Correções no Frontend e Backend para Mesclas e KITs
+# Plano: Corrigir Extração de Aplicação da FC03300
 
-## Resumo das Alterações
+## Problema Identificado
 
-Este plano aborda três problemas identificados:
+O print mostra a estrutura da tabela FC03300 (Observações de Ficha):
 
-1. Remover prefixo "AMP" dos nomes de componentes de KIT no frontend
-2. Exibir TODAS as observações/ativos das mesclas (não apenas a primeira)
-3. Garantir que a APLICAÇÃO apareça para todos os tipos: mesclas, kits e produtos únicos
+| Forma (FRFAR) | Código (CDICP) | Observação |
+|---------------|----------------|------------|
+| **14** | 00001 | **APLICAÇÃO: SC** ← Esta é a aplicação |
+| T | 00001 | XANTAGOSIL C 1% (SUBST. TRIPEPTIDEO 1%), CAFEINA 2%, |
+| T | 00002 | L CARNITINA 300MG, SILICIO ORGANICO 0,5% |
+| T | 00003 | ETIQUETA (CATALOGO ESTETICA) - GORDURA... ← **IGNORAR** |
 
----
+## Causa Raiz
 
-## Alteração 1: Remover "AMP" dos Nomes de Componentes de KIT
-
-### Arquivo: `src/components/LabelCard.tsx`
-
-O frontend já possui a função `formatarFormula()` que remove o prefixo "AMP", mas ela não está sendo usada para os nomes de componentes de kit. 
-
-### Implementação
-
-Criar uma nova função auxiliar para limpar nomes de componentes:
-
-```typescript
-// Nova função para limpar nome de componente (remove "AMP", "FRS", etc.)
-const formatarNomeComponente = (nome: string): string => {
-  if (!nome) return "";
-  let limpo = nome.trim().toUpperCase();
-  
-  // Remove prefixos de embalagem comuns
-  const prefixos = ["AMP ", "FRS ", "FR ", "BIS ", "ENV "];
-  for (const prefixo of prefixos) {
-    if (limpo.startsWith(prefixo)) {
-      limpo = limpo.substring(prefixo.length);
-      break;
-    }
-  }
-  
-  return limpo;
-};
+A query atual na linha 3004-3009 não inclui a coluna **FRFAR**:
+```python
+SELECT CDICP, OBSER 
+FROM FC03300 
+WHERE CDPRO = ?
 ```
 
-### Locais de Uso
+Isso faz com que a aplicação não seja identificada corretamente porque:
+1. O sistema não distingue entre formas farmacêuticas (14, T, etc.)
+2. A detecção atual só funciona se o texto começar exatamente com "APLICAÇÃO:"
 
-1. **`generateKitText()`** (linha 197-198):
-   - Antes: `const compLine: string[] = [comp.nome.toUpperCase()];`
-   - Depois: `const compLine: string[] = [formatarNomeComponente(comp.nome)];`
-
-2. **`renderKitContent()`** (linha 401):
-   - Antes: `<span className="font-semibold uppercase">{comp.nome}</span>`
-   - Depois: `<span className="font-semibold uppercase">{formatarNomeComponente(comp.nome)}</span>`
-
----
-
-## Alteração 2: Exibir TODAS as Observações da Mescla
+## Solução
 
 ### Arquivo: `servidor.py`
 
-### Problema Atual
-
-Na linha 2948, quando o item é classificado como mescla, o sistema usa apenas o primeiro ativo:
+#### Alteração 1: Incluir FRFAR na query FC03300 (linhas 3004-3009)
 
 ```python
-composicao = primeiro_ativo  # Só usa o primeiro!
+cursor.execute("""
+    SELECT FRFAR, CDICP, OBSER 
+    FROM FC03300 
+    WHERE CDPRO = ?
+    ORDER BY FRFAR, CDICP
+""", (codigo_aplicacao,))
 ```
 
-### Implementação
-
-Alterar para concatenar TODOS os ativos encontrados na FC99999:
+#### Alteração 2: Melhorar processamento das observações (linhas 3013-3027)
 
 ```python
-# Em vez de usar só o primeiro ativo:
-# composicao = primeiro_ativo
-
-# Concatena TODOS os ativos separados por vírgula
-composicao = ", ".join(ativos_mescla)
+for obs in observacoes:
+    frfar = str(obs[0]).strip() if obs[0] else ""
+    cdicp = str(obs[1]).strip().zfill(5)
+    texto = obs[2]
+    if texto and hasattr(texto, 'read'):
+        texto = texto.read().decode('latin-1')
+    texto = texto.strip() if texto else ""
+    
+    if not texto:
+        continue
+    
+    texto_upper = texto.upper()
+    
+    # =====================================================
+    # IGNORA campos que contêm ETIQUETA, CATALOGO, etc.
+    # =====================================================
+    IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO']
+    if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
+        print(f"    FC03300 IGNORADO: '{texto[:40]}...'")
+        continue
+    
+    # =====================================================
+    # EXTRAI APLICAÇÃO
+    # Prioridade 1: Texto começa com "APLICAÇÃO:" ou "APLICACAO:"
+    # Prioridade 2: Forma farmacêutica numérica (14, 1, etc.) com via direta
+    # =====================================================
+    if not aplicacao:
+        if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
+            aplicacao = texto[10:].strip()
+            print(f"  -> APLICAÇÃO (prefixo): '{aplicacao}'")
+        elif frfar.isdigit():  # Forma farmacêutica numérica (ex: 14)
+            # Verifica se é via de administração direta
+            vias_conhecidas = ['SC', 'IM', 'IV', 'ID', 'EV', 'IDSC', 'ID/SC', 'IM/SC', 
+                               'SUBCUTANEA', 'INTRAMUSCULAR', 'INTRAVENOSA']
+            for via in vias_conhecidas:
+                if via in texto_upper:
+                    aplicacao = via
+                    print(f"  -> APLICAÇÃO (via direta em FRFAR={frfar}): '{aplicacao}'")
+                    break
+    
+    # Campo 00004 = descrição do produto
+    if cdicp == '00004' and not descricao_produto:
+        descricao_produto = texto
 ```
 
-### Localização
+## Resumo das Mudanças
 
-Linhas 2946-2952 do `servidor.py` - dentro do bloco `if e_mescla:`
-
----
-
-## Alteração 3: Garantir Aplicação para Mesclas, KITs e Produtos Únicos
-
-### Problema Atual
-
-1. A aplicação é buscada na FC99999 e FC03300
-2. Porém, linhas 3027-3029 limpam a aplicação se tiver mais de 30 caracteres ou vírgulas:
-   ```python
-   if len(aplicacao) > 30 or ',' in aplicacao:
-       aplicacao = ""
-   ```
-3. Isso pode estar removendo aplicações válidas
-
-### Arquivo: `servidor.py`
-
-### Implementação
-
-1. **Flexibilizar a regra de limpeza** (linha 3027-3029):
-   - Aumentar o limite de 30 para 50 caracteres
-   - Manter validação de vírgulas (indica lista de ativos, não aplicação)
-
-```python
-# Limpa aplicação se for muito longa ou contiver vírgulas (indica lista de ativos)
-# Aumentado limite de 30 para 50 caracteres
-if len(aplicacao) > 50 or ',' in aplicacao:
-    aplicacao = ""
-```
-
-2. **Verificar busca de aplicação para mesclas usando CDPRIN**:
-
-   Atualmente a busca em FC03300 (linhas 3002-3007) usa apenas CDPRO:
-   ```python
-   cursor.execute("""
-       SELECT CDICP, OBSER 
-       FROM FC03300 
-       WHERE CDPRO = ?
-   """, (cdpro,))
-   ```
-
-   Alterar para priorizar CDPRIN (código base) quando disponível:
-   ```python
-   # Usa CDPRIN se disponível, senão CDPRO
-   codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro
-   
-   cursor.execute("""
-       SELECT CDICP, OBSER 
-       FROM FC03300 
-       WHERE CDPRO = ?
-       ORDER BY CDICP
-   """, (codigo_aplicacao,))
-   ```
-
----
-
-## Resumo das Mudanças por Arquivo
-
-### `src/components/LabelCard.tsx`
 | Linha | Alteração |
 |-------|-----------|
-| ~138 | Adicionar função `formatarNomeComponente()` |
-| ~198 | Usar `formatarNomeComponente(comp.nome)` em `generateKitText()` |
-| ~401 | Usar `formatarNomeComponente(comp.nome)` em `renderKitContent()` |
-
-### `servidor.py`
-| Linha | Alteração |
-|-------|-----------|
-| 2948 | Mudar `composicao = primeiro_ativo` para `composicao = ", ".join(ativos_mescla)` |
-| 3001-3007 | Usar CDPRIN para buscar aplicação em FC03300 |
-| 3028 | Aumentar limite de 30 para 50 caracteres |
-
----
+| 3004-3009 | Adicionar `FRFAR` na query SELECT e ORDER BY |
+| 3013-3027 | Processar FRFAR, ignorar ETIQUETA/CATALOGO, detectar vias diretas |
 
 ## Resultado Esperado
 
-### KITs (antes/depois)
-```text
-ANTES:                              DEPOIS:
-AMP BENZOPIRONA 0,5MG/ML 2ML       BENZOPIRONA 0,5MG/ML 2ML
-AMP L CARNITINA 600MG/2ML          L CARNITINA 600MG/2ML
-AMP LIP. DESOXICOLATO 60MG         LIP. DESOXICOLATO 60MG
-```
+Após a correção, o sistema irá:
 
-### Mesclas (antes/depois)
-```text
-ANTES (só 1 observação):
-TRIPEPTÍDEO 1%, LIPOSSOMAS DE AC. DEOXICÓLICO 30MG,
+1. Ler o registro `FRFAR=14, CDICP=00001` com "APLICAÇÃO: SC"
+2. Extrair `aplicacao = "SC"`
+3. Ignorar registro com "ETIQUETA (CATALOGO...)"
+4. O rótulo exibirá: `APLICAÇÃO: SC`
 
-DEPOIS (todas as observações):
-TRIPEPTÍDEO 1%, LIPOSSOMAS DE AC. DEOXICÓLICO 30MG, SILÍCIO 0,5%, PENTOXIFILINA 20MG
-```
+## Dados Que Serão Extraídos (do print)
 
-### Aplicação (para todos os tipos)
-```text
-APLICAÇÃO: SC
-APLICAÇÃO: IM
-```
-
----
-
-## Observações Técnicas
-
-1. A lógica de KIT permanece inalterada conforme solicitado
-2. As mudanças no frontend afetam apenas a exibição, não a estrutura de dados
-3. As mudanças no backend melhoram a extração de dados sem quebrar compatibilidade
-4. A função `formatarNomeComponente()` é similar à existente `formatarFormula()` mas focada em componentes
+Para o produto 92602:
+- **Aplicação**: SC (de FRFAR=14, CDICP=00001)
+- **Ativos**: XANTAGOSIL C 1%..., L CARNITINA 300MG... (da FC99999 ou FC03300 FRFAR=T)
+- **Ignorado**: ETIQUETA (CATALOGO ESTETICA)...
