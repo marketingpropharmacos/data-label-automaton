@@ -2813,7 +2813,7 @@ def buscar_requisicao(nr_requisicao):
             
             # Query com match exato em múltiplos formatos usando codigo_busca (CDPRIN ou CDPRO)
             cursor.execute("""
-                SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
                 FROM FC99999 
                 WHERE ARGUMENTO = ? 
                    OR ARGUMENTO = ?
@@ -2828,7 +2828,7 @@ def buscar_requisicao(nr_requisicao):
             if not todos_args_exato:
                 print(f"  -> Nenhum match exato. Tentando CONTAINING com validação...")
                 cursor.execute("""
-                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
                     FROM FC99999 
                     WHERE ARGUMENTO CONTAINING ?
                     ORDER BY ARGUMENTO, SUBARGUM
@@ -2864,7 +2864,7 @@ def buscar_requisicao(nr_requisicao):
                 cdpro_padded = cdpro_str.zfill(8)
                 
                 cursor.execute("""
-                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
                     FROM FC99999 
                     WHERE ARGUMENTO CONTAINING ?
                     ORDER BY ARGUMENTO, SUBARGUM
@@ -2932,23 +2932,48 @@ def buscar_requisicao(nr_requisicao):
                 argumento = arg[0]
                 subargum = str(arg[1]).strip().zfill(5)
                 texto = arg[2]
+                descrpar = arg[3] if len(arg) > 3 else None  # DESCRPAR (campo 4)
                 
-                # Trata BLOB se necessário
+                # Trata BLOB se necessário (PARAMETRO)
                 if texto and hasattr(texto, 'read'):
                     texto = texto.read().decode('latin-1')
                 texto = texto.strip() if texto else ""
                 
+                # Trata BLOB se necessário (DESCRPAR)
+                if descrpar and hasattr(descrpar, 'read'):
+                    descrpar = descrpar.read().decode('latin-1')
+                descrpar = descrpar.strip() if descrpar else ""
+                
+                param_preview = texto[:80] if texto else 'NULL'
+                descrpar_preview = descrpar[:50] if descrpar else 'NULL'
+                print(f"    - ARG: {argumento}, SUB: {subargum}, PARAM: {param_preview}...")
+                if descrpar:
+                    print(f"      DESCRPAR: {descrpar_preview}...")
+                
+                # =====================================================
+                # EXTRAÇÃO DE APLICAÇÃO DO CAMPO DESCRPAR
+                # Ex: "APLICACAO: SC" ou "APLICAÇÃO: ID/SC"
+                # =====================================================
+                if not aplicacao_fc99999 and descrpar:
+                    import unicodedata
+                    descrpar_normalizado = ''.join(
+                        c for c in unicodedata.normalize('NFD', descrpar.upper()) 
+                        if unicodedata.category(c) != 'Mn'
+                    )
+                    if 'APLICAC' in descrpar_normalizado:
+                        if ':' in descrpar:
+                            aplicacao_fc99999 = descrpar.split(':', 1)[1].strip()
+                        else:
+                            aplicacao_fc99999 = descrpar.strip()
+                        print(f"  -> APLICAÇÃO extraída de DESCRPAR: '{aplicacao_fc99999}'")
+                
                 if not texto:
                     continue
                 
-                param_preview = texto[:80] if texto else 'NULL'
-                print(f"    - ARG: {argumento}, SUB: {subargum}, PARAM: {param_preview}...")
-                
                 texto_upper = texto.upper()
                 
-                # Verifica se é APLICAÇÃO inline (texto contém "APLICAÇÃO:" ou "APLICACAO:")
+                # Verifica se é APLICAÇÃO inline no PARAMETRO (texto contém "APLICAÇÃO:" ou "APLICACAO:")
                 if not aplicacao_fc99999:
-                    import unicodedata
                     texto_normalizado = ''.join(
                         c for c in unicodedata.normalize('NFD', texto_upper) 
                         if unicodedata.category(c) != 'Mn'
