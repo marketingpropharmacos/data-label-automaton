@@ -1,112 +1,124 @@
 
-# Plano: Corrigir Extração de Aplicação da FC03300
+# Plano: Corrigir Extração de Aplicação - Problema de Encoding
 
 ## Problema Identificado
 
-O print mostra a estrutura da tabela FC03300 (Observações de Ficha):
+O print mostra que a aplicação "APLICAÇÃO: SC" deveria estar sendo capturada, mas não está aparecendo no frontend. Após análise do código, identificamos dois problemas potenciais:
 
-| Forma (FRFAR) | Código (CDICP) | Observação |
-|---------------|----------------|------------|
-| **14** | 00001 | **APLICAÇÃO: SC** ← Esta é a aplicação |
-| T | 00001 | XANTAGOSIL C 1% (SUBST. TRIPEPTIDEO 1%), CAFEINA 2%, |
-| T | 00002 | L CARNITINA 300MG, SILICIO ORGANICO 0,5% |
-| T | 00003 | ETIQUETA (CATALOGO ESTETICA) - GORDURA... ← **IGNORAR** |
+### Problema 1: Inconsistência no Fallback de CDPRO
+Na linha 3003, quando o fallback é ativado, usa `cdpro` (valor bruto do banco) ao invés de `cdpro_str` (string normalizada):
 
-## Causa Raiz
-
-A query atual na linha 3004-3009 não inclui a coluna **FRFAR**:
 ```python
-SELECT CDICP, OBSER 
-FROM FC03300 
-WHERE CDPRO = ?
+# PROBLEMA:
+codigo_aplicacao = cdprin_str if (...) else cdpro  # <-- deveria ser cdpro_str
 ```
 
-Isso faz com que a aplicação não seja identificada corretamente porque:
-1. O sistema não distingue entre formas farmacêuticas (14, T, etc.)
-2. A detecção atual só funciona se o texto começar exatamente com "APLICAÇÃO:"
+### Problema 2: Encoding de Caracteres Especiais
+O banco Firebird pode armazenar "APLICAÇÃO:" com encoding diferente (Latin-1, CP1252). O `texto_upper` pode resultar em algo como "APLICACˆO:" ou "APLICAÇAO:" dependendo do encoding.
+
+### Problema 3: Falta de Debug Logging
+Não há logs indicando quando a busca na FC03300 acontece e o que ela retorna.
+
+---
 
 ## Solução
 
 ### Arquivo: `servidor.py`
 
-#### Alteração 1: Incluir FRFAR na query FC03300 (linhas 3004-3009)
+#### Alteração 1: Corrigir fallback de CDPRO (linha 3003)
 
+**Antes:**
 ```python
-cursor.execute("""
-    SELECT FRFAR, CDICP, OBSER 
-    FROM FC03300 
-    WHERE CDPRO = ?
-    ORDER BY FRFAR, CDICP
-""", (codigo_aplicacao,))
+codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro
 ```
 
-#### Alteração 2: Melhorar processamento das observações (linhas 3013-3027)
+**Depois:**
+```python
+codigo_aplicacao = cdprin_str if (cdprin_str and cdprin_str != '0' and cdprin_str != cdpro_str) else cdpro_str
+```
+
+#### Alteração 2: Adicionar detecção robusta de "APLICAÇÃO" (linhas 3039-3051)
+
+Usar normalização de texto para remover acentos antes da comparação:
 
 ```python
-for obs in observacoes:
-    frfar = str(obs[0]).strip() if obs[0] else ""
-    cdicp = str(obs[1]).strip().zfill(5)
-    texto = obs[2]
-    if texto and hasattr(texto, 'read'):
-        texto = texto.read().decode('latin-1')
-    texto = texto.strip() if texto else ""
-    
+import unicodedata
+
+def normalizar_texto(texto):
+    """Remove acentos e normaliza texto para comparação"""
     if not texto:
-        continue
-    
-    texto_upper = texto.upper()
-    
-    # =====================================================
-    # IGNORA campos que contêm ETIQUETA, CATALOGO, etc.
-    # =====================================================
-    IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO']
-    if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
-        print(f"    FC03300 IGNORADO: '{texto[:40]}...'")
-        continue
-    
-    # =====================================================
-    # EXTRAI APLICAÇÃO
-    # Prioridade 1: Texto começa com "APLICAÇÃO:" ou "APLICACAO:"
-    # Prioridade 2: Forma farmacêutica numérica (14, 1, etc.) com via direta
-    # =====================================================
-    if not aplicacao:
-        if texto_upper.startswith("APLICAÇÃO:") or texto_upper.startswith("APLICACAO:"):
-            aplicacao = texto[10:].strip()
-            print(f"  -> APLICAÇÃO (prefixo): '{aplicacao}'")
-        elif frfar.isdigit():  # Forma farmacêutica numérica (ex: 14)
-            # Verifica se é via de administração direta
-            vias_conhecidas = ['SC', 'IM', 'IV', 'ID', 'EV', 'IDSC', 'ID/SC', 'IM/SC', 
-                               'SUBCUTANEA', 'INTRAMUSCULAR', 'INTRAVENOSA']
-            for via in vias_conhecidas:
-                if via in texto_upper:
-                    aplicacao = via
-                    print(f"  -> APLICAÇÃO (via direta em FRFAR={frfar}): '{aplicacao}'")
-                    break
-    
-    # Campo 00004 = descrição do produto
-    if cdicp == '00004' and not descricao_produto:
-        descricao_produto = texto
+        return ""
+    # NFD decompõe caracteres acentuados
+    normalizado = unicodedata.normalize('NFD', texto)
+    # Remove marcas de acentuação (categoria 'Mn')
+    return ''.join(c for c in normalizado if unicodedata.category(c) != 'Mn')
 ```
+
+E usar na detecção:
+
+```python
+if not aplicacao:
+    texto_normalizado = normalizar_texto(texto_upper)
+    
+    # Verifica prefixos COM e SEM acento
+    if (texto_upper.startswith("APLICAÇÃO:") or 
+        texto_upper.startswith("APLICACAO:") or
+        texto_normalizado.startswith("APLICACAO:")):
+        # Encontra posição do : para extrair o valor
+        pos_dois_pontos = texto.find(':')
+        if pos_dois_pontos > 0:
+            aplicacao = texto[pos_dois_pontos + 1:].strip()
+            print(f"  -> APLICAÇÃO (prefixo): '{aplicacao}'")
+```
+
+#### Alteração 3: Adicionar logs de debug (após linha 3011)
+
+```python
+print(f"\n  DEBUG FC03300 - Buscando aplicação em CDPRO={codigo_aplicacao}")
+print(f"    Observações encontradas: {len(observacoes)}")
+for obs in observacoes:
+    print(f"    - FRFAR={obs[0]}, CDICP={obs[1]}, OBSER={str(obs[2])[:50]}...")
+```
+
+---
 
 ## Resumo das Mudanças
 
 | Linha | Alteração |
 |-------|-----------|
-| 3004-3009 | Adicionar `FRFAR` na query SELECT e ORDER BY |
-| 3013-3027 | Processar FRFAR, ignorar ETIQUETA/CATALOGO, detectar vias diretas |
+| 3003 | Trocar `cdpro` por `cdpro_str` no fallback |
+| ~3005 (antes do loop) | Adicionar função `normalizar_texto()` ou import |
+| 3039-3051 | Usar `texto.find(':')` para extrair aplicação de forma robusta |
+| 3012 | Adicionar logs de debug para FC03300 |
+
+---
 
 ## Resultado Esperado
 
-Após a correção, o sistema irá:
+Após as correções:
 
-1. Ler o registro `FRFAR=14, CDICP=00001` com "APLICAÇÃO: SC"
-2. Extrair `aplicacao = "SC"`
-3. Ignorar registro com "ETIQUETA (CATALOGO...)"
-4. O rótulo exibirá: `APLICAÇÃO: SC`
+1. O sistema irá logar no console Flask: 
+   ```
+   DEBUG FC03300 - Buscando aplicação em CDPRO=92602
+   Observações encontradas: 4
+   - FRFAR=14, CDICP=00001, OBSER=APLICAÇÃO: SC...
+   -> APLICAÇÃO (prefixo): 'SC'
+   ```
 
-## Dados Que Serão Extraídos (do print)
+2. O frontend exibirá:
+   ```
+   APLICAÇÃO: SC
+   CONTÉM:
+   REG: 154064
+   ```
 
-Para o produto 92602:
-- **Aplicação**: SC (de FRFAR=14, CDICP=00001)
-- **Ativos**: XANTAGOSIL C 1%..., L CARNITINA 300MG... (da FC99999 ou FC03300 FRFAR=T)
-- **Ignorado**: ETIQUETA (CATALOGO ESTETICA)...
+---
+
+## Arquivo de Referência Atualizado
+
+Após estas alterações, o servidor.py terá aproximadamente **3350 linhas**. O usuário deverá:
+
+1. Copiar todo o servidor.py atualizado
+2. Substituir o arquivo local
+3. Reiniciar o Flask
+4. Testar requisição 89489 novamente
