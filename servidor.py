@@ -46,64 +46,57 @@ def buscar_aplicacao_nao_kit(cursor, cdpro_int):
     
     cdpro_str = str(cdpro_int).replace('.', '').strip()
     
-    # Variações do argumento OBSFIC (com diferentes padding de zeros)
-    argumentos_tentar = [
-        f"OBSFIC{cdpro_str}",
-        f"OBSFIC0{cdpro_str}",
-        f"OBSFIC00{cdpro_str}",
-    ]
+    # Usar STARTING WITH para encontrar ARGUMENTOs com sufixos (ex: OBSFIC9263814)
+    argumento = f"OBSFIC{cdpro_str}"
     
     aplicacoes = []
     
-    for argumento in argumentos_tentar:
-        try:
-            cursor.execute("""
-                SELECT FIRST 5 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
-                FROM FC99999
-                WHERE ARGUMENTO = ?
-                  AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
-                       OR UPPER(DESCRPAR) CONTAINING 'APLIC')
-                ORDER BY SUBARGUM
-            """, (argumento,))
+    try:
+        print(f"  [APLICAÇÃO NÃO-KIT] Tentando ARGUMENTO STARTING WITH '{argumento}'")
+        cursor.execute("""
+            SELECT FIRST 10 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+            FROM FC99999
+            WHERE ARGUMENTO STARTING WITH ?
+              AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
+                   OR UPPER(DESCRPAR) CONTAINING 'APLIC')
+            ORDER BY ARGUMENTO, SUBARGUM
+        """, (argumento,))
+        
+        registros = cursor.fetchall()
+        print(f"  [APLICAÇÃO NÃO-KIT] Encontrados {len(registros)} registros")
+        
+        for reg in registros:
+            # PARAMETRO (índice 2)
+            texto = reg[2]
+            if texto and hasattr(texto, 'read'):
+                texto = texto.read().decode('latin-1')
+            texto = (texto or "").strip()
             
-            registros = cursor.fetchall()
+            # DESCRPAR (índice 3)
+            descrpar = reg[3]
+            if descrpar and hasattr(descrpar, 'read'):
+                descrpar = descrpar.read().decode('latin-1')
+            descrpar = (descrpar or "").strip()
             
-            for reg in registros:
-                # PARAMETRO (índice 2)
-                texto = reg[2]
-                if texto and hasattr(texto, 'read'):
-                    texto = texto.read().decode('latin-1')
-                texto = (texto or "").strip()
+            # Extrai valor após "APLICAÇÃO:" ou "APLICACAO:"
+            for campo in [texto, descrpar]:
+                if not campo:
+                    continue
+                campo_upper = campo.upper()
                 
-                # DESCRPAR (índice 3)
-                descrpar = reg[3]
-                if descrpar and hasattr(descrpar, 'read'):
-                    descrpar = descrpar.read().decode('latin-1')
-                descrpar = (descrpar or "").strip()
-                
-                # Extrai valor após "APLICAÇÃO:" ou "APLICACAO:"
-                for campo in [texto, descrpar]:
-                    if not campo:
-                        continue
-                    campo_upper = campo.upper()
+                if 'APLIC' in campo_upper:
+                    # Tenta extrair após ":"
+                    if ':' in campo:
+                        valor = campo.split(':', 1)[1].strip()
+                    else:
+                        valor = campo.strip()
                     
-                    if 'APLIC' in campo_upper:
-                        # Tenta extrair após ":"
-                        if ':' in campo:
-                            valor = campo.split(':', 1)[1].strip()
-                        else:
-                            valor = campo.strip()
-                        
-                        if valor and valor not in aplicacoes:
-                            aplicacoes.append(valor)
-                            print(f"  [APLICAÇÃO NÃO-KIT] Encontrado: '{valor}' em {argumento}")
-            
-            if aplicacoes:
-                break  # Encontrou, não precisa tentar próximas variações
-                
-        except Exception as e:
-            print(f"  [APLICAÇÃO NÃO-KIT] Erro ao buscar {argumento}: {e}")
-            continue
+                    if valor and valor not in aplicacoes:
+                        aplicacoes.append(valor)
+                        print(f"  [APLICAÇÃO NÃO-KIT] Encontrado: '{valor}' em {reg[0]}")
+                    
+    except Exception as e:
+        print(f"  [APLICAÇÃO NÃO-KIT] Erro ao buscar {argumento}: {e}")
     
     if aplicacoes:
         return " | ".join(aplicacoes)
