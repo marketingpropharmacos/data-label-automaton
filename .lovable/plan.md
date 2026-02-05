@@ -1,113 +1,111 @@
 
-# Plano: Corrigir Busca de APLICAÇÃO para Não-Kits
+# Plano: Corrigir Extração de APLICAÇÃO para Não-Kits
 
-## Diagnóstico do Problema
+## Diagnóstico do Problema Real
 
-Analisando a imagem do DBeaver enviada, identifiquei a discrepância:
+Analisando a imagem do DBeaver (imagem-280) e o código:
 
-| O que o banco tem | O que o código busca |
-|-------------------|---------------------|
-| `ARGUMENTO = OBSFIC9263814` (7 dígitos após OBSFIC) | `ARGUMENTO = OBSFIC92638` (5 dígitos) |
-| `ARGUMENTO = OBSFIC9263914` | Match exato falha |
-| `ARGUMENTO = OBSFIC9264114` | Não encontra registros |
+| Campo na FC99999 | Conteúdo |
+|------------------|----------|
+| `ARGUMENTO` | OBSFIC9263814 |
+| `PARAMETRO` | (vazio ou texto dos ativos) |
+| **`DESCRPAR`** | **APLICACAO: ID, APLICACAO: SC, etc.** |
 
-**Causa raiz:** O código usa `WHERE ARGUMENTO = ?` (igualdade exata), mas os ARGUMENTOs reais no banco têm sufixos adicionais além do CDPRO.
+**Problema 1:** A query que busca ativos (linhas 2815-2823) **não inclui o campo DESCRPAR**:
+```sql
+SELECT ARGUMENTO, SUBARGUM, PARAMETRO  -- FALTA DESCRPAR!
+FROM FC99999
+```
 
-Exemplo:
-- CDPRO do produto: `92638`
-- ARGUMENTO esperado pelo código: `OBSFIC92638`
-- ARGUMENTO real no banco: `OBSFIC9263814` (CDPRO + sufixo numérico)
+**Problema 2:** O loop que processa os resultados (linha 2934) só lê `arg[2]` (PARAMETRO), ignorando completamente o `DESCRPAR` onde está a aplicação.
+
+**Problema 3:** A função `buscar_aplicacao_nao_kit` faz uma query separada que até inclui DESCRPAR, mas usa `STARTING WITH 'OBSFIC{cdpro}'` onde cdpro tem 5 dígitos, enquanto os ARGUMENTOs reais têm 7+ dígitos (ex: OBSFIC9263814 vs OBSFIC92638).
 
 ---
 
 ## Solução
 
-Modificar a função `buscar_aplicacao_nao_kit()` para usar `STARTING WITH` em vez de igualdade exata, e adicionar log de debug para rastrear a busca.
-
-### Alteração na Linha 60-67 do servidor.py
+### Alteração 1: Incluir DESCRPAR na query principal (linhas 2815-2823)
 
 **Antes:**
-```python
-cursor.execute("""
-    SELECT FIRST 5 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
-    FROM FC99999
-    WHERE ARGUMENTO = ?
-      AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
-           OR UPPER(DESCRPAR) CONTAINING 'APLIC')
-    ORDER BY SUBARGUM
-""", (argumento,))
+```sql
+SELECT ARGUMENTO, SUBARGUM, PARAMETRO 
+FROM FC99999 
 ```
 
 **Depois:**
-```python
-print(f"  [APLICAÇÃO NÃO-KIT] Tentando ARGUMENTO STARTING WITH '{argumento}'")
-cursor.execute("""
-    SELECT FIRST 10 ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
-    FROM FC99999
-    WHERE ARGUMENTO STARTING WITH ?
-      AND (UPPER(PARAMETRO) CONTAINING 'APLIC'
-           OR UPPER(DESCRPAR) CONTAINING 'APLIC')
-    ORDER BY ARGUMENTO, SUBARGUM
-""", (argumento,))
+```sql
+SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+FROM FC99999 
 ```
 
-### Alteração nos argumentos a tentar (Linha 50-54)
+### Alteração 2: Processar DESCRPAR para extrair APLICAÇÃO (linhas 2930-2961)
 
-**Antes:**
+Adicionar leitura de `arg[3]` (DESCRPAR) e extrair aplicação quando conter "APLICAC":
+
 ```python
-argumentos_tentar = [
-    f"OBSFIC{cdpro_str}",
-    f"OBSFIC0{cdpro_str}",
-    f"OBSFIC00{cdpro_str}",
-]
+for arg in todos_args:
+    argumento = arg[0]
+    subargum = str(arg[1]).strip().zfill(5)
+    texto = arg[2]  # PARAMETRO
+    descrpar = arg[3] if len(arg) > 3 else None  # DESCRPAR (NOVO!)
+    
+    # Trata BLOB se necessário
+    if texto and hasattr(texto, 'read'):
+        texto = texto.read().decode('latin-1')
+    texto = texto.strip() if texto else ""
+    
+    # NOVO: Trata DESCRPAR (também pode ser BLOB)
+    if descrpar and hasattr(descrpar, 'read'):
+        descrpar = descrpar.read().decode('latin-1')
+    descrpar = descrpar.strip() if descrpar else ""
+    
+    # NOVO: Extrai APLICAÇÃO do campo DESCRPAR
+    if not aplicacao_fc99999 and descrpar:
+        descrpar_upper = descrpar.upper()
+        if 'APLICAC' in descrpar_upper:
+            if ':' in descrpar:
+                aplicacao_fc99999 = descrpar.split(':', 1)[1].strip()
+            else:
+                aplicacao_fc99999 = descrpar.strip()
+            print(f"  -> APLICAÇÃO extraída de DESCRPAR: '{aplicacao_fc99999}'")
 ```
 
-**Depois:**
-```python
-argumentos_tentar = [
-    f"OBSFIC{cdpro_str}",      # Ex: OBSFIC92638 -> encontra OBSFIC9263814
-]
-```
+### Alteração 3: Atualizar todas as queries que usam FC99999
 
-Apenas um prefixo é necessário com `STARTING WITH`, pois já cobre todas as variações com sufixo.
+Também atualizar as queries de fallback (linhas 2830-2835, 2866-2871) para incluir DESCRPAR:
+
+```sql
+SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
+FROM FC99999 
+WHERE ...
+```
 
 ---
 
 ## Arquivos Alterados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `servidor.py` | Modificar query de `ARGUMENTO = ?` para `ARGUMENTO STARTING WITH ?` |
-| `servidor.py` | Adicionar log de debug mostrando o prefixo buscado |
-| `servidor.py` | Aumentar limite de registros para 10 (garantir cobertura) |
+| Arquivo | Linha | Alteração |
+|---------|-------|-----------|
+| `servidor.py` | 2815-2823 | Adicionar `DESCRPAR` à query principal |
+| `servidor.py` | 2830-2835 | Adicionar `DESCRPAR` à query CONTAINING |
+| `servidor.py` | 2866-2871 | Adicionar `DESCRPAR` à query fallback CDPRO |
+| `servidor.py` | 2930-2961 | Processar `arg[3]` (DESCRPAR) e extrair aplicação |
 
 ---
 
 ## Fluxo Corrigido
 
 ```text
-Item da requisição (não-kit)
+Query FC99999 com ARGUMENTO CONTAINING '{cdpro}'
       │
-      └─► buscar_aplicacao_nao_kit(cursor, 92638)
+      └─► Retorna: ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR
               │
-              └─► Query: WHERE ARGUMENTO STARTING WITH 'OBSFIC92638'
+              └─► Loop em cada registro:
                       │
-                      └─► Encontra: OBSFIC9263814, OBSFIC9263914, etc.
-                              │
-                              └─► Filtra: PARAMETRO ou DESCRPAR contém 'APLIC'
-                                      │
-                                      └─► Extrai: "SC", "ID", "ID/SC", "IM/EV"
-```
-
----
-
-## Resultado Esperado
-
-Após implementação, o console Flask mostrará:
-```
-  [APLICAÇÃO NÃO-KIT] Tentando ARGUMENTO STARTING WITH 'OBSFIC92638'
-  [APLICAÇÃO NÃO-KIT] Encontrado: 'SC' em OBSFIC9263814
-  [APLICAÇÃO] Usando busca não-kit: 'SC'
+                      ├─► arg[2] = PARAMETRO → Extrai ativos/composição
+                      │
+                      └─► arg[3] = DESCRPAR → Se contém "APLICAC" → Extrai aplicação
 ```
 
 ---
@@ -115,5 +113,21 @@ Após implementação, o console Flask mostrará:
 ## Garantias de Não-Regressão
 
 - Não altera nada relacionado a KIT
-- A função continua isolada e só é chamada dentro de `if not e_kit`
-- Apenas muda a estratégia de match de "exato" para "prefixo"
+- Usa a mesma lógica de busca que já funciona para ativos (CONTAINING)
+- Apenas adiciona processamento do campo DESCRPAR que já vem na mesma query
+- A função `buscar_aplicacao_nao_kit` pode ser removida ou mantida como fallback
+
+---
+
+## Resultado Esperado
+
+Após implementação, o console Flask mostrará:
+```
+    - ARG: OBSFIC9263814, SUB: 00001, PARAM: ...
+  -> APLICAÇÃO extraída de DESCRPAR: 'SC'
+```
+
+E o rótulo exibirá:
+```
+APLICAÇÃO: SC
+```
