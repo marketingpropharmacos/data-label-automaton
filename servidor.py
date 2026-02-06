@@ -57,6 +57,85 @@ def norm_texto(txt: str) -> str:
     return txt.strip()
 
 
+# =====================================================
+# FUNÇÕES DE CLASSIFICAÇÃO: EMBALAGEM vs ATIVO
+# Usadas para distinguir ITEM ÚNICO de MESCLA
+# =====================================================
+
+def is_embalagem_ou_obs(linha: str) -> bool:
+    """
+    Retorna True se a linha indicar embalagem, material físico ou observação operacional.
+    Essas linhas NÃO devem ser tratadas como ativos de mescla.
+    """
+    if not linha or not linha.strip():
+        return True  # Linha vazia = ignorar
+    
+    # Normaliza removendo acentos para comparação
+    linha_norm = ''.join(
+        c for c in unicodedata.normalize('NFD', linha.upper()) 
+        if unicodedata.category(c) != 'Mn'
+    )
+    
+    # Lista de palavras-chave que indicam embalagem/material físico
+    EMBALAGEM_KEYWORDS = [
+        # Recipientes
+        'FRASCO', 'AMBAR', 'AMPOLA', 'SERINGA', 'AGULHA', 'TUBO',
+        'BISNAGA', 'POTE', 'GARRAFA', 'SACHE', 'ENVELOPE',
+        # Vedação/fechamento
+        'SELO', 'TAMPA', 'BORRACHA', 'LACRE', 'ROLHA', 'FLIP-OFF',
+        'FLIPOFF', 'FLIP OFF', 'ALUMINIO',
+        # Veículos/diluentes (não são ativos)
+        'AGUA PARA INJETAVEIS', 'AGUA PARA INJECAO', 'AGUA ESTERIL',
+        'SORO FISIOLOGICO', 'NACL 0,9',
+        # Acessórios
+        'VALVULA', 'DOSADOR', 'CONTA-GOTAS', 'APLICADOR',
+        # Identificação
+        'ROTULO', 'ETIQUETA', 'EMBALAGEM',
+        # Termos operacionais/instruções
+        'CATALOGO', 'PESAGEM', 'OBSERVACAO', 'INSTRUCAO', 'INSTRUC',
+        'PREGA', 'SUG.', 'SUGESTAO', 'AVISO', 'OBS:',
+        # Medidas de embalagem
+        'MENOR 3CM', 'MENOR 4CM', 'MENOR 5CM',
+        # Registro (não é ativo)
+        'REG:',
+    ]
+    
+    for keyword in EMBALAGEM_KEYWORDS:
+        if keyword in linha_norm:
+            return True
+    
+    return False
+
+
+def is_ativo_mescla(linha: str) -> bool:
+    """
+    Retorna True se a linha parece ser um ativo real de mescla.
+    Critérios: NÃO é embalagem E tem características de ativo.
+    """
+    if is_embalagem_ou_obs(linha):
+        return False
+    
+    linha_upper = linha.upper().strip()
+    
+    # Ignora linhas muito curtas (provavelmente não é ativo)
+    if len(linha_upper) < 3:
+        return False
+    
+    # Indicadores positivos de que É um ativo
+    INDICADORES_ATIVO = ['MG', 'ML', '%', 'UI', 'IU', 'MCG', 'G/ML', 'MG/ML']
+    
+    # Se contém indicador de concentração, provavelmente é ativo
+    for indicador in INDICADORES_ATIVO:
+        if indicador in linha_upper:
+            return True
+    
+    # Se não é embalagem e tem tamanho razoável, considera como potencial ativo
+    if len(linha_upper) >= 5:
+        return True
+    
+    return False
+
+
 def buscar_aplicacao_nao_kit(cursor, cdpro_int, cdprin_int=None):
     """
     Busca APLICAÇÃO na FC99999 para itens NÃO-KIT (Mesclas e Ativos Únicos).
@@ -2993,8 +3072,10 @@ def buscar_requisicao(nr_requisicao):
                 if aplicacao_fc99999:
                     break
             
-            # Lista de prefixos/palavras que indicam que NÃO é um ativo real
-            IGNORAR_ATIVOS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'SUGESTAO', 'CATÁLOGO', 'INSTRUC', 'AVISO']
+            # =====================================================
+            # CLASSIFICAÇÃO DE ATIVOS usando funções utilitárias
+            # is_embalagem_ou_obs() e is_ativo_mescla()
+            # =====================================================
             
             # Processa TODOS os registros encontrados (OBSFIC)
             for arg in todos_args:
@@ -3055,18 +3136,9 @@ def buscar_requisicao(nr_requisicao):
                             continue
                 
                 # =====================================================
-                # EXPANDIDO: Aceita QUALQUER SUBARGUM para ativos
-                # (antes só aceitava 00001 e 00002)
+                # CLASSIFICAÇÃO: EMBALAGEM/OBS vs ATIVO REAL
+                # Usa funções is_embalagem_ou_obs() e is_ativo_mescla()
                 # =====================================================
-                # Ignora se contém palavra de exclusão
-                if any(ignorar in texto_upper for ignorar in IGNORAR_ATIVOS):
-                    print(f"    IGNORADO (não é ativo): '{texto[:50]}...'")
-                    continue
-                
-                # Ignora se parece ser instrução ou texto muito longo sem vírgula
-                if len(texto) > 200 and ',' not in texto:
-                    print(f"    IGNORADO (texto muito longo sem ativos): '{texto[:50]}...'")
-                    continue
                 
                 # Remove prefixo OBS: se existir
                 texto_limpo = texto
@@ -3075,9 +3147,25 @@ def buscar_requisicao(nr_requisicao):
                 elif texto_upper.startswith("OBS :"):
                     texto_limpo = texto[5:].strip()
                 
+                # Verifica se é embalagem/observação (deve ignorar)
+                if is_embalagem_ou_obs(texto_limpo):
+                    print(f"    EMBALAGEM/OBS (ignorado): '{texto[:50]}...'")
+                    continue
+                
+                # Verifica se é ativo real
+                if not is_ativo_mescla(texto_limpo):
+                    print(f"    NÃO É ATIVO (ignorado): '{texto[:50]}...'")
+                    continue
+                
+                # Ignora se parece ser instrução ou texto muito longo sem vírgula
+                if len(texto_limpo) > 200 and ',' not in texto_limpo:
+                    print(f"    IGNORADO (texto muito longo sem ativos): '{texto[:50]}...'")
+                    continue
+                
+                # Só chega aqui se for ativo válido
                 if texto_limpo.strip():
                     ativos_mescla.append(texto_limpo)
-                    print(f"  -> ATIVO encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
+                    print(f"  -> ATIVO REAL encontrado (SUB:{subargum}): '{texto_limpo[:50]}...'")
 
             # =====================================================
             # VERIFICAÇÃO DE KIT: NOVA LÓGICA VIA FC05000.CDSAC
