@@ -20,9 +20,9 @@ app = Flask(__name__)
 CORS(app)
 # --- Mapeamento de filiais (Frontend -> Código no Firebird) ---
 # Em algumas instalações, o frontend usa um "código de filial" diferente do CDFIL do banco.
-# Ex.: Frontend 392 -> Banco 279 (PROPHARMACOS). Ajuste conforme necessário.
+# Deixe vazio se o frontend usar o mesmo código CDFIL do banco.
 FILIAL_MAP = {
-    392: 279,
+    # Adicione mapeamentos aqui se necessário, ex: 999: 1
 }
 def mapear_filial(filial: int) -> int:
     return FILIAL_MAP.get(filial, filial)
