@@ -3359,8 +3359,11 @@ def buscar_requisicao(nr_requisicao):
                 else:
                     print(f"\n  DEBUG FC03300 - Nada em CDPRO={codigo_aplicacao}, tentando próximo...")
             
-            # Termos a ignorar completamente
-            IGNORAR_OBS = ['ETIQUETA', 'CATALOGO', 'PREGA', 'SUG.', 'CATÁLOGO', 'AMPOLA', 'INSTRUC', 'AVISO']
+            # =====================================================
+            # PROCESSAMENTO FC03300: Filtra ativos reais vs embalagem
+            # Usa as funções is_embalagem_ou_obs() e is_ativo_mescla()
+            # para evitar que embalagens poluam a composição
+            # =====================================================
             
             for obs in observacoes_raw:
                 frfar = str(obs[0]).strip() if obs[0] else ""
@@ -3376,16 +3379,10 @@ def buscar_requisicao(nr_requisicao):
                 texto_upper = texto.upper()
                 print(f"    - FRFAR={frfar}, CDICP={cdicp}: '{texto[:60]}...'")
                 
-                # Verifica se deve ignorar
-                if any(ignorar in texto_upper for ignorar in IGNORAR_OBS):
-                    print(f"      -> IGNORADO (termo bloqueado)")
-                    continue
-                
                 # =====================================================
                 # 1. EXTRAI APLICAÇÃO (prefixo "APLICAÇÃO:")
                 # =====================================================
                 if not aplicacao:
-                    import unicodedata
                     texto_normalizado = ''.join(
                         c for c in unicodedata.normalize('NFD', texto_upper) 
                         if unicodedata.category(c) != 'Mn'
@@ -3411,9 +3408,14 @@ def buscar_requisicao(nr_requisicao):
                             continue
                 
                 # =====================================================
-                # 2. EXTRAI OBSERVAÇÕES/ATIVOS (textos úteis)
+                # 2. FILTRO RIGOROSO: Usa is_embalagem_ou_obs() para
+                # rejeitar linhas de embalagem/insumos
                 # =====================================================
-                # Ignora textos muito longos (>200 chars) ou que são descrições do produto
+                if is_embalagem_ou_obs(texto):
+                    print(f"      -> IGNORADO (embalagem/insumo detectado)")
+                    continue
+                
+                # Ignora textos muito longos (>200 chars)
                 if len(texto) > 200:
                     print(f"      -> IGNORADO (muito longo)")
                     continue
@@ -3424,15 +3426,68 @@ def buscar_requisicao(nr_requisicao):
                     print(f"      -> DESCRIÇÃO DO PRODUTO")
                     continue
                 
-                # Adiciona observação relevante (ativos, composição, etc.)
+                # =====================================================
+                # 3. VERIFICA SE É ATIVO REAL vs REPETIÇÃO DO PRODUTO
+                # =====================================================
                 # Remove prefixos desnecessários
                 texto_limpo = texto
                 if texto_upper.startswith("CONTÉM:"):
                     texto_limpo = texto[7:].strip()
                 
+                # Verifica se é apenas repetição do nome do produto
+                # (não é ativo real, é o próprio nome do item)
+                def is_repeticao_produto(linha_texto, nome_prod):
+                    """Retorna True se a linha é apenas repetição do nome do produto."""
+                    if not linha_texto or not nome_prod:
+                        return False
+                    
+                    linha_norm = ''.join(
+                        c for c in unicodedata.normalize('NFD', linha_texto.upper()) 
+                        if unicodedata.category(c) != 'Mn'
+                    )
+                    nome_norm = ''.join(
+                        c for c in unicodedata.normalize('NFD', nome_prod.upper()) 
+                        if unicodedata.category(c) != 'Mn'
+                    )
+                    
+                    # Extrai palavra principal do produto (ignora prefixos como AMP, FRS)
+                    palavras_produto = [p for p in nome_norm.split() 
+                                        if len(p) > 3 and p not in ['AMP', 'FRS', 'ENV', 'BIS']]
+                    
+                    if not palavras_produto:
+                        return False
+                    
+                    palavra_principal = palavras_produto[0]
+                    
+                    # Se a linha contém a palavra principal do produto
+                    # E NÃO contém indicadores de ativo (dosagem)
+                    if palavra_principal in linha_norm:
+                        indicadores_ativo = ['MG', 'MCG', 'UI', 'IU', 'ML', 'G/ML', 'MG/ML']
+                        tem_dosagem = any(ind in linha_norm for ind in indicadores_ativo)
+                        # % é especial: só conta se não for parte do nome do produto
+                        if '%' in linha_norm and '%' not in nome_norm:
+                            tem_dosagem = True
+                        
+                        if not tem_dosagem:
+                            return True  # É repetição do produto, não ativo
+                    
+                    return False
+                
+                if is_repeticao_produto(texto_limpo, nome_produto):
+                    print(f"      -> IGNORADO (repetição do nome do produto)")
+                    continue
+                
+                # =====================================================
+                # 4. VALIDA SE É ATIVO REAL usando is_ativo_mescla()
+                # =====================================================
+                if not is_ativo_mescla(texto_limpo):
+                    print(f"      -> IGNORADO (não é ativo de mescla)")
+                    continue
+                
+                # Chegou até aqui = é ativo real válido
                 if texto_limpo and texto_limpo not in observacoes_fc03300:
                     observacoes_fc03300.append(texto_limpo)
-                    print(f"      -> ADICIONADO às observações")
+                    print(f"      -> ADICIONADO como ATIVO REAL")
             
             # Limpa aplicação se for muito longa ou contiver vírgulas
             if len(aplicacao) > 50 or ',' in aplicacao:
@@ -3441,6 +3496,7 @@ def buscar_requisicao(nr_requisicao):
             
             # =====================================================
             # MERGE: Combina composição FC99999 com observações FC03300
+            # SOMENTE se houver ativos reais após o filtro
             # =====================================================
             if observacoes_fc03300:
                 obs_texto = " | ".join(observacoes_fc03300)
@@ -3451,6 +3507,9 @@ def buscar_requisicao(nr_requisicao):
                     composicao = obs_texto
                 e_mescla = True
                 print(f"  -> COMPOSIÇÃO FINAL: '{composicao[:100]}...'")
+            else:
+                # SEM ativos reais no FC03300 = não sobrescrever classificação
+                print(f"  -> FC03300: Nenhum ativo real encontrado (mantém classificação anterior)")
             
             # Determina tipoItem: KIT > MESCLA > PRODUTO ÚNICO
             if e_kit and len(componentes_kit) > 0:
