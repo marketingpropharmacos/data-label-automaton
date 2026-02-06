@@ -3,8 +3,6 @@ from flask_cors import CORS
 import fdb
 import platform
 
-import os
-import re
 # Importa win32print apenas no Windows
 if platform.system() == 'Windows':
     try:
@@ -19,27 +17,7 @@ else:
     print("AVISO: Sistema não-Windows detectado. Impressão desabilitada.")
 
 app = Flask(__name__)
-
-# --- Safe route registration (avoids duplicate endpoint crash) ---
-def route_if_not_exists(rule, **options):
-    """Register a route only if the endpoint isn't already registered."""
-    def decorator(f):
-        endpoint = options.pop("endpoint", f.__name__)
-        if endpoint in app.view_functions:
-            return f
-        app.add_url_rule(rule, endpoint, f, **options)
-        return f
-    return decorator
-
 CORS(app)
-
-# === Config de Filial (produção) ===
-# Força o servidor a trabalhar SOMENTE com a filial 392 por padrão.
-# Se quiser mudar no futuro, ajuste a variável de ambiente FILIAL_FIXA.
-FILIAL_FIXA = int(os.getenv('FILIAL_FIXA', '392'))
-# STRICT_FILIAL=1 -> não retorna dados de outras filiais; apenas informa no erro.
-STRICT_FILIAL = os.getenv('STRICT_FILIAL', '1').lower() not in ('0','false','no')
-
 # --- Mapeamento de filiais (Frontend -> Código no Firebird) ---
 # Em algumas instalações, o frontend usa um "código de filial" diferente do CDFIL do banco.
 # Deixe vazio se o frontend usar o mesmo código CDFIL do banco.
@@ -1290,7 +1268,7 @@ def debug_kit(cdsac):
 
 
 # Debug: verificar se requisição existe no banco
-@route_if_not_exists('/api/debug/verificar-requisicao/<nr_requisicao>', methods=['GET'])
+@app.route('/api/debug/verificar-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_verificar_requisicao(nr_requisicao):
     """
     Endpoint simples para verificar se uma requisição existe no banco.
@@ -2530,24 +2508,16 @@ def debug_fc12111(nrrqu, serier):
 # ============================================
 @app.route('/api/requisicao/<nr_requisicao>', methods=['GET'])
 def buscar_requisicao(nr_requisicao):
-    # Produção: trabalhar somente com a filial fixa (padrão 392)
-    filial_db = FILIAL_FIXA
+    filial = request.args.get('filial', '1')
+    filial_int = int(filial)
+    filial_db = mapear_filial(filial_int)
 
-    # Aceita "6806", "6806-0", "6806/0", etc. (barra é tratada no frontend, mas o BD usa NRRQU)
-    nr_txt = str(nr_requisicao).strip()
-    m = re.match(r'^(\d+)', nr_txt)
-    if not m:
-        return jsonify({'erro': 'Número de requisição inválido'}), 400
-    nr_int = int(m.group(1))
-
-    if request.args.get('filial') and str(request.args.get('filial')) != str(FILIAL_FIXA):
-        print(f"AVISO: parâmetro filial={request.args.get('filial')} ignorado; usando FILIAL_FIXA={FILIAL_FIXA}")
-
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        # Query correta usando colunas que EXISTEM na FC12100
+        
+        # Busca dados da requisição
         cursor.execute("""
             SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
                    R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
@@ -2555,31 +2525,25 @@ def buscar_requisicao(nr_requisicao):
             FROM FC12100 R
             LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
             WHERE R.NRRQU = ? AND R.CDFIL = ?
-        """, (nr_int, filial_db))
-
+        """, (int(nr_requisicao), filial_db))
+        
         row = cursor.fetchone()
+        
+        # Fallback REMOVIDO: se filial foi especificada, respeitar a escolha do usuário.
+        # Não buscar em outras filiais para evitar retornar dados incorretos.
 
         if not row:
-            # Debug: verifica se existe em alguma filial (sem retornar dados de outras filiais)
-            cursor.execute("""SELECT DISTINCT CDFIL FROM FC12100 WHERE NRRQU = ?""", (nr_int,))
-            filiais = [r[0] for r in cursor.fetchall()] or []
             conn.close()
-            msg = f"Requisição {nr_int} não encontrada na filial {filial_db}."
-            if filiais:
-                msg += f" Encontrada em outras filiais: {filiais}"
-            return jsonify({'erro': msg, 'nr_requisicao': nr_int, 'filial_usada': filial_db, 'filiais_encontradas': filiais}), 404
-
-        # Mapeamento corrigido para corresponder às colunas da query
-        # Índices: 0=NRRQU, 1=CDFIL, 2=NOMEPA, 3=PFCRM, 4=NRCRM, 5=UFCRM,
-        #          6=DTCAD, 7=DTVAL, 8=NRREG, 9=POSOL, 10=TPUSO, 11=OBSERFIC,
-        #          12=VOLUME, 13=UNIVOL, 14=NOMEMED, 15=TPFORMAFARMA
+            return jsonify({"success": False, "error": "Requisição não encontrada"}), 404
+        
         tipo_forma = row[15]
+        
         dados_base = {
             "nrRequisicao": str(row[0]),
             "codigoFilial": str(row[1]),
             "nomePaciente": row[2] or "",
             "prefixoCRM": row[3] or "",
-            "numeroCRM": str(row[4]) if row[4] else "",
+            "numeroCRM": row[4] or "",
             "ufCRM": row[5] or "",
             "nomeMedico": row[14] or "",
             "dataFabricacao": row[6].strftime('%d/%m/%Y') if row[6] else "",
