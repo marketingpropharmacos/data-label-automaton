@@ -1,111 +1,89 @@
 
+# Plano: Corrigir Query com Coluna Inexistente (CDPAC)
 
-# Plano: Corrigir Fallback que Ignora a Filial Selecionada
+## Problema
 
-## Problema Identificado
+O erro SQL -206 "Column unknown FC12100.CDPAC" indica que a query no endpoint `/api/requisicao` está tentando usar colunas que não existem na tabela FC12100 do seu banco de dados Firebird.
 
-O endpoint `/api/requisicao` tem um **fallback** que busca a requisição em qualquer filial quando não encontra na filial especificada. Esse fallback usa `ORDER BY R.CDFIL` (crescente), então a filial 279 sempre vem antes da 392.
+### Query Atual (ERRADA) - linhas 2550-2582
 
-### Localização do Problema
-
-**Arquivo**: `servidor.py`  
-**Linhas**: 2534-2546
-
-```python
-# FALLBACK PROBLEMÁTICO:
-if not row:
-    cursor.execute("""
-        SELECT ... FROM FC12100 R ...
-        WHERE R.NRRQU = ?
-        ORDER BY R.CDFIL  ← Retorna 279 antes de 392!
-    """, (int(nr_requisicao),))
-    row = cursor.fetchone()
-    if row:
-        filial_db = int(row[1])  ← Sobrescreve com 279!
+```sql
+SELECT 
+    fc12100.NRRQU,
+    fc12100.CDPRO,    -- Pode não existir
+    fc12100.CDPAC,    -- NÃO EXISTE!
+    fc12100.CDMED,    -- Pode não existir
+    ...
+FROM FC12100
+LEFT JOIN FC02000 ON fc12100.CDPAC = fc02000.CDPAC  -- CDPAC não existe!
+LEFT JOIN FC03000 ON fc12100.CDMED = fc03000.CDMED
+...
 ```
 
-### Fluxo Atual (Errado)
+### Query Correta (do servidor_completo.py que funcionava)
 
-```text
-1. Frontend: GET /api/requisicao/6806?filial=392
-2. Query principal: WHERE NRRQU=6806 AND CDFIL=392
-3. Resultado: NÃO encontra (possivelmente ordem de parâmetros ou timing)
-4. Fallback: WHERE NRRQU=6806 ORDER BY CDFIL
-5. Retorna: Filial 279 (GABRIELA M. DAMAZIO, DRA. MARIA PESSOA)
+```sql
+SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
+       R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
+       R.VOLUME, R.UNIVOL, M.NOMEMED, R.TPFORMAFARMA
+FROM FC12100 R
+LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
+WHERE R.NRRQU = ? AND R.CDFIL = ?
 ```
 
 ---
 
 ## Solução
 
-Remover o fallback completamente ou torná-lo mais restritivo. Se a filial 392 foi especificada, o sistema NÃO deve retornar dados de outra filial.
+Restaurar a query original do endpoint `/api/requisicao` para usar as colunas corretas que existem na tabela FC12100.
 
-### Opção Escolhida: Remover o Fallback
+### Alterações no arquivo servidor.py
 
-Se o usuário especificou filial 392, é porque quer dados dessa filial. Retornar dados da 279 é um comportamento inesperado.
+**Linhas afetadas**: 2550-2600 (aproximadamente)
 
-### Alteração no Código
+#### Mudanças:
 
-**Antes** (linhas 2530-2547):
-```python
-row = cursor.fetchone()
-
-# Se não achou pela filial informada (ou mapeada), tenta localizar a requisição em qualquer filial.
-# Isso evita 404 quando o frontend usa um código de filial diferente do CDFIL do banco.
-if not row:
-    cursor.execute("""
-        SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
-               R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
-               R.VOLUME, R.UNIVOL, M.NOMEMED, R.TPFORMAFARMA
-        FROM FC12100 R
-        LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
-        WHERE R.NRRQU = ?
-        ORDER BY R.CDFIL
-    """, (int(nr_requisicao),))
-    row = cursor.fetchone()
-    if row:
-        filial_db = int(row[1])
-```
-
-**Depois**:
-```python
-row = cursor.fetchone()
-
-# Fallback removido: se filial foi especificada, respeitar a escolha do usuário.
-# Não buscar em outras filiais para evitar retornar dados incorretos.
-```
-
----
-
-## Passos de Implementação
-
-1. Editar `servidor.py` (linhas 2532-2546)
-2. Remover o bloco de fallback que busca em qualquer filial
-3. Manter apenas o tratamento de "não encontrado" (404)
+1. **Substituir toda a query SELECT** (linhas 2550-2582) pela query original que funciona
+2. **Ajustar os índices** no mapeamento de dados_base para corresponder às colunas corretas
+3. **Remover JOINs desnecessários** (FC02000, FC03000, FC05000, FC09000, FC18000)
+4. **Manter apenas o JOIN** com FC04000 (tabela de médicos)
 
 ---
 
 ## Detalhes Técnicos
 
-| Linha | Ação |
-|-------|------|
-| 2532-2546 | Remover bloco `if not row:` com fallback |
+### Colunas que EXISTEM na FC12100:
+- NRRQU (número requisição)
+- CDFIL (código filial)
+- NOMEPA (nome paciente)
+- PFCRM, NRCRM, UFCRM (dados do médico)
+- DTCAD, DTVAL (datas)
+- NRREG (registro)
+- POSOL (posologia)
+- TPUSO (tipo uso)
+- OBSERFIC (observações)
+- VOLUME, UNIVOL
+- TPFORMAFARMA
+
+### Colunas que NÃO EXISTEM (causam erro):
+- CDPAC (código paciente separado)
+- CDMED (código médico separado)
+- CDPRO (na requisição principal)
+
+---
+
+## Passos da Implementação
+
+1. Localizar o endpoint `/api/requisicao` (linha 2531)
+2. Substituir a query (linhas 2550-2582) pela versão correta
+3. Atualizar o mapeamento de `dados_base` (linhas 2598-2620)
 
 ---
 
 ## Após Aprovação
 
-1. Vou editar o arquivo `servidor.py`
-2. Você copia para `C:\ServidorRotulos\servidor.py`
+1. Farei as edições no `servidor.py`
+2. Você copia o arquivo atualizado para `C:\ServidorRotulos\servidor.py`
 3. Reinicia o servidor Python
-4. Testa: requisição 6806 com filial 392
-5. Resultado esperado: médico "LENIE" (não mais "MARIA PESSOA")
-
----
-
-## Impacto
-
-- **Risco**: Baixo - apenas remove comportamento problemático
-- **Benefício**: Filial selecionada será respeitada
-- **Efeito colateral**: Se a requisição não existir na filial, retornará 404 (comportamento correto)
-
+4. Testa a requisição 6806 com filial 392
+5. Resultado esperado: dados corretos sem erro HTTP 500
