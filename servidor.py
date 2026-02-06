@@ -2547,38 +2547,14 @@ def buscar_requisicao(nr_requisicao):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        cursor.execute(""" 
-            SELECT 
-                fc12100.NRRQU,
-                fc12100.CDPRO,
-                fc12100.CDPAC,
-                fc12100.CDMED,
-                fc12100.DTENT,
-                fc12100.DTPRE,
-                fc12100.CDREG,
-                fc12100.TPFOR,
-                fc12100.CDTPF,
-                fc12100.QTDPOT,
-                fc12100.QTDPRE,
-                fc12100.PH,
-                fc12100.USO,
-                fc12100.CDEMB,
-                fc12100.OBSRQU,
-                fc12100.TPFORMAFARMA,
-                fc02000.NOMPAC,
-                fc03000.NOMMED,
-                fc05000.NOMPRO,
-                fc05000.CDSAC,
-                fc05000.FORMF,
-                fc09000.DESFORMA,
-                fc18000.DESUSO
-            FROM FC12100
-            LEFT JOIN FC02000 ON fc12100.CDPAC = fc02000.CDPAC
-            LEFT JOIN FC03000 ON fc12100.CDMED = fc03000.CDMED
-            LEFT JOIN FC05000 ON fc12100.CDPRO = fc05000.CDPRO
-            LEFT JOIN FC09000 ON fc12100.TPFOR = fc09000.TPFOR
-            LEFT JOIN FC18000 ON fc12100.USO = fc18000.USO
-            WHERE fc12100.NRRQU = ? AND fc12100.CDFIL = ?
+        # Query correta usando colunas que EXISTEM na FC12100
+        cursor.execute("""
+            SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
+                   R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
+                   R.VOLUME, R.UNIVOL, M.NOMEMED, R.TPFORMAFARMA
+            FROM FC12100 R
+            LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
+            WHERE R.NRRQU = ? AND R.CDFIL = ?
         """, (nr_int, filial_db))
 
         row = cursor.fetchone()
@@ -2593,14 +2569,17 @@ def buscar_requisicao(nr_requisicao):
                 msg += f" Encontrada em outras filiais: {filiais}"
             return jsonify({'erro': msg, 'nr_requisicao': nr_int, 'filial_usada': filial_db, 'filiais_encontradas': filiais}), 404
 
-        # A partir daqui mantém a lógica atual (não mexer)
+        # Mapeamento corrigido para corresponder às colunas da query
+        # Índices: 0=NRRQU, 1=CDFIL, 2=NOMEPA, 3=PFCRM, 4=NRCRM, 5=UFCRM,
+        #          6=DTCAD, 7=DTVAL, 8=NRREG, 9=POSOL, 10=TPUSO, 11=OBSERFIC,
+        #          12=VOLUME, 13=UNIVOL, 14=NOMEMED, 15=TPFORMAFARMA
         tipo_forma = row[15]
         dados_base = {
             "nrRequisicao": str(row[0]),
             "codigoFilial": str(row[1]),
             "nomePaciente": row[2] or "",
             "prefixoCRM": row[3] or "",
-            "numeroCRM": row[4] or "",
+            "numeroCRM": str(row[4]) if row[4] else "",
             "ufCRM": row[5] or "",
             "nomeMedico": row[14] or "",
             "dataFabricacao": row[6].strftime('%d/%m/%Y') if row[6] else "",
