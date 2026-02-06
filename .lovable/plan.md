@@ -1,100 +1,110 @@
 
 
-# Plano: Adicionar Endpoint de Diagnóstico e Corrigir Parâmetros Restantes
+# Plano: Corrigir Funções Duplicadas e Parâmetros Faltando
 
-## Problema Identificado
+## Problema Crítico Encontrado
 
-O servidor Python no seu computador local **não está usando o arquivo atualizado**. As alterações que fizemos no Lovable precisam ser copiadas para o seu computador.
+O arquivo `servidor.py` tem **funções duplicadas com o mesmo nome**, o que causa erro no Flask:
 
-Além disso, encontrei **mais locais** no arquivo onde falta a conversão `int()`:
+```
+Linha 1264: def debug_verificar_requisicao(nr_requisicao)
+Linha 1477: def debug_verificar_requisicao(nr_requisicao)  ← DUPLICADO!
+```
 
-| Linha | Endpoint | Problema |
-|-------|----------|----------|
-| 1394 | `/api/debug/fc12110-completo` | `(nr_requisicao, filial)` sem `int()` |
+Quando o Python carrega o arquivo, a **segunda função sobrescreve a primeira**, mas o decorator `@app.route` pode já ter registrado a rota com a função errada, causando comportamento imprevisível.
+
+Além disso, ainda há **6 queries sem conversão int()**:
+
+| Linha | Endpoint | Parâmetro sem int() |
+|-------|----------|---------------------|
+| 1380 | `/api/debug/formulas` | `(nr_requisicao, filial)` |
+| 1412 | `/api/debug/produtos-requisicao` | `(nr_requisicao, filial)` |
+| 1612 | `/api/debug/observacoes-requisicao` | `(nr_requisicao, filial)` |
+| 1622 | `/api/debug/observacoes-requisicao` | `(nr_requisicao, filial)` |
+| 1661 | `/api/debug/verificar-obs-requisicao` | `(nr_requisicao, filial)` |
+| 1671 | `/api/debug/verificar-obs-requisicao` | `(nr_requisicao, filial)` |
 
 ---
 
 ## Solução em 2 Etapas
 
-### Etapa 1: Corrigir Parâmetros Restantes
+### Etapa 1: Remover Função Duplicada
+
+**Ação**: Excluir a segunda definição de `debug_verificar_requisicao` (linhas 1475-1522)
+
+A primeira versão (linhas 1262-1309) está correta e completa.
+
+### Etapa 2: Adicionar int() nas Queries Restantes
 
 **Arquivo**: `servidor.py`
 
 | Linha | Antes | Depois |
 |-------|-------|--------|
-| 1394 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
-
-### Etapa 2: Adicionar Endpoint de Diagnóstico Simples
-
-Criar um endpoint `/api/debug/verificar-requisicao/<nr_requisicao>` que faz uma query mínima para confirmar se a requisição existe:
-
-```python
-@app.route('/api/debug/verificar-requisicao/<nr_requisicao>', methods=['GET'])
-def debug_verificar_requisicao(nr_requisicao):
-    """
-    Endpoint simples para verificar se uma requisição existe no banco.
-    Retorna apenas contagem de registros.
-    """
-    filial = request.args.get('filial', '1')
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Verifica FC12100 (cabeçalho da requisição)
-        cursor.execute("""
-            SELECT COUNT(*) FROM FC12100 
-            WHERE NRRQU = ? AND CDFIL = ?
-        """, (int(nr_requisicao), int(filial)))
-        count_12100 = cursor.fetchone()[0]
-        
-        # Verifica FC12110 (itens da requisição)
-        cursor.execute("""
-            SELECT COUNT(*) FROM FC12110 
-            WHERE NRRQU = ? AND CDFIL = ?
-        """, (int(nr_requisicao), int(filial)))
-        count_12110 = cursor.fetchone()[0]
-        
-        # Lista todas as filiais que têm essa requisição
-        cursor.execute("""
-            SELECT DISTINCT CDFIL FROM FC12100 
-            WHERE NRRQU = ?
-        """, (int(nr_requisicao),))
-        filiais = [row[0] for row in cursor.fetchall()]
-        
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "requisicao": nr_requisicao,
-            "filialBuscada": filial,
-            "encontradoFC12100": count_12100 > 0,
-            "quantidadeFC12100": count_12100,
-            "encontradoFC12110": count_12110 > 0,
-            "quantidadeFC12110": count_12110,
-            "filiaisDisponiveis": filiais,
-            "mensagem": f"Requisição existe nas filiais: {filiais}" if filiais else "Requisição não encontrada em nenhuma filial"
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-```
+| 1380 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
+| 1412 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
+| 1612 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
+| 1622 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
+| 1661 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
+| 1671 | `""", (nr_requisicao, filial))` | `""", (int(nr_requisicao), int(filial)))` |
 
 ---
 
-## Como Testar Após Atualizar
+## Resumo das Alterações
 
-1. **Copiar** o arquivo `servidor.py` do Lovable para seu computador
-2. **Reiniciar** o servidor (Ctrl+C e executar novamente)
-3. **Testar** no navegador:
-   ```
-   http://localhost:5000/api/debug/verificar-requisicao/6806?filial=392
-   ```
+1. **Remover linhas 1475-1522** - função duplicada `debug_verificar_requisicao`
+2. **Linha 1380** - adicionar `int()` na query
+3. **Linha 1412** - adicionar `int()` na query
+4. **Linha 1612** - adicionar `int()` na query
+5. **Linha 1622** - adicionar `int()` na query
+6. **Linha 1661** - adicionar `int()` na query
+7. **Linha 1671** - adicionar `int()` na query
 
-Se retornar `"filiaisDisponiveis": []` significa que a requisição 6806 **não existe** com filial 392. O endpoint mostrará em qual filial ela existe.
+---
+
+## Detalhes Técnicos
+
+### Por que a duplicação causa erro?
+
+Python permite redefinir funções, mas o Flask usa os decorators `@app.route` para registrar rotas. Quando você tem:
+
+```python
+@app.route('/api/debug/verificar-requisicao/<nr_requisicao>')
+def debug_verificar_requisicao(nr_requisicao):
+    # versão 1
+    pass
+
+@app.route('/api/debug/verificar-requisicao/<nr_requisicao>')  
+def debug_verificar_requisicao(nr_requisicao):
+    # versão 2
+    pass
+```
+
+O Flask pode:
+1. Registrar a rota duas vezes (erro)
+2. Sobrescrever a primeira função com a segunda
+3. Causar comportamento inconsistente
+
+### Por que int() é necessário?
+
+O driver `fdb` do Firebird precisa de tipos Python compatíveis com as colunas do banco:
+- Coluna `INTEGER` no banco = precisa de `int` no Python
+- String "6806" pode falhar ou retornar vazio
+- Inteiro 6806 sempre funciona
+
+---
+
+## Teste Após Correção
+
+1. **Copiar** o `servidor.py` corrigido para seu computador
+2. **Parar** o servidor (Ctrl+C)
+3. **Reiniciar** o servidor
+4. **Testar**: `http://localhost:5000/api/requisicao/6806?filial=392`
 
 ---
 
 ## Impacto
 
-- **Risco**: Nenhum - apenas adiciona diagnóstico
-- **Benefício**: Permite identificar rapidamente se o problema é a filial errada ou se a requisição não existe
+- **Risco**: Baixo - apenas remove código duplicado e adiciona conversão de tipos
+- **Benefício**: Resolve 404 e erros de função duplicada
+- **Compatibilidade**: Nenhuma quebra de funcionalidade
 
