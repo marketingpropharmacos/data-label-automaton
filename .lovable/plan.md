@@ -1,102 +1,134 @@
 
-# Plano: Corrigir Detecção de KIT - Não Usar FC05000 Como Critério Único
+# Plano: Corrigir Detecção de KIT - Filtrar o Próprio Produto
 
-## Diagnóstico do Bug
+## Diagnóstico Confirmado
 
-### Problema Atual
-A função `detecta_kit()` (linhas 262-349) considera como **KIT qualquer produto que exista na FC05000**:
+### O Bug Atual
+Na função `detecta_kit()` (linhas 337-357), quando contamos os "ativos reais" dos componentes na FC05100:
 
 ```python
-# ATUAL (ERRADO):
-def detecta_kit(cursor, cdpro, tpforma=None):
-    # ...
-    cursor.execute("""
-        SELECT FIRST 1 CDFRM, CDSAC, DESCRFRM, TPFORMAFARMA
-        FROM FC05000 
-        WHERE CDSAC = ?
-    """, (cdpro_str,))
+for comp in componentes:
+    descr = comp[1] or ""
+    if not is_embalagem_ou_obs(descr):
+        ativos_reais += 1  # ← Conta QUALQUER coisa que não seja embalagem
+```
+
+**O problema**: O próprio produto (ex: "GLICOSE 75%") pode estar cadastrado como componente da sua própria fórmula na FC05100. Como "GLICOSE" não é embalagem, ela passa o filtro e conta como "ativo real".
+
+### Exemplo Real
+Produto: **GLICOSE 75% 2ML**
+
+Componentes na FC05100:
+| Componente | `is_embalagem_ou_obs()` | Contado? |
+|------------|------------------------|----------|
+| GLICOSE 75% | FALSE | ✅ SIM (1) |
+| ÁGUA PARA INJETÁVEIS | TRUE | ❌ NÃO |
+| AMPOLA ÂMBAR 2ML | TRUE | ❌ NÃO |
+| SELO ALUMÍNIO 13MM | TRUE | ❌ NÃO |
+| TAMPA BORRACHA | TRUE | ❌ NÃO |
+
+**Resultado atual**: `ativos_reais = 1` → Deveria ser OK (precisa de 2+)
+
+**MAS**: Se houver QUALQUER outro componente que não seja embalagem (ex: produto duplicado, outro insumo), chega a 2+ e classifica erroneamente como KIT.
+
+---
+
+## Solução: Adicionar Filtro de "Repetição do Produto"
+
+### Lógica a Adicionar
+Em `detecta_kit()`, quando contamos ativos reais, precisamos **também ignorar o próprio produto**:
+
+```python
+# Conta quantos componentes são "ativos reais" (não embalagem E não é o próprio produto)
+ativos_reais = 0
+for comp in componentes:
+    cdpro_comp = comp[0]  # Código do componente
+    descr = comp[1] or ""
     
-    if row:
-        return kit_info  # ← QUALQUER produto com receita é classificado como KIT!
+    # Ignora se for embalagem
+    if is_embalagem_ou_obs(descr):
+        continue
+    
+    # NOVO: Ignora se for o próprio produto sendo consultado
+    if str(cdpro_comp) == str(cdpro):
+        print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
+        continue
+    
+    ativos_reais += 1
 ```
 
-### Por que está errado?
-A tabela **FC05000/FC05100** contém a **receita de fabricação (BOM)** de TODOS os produtos que têm fórmula, incluindo:
-- **KITs verdadeiros**: contêm múltiplos produtos farmacêuticos independentes
-- **Produtos únicos**: contêm apenas insumos de fabricação (água, ampola, selo, tampa)
+### Alteração Alternativa (mais robusta)
+Como fallback, também verificar pelo nome:
 
-**GLICOSE 75%** tem uma receita (água + ampola + selo + tampa), então entra na FC05000, mas **NÃO é um KIT** - é um produto único.
+```python
+# NOVO: Ignora se for repetição do nome do produto
+def is_repeticao_produto_kit(descr_comp, descr_produto):
+    """Verifica se o componente é apenas o próprio produto."""
+    if not descr_comp or not descr_produto:
+        return False
+    
+    # Normaliza ambos
+    comp_norm = unicodedata.normalize('NFD', descr_comp.upper())
+    prod_norm = unicodedata.normalize('NFD', descr_produto.upper())
+    
+    # Extrai palavras principais (ignora prefixos)
+    palavras_prod = [p for p in prod_norm.split() 
+                     if len(p) > 3 and p not in ['AMP', 'FRS', 'ENV', 'BIS']]
+    
+    if not palavras_prod:
+        return False
+    
+    # Se a palavra principal do produto está no componente = é o mesmo
+    return palavras_prod[0] in comp_norm
+```
 
 ---
 
-## Solução: Critério Explícito para KIT
+## Arquivos a Alterar
 
-### Opção Implementada: Validar Componentes
-
-Modificar `detecta_kit()` para **validar se os componentes são produtos farmacêuticos reais** (não apenas insumos de fabricação).
-
-**Critério de validação:**
-1. Buscar componentes na FC05100
-2. Para cada componente, verificar se é **embalagem/insumo** usando `is_embalagem_ou_obs()`
-3. **Só retornar como KIT se houver pelo menos 2 componentes "ativos reais"**
+| Arquivo | Linhas | Alteração |
+|---------|--------|-----------|
+| `servidor.py` | 337-357 | Adicionar verificação de CDPRO do componente vs CDPRO consultado |
+| `servidor.py` | 386-403 | Mesma alteração para estratégia 2 (busca por inteiro) |
 
 ---
 
-## Alterações no servidor.py
+## Código Corrigido
 
-### Alteração 1: Modificar `detecta_kit()` (linhas 262-349)
-
-**Antes:**
+### Estratégia 1 (linhas 337-357)
 ```python
-def detecta_kit(cursor, cdpro, tpforma=None):
-    # ...
-    if row:
-        kit_info = {...}
-        print(f"  [DETECTA_KIT] ✓ KIT ENCONTRADO!")
-        return kit_info  # ← Retorna para QUALQUER produto na FC05000
+# Conta quantos componentes são "ativos reais" (não embalagem)
+ativos_reais = 0
+for comp in componentes:
+    cdpro_comp = comp[0]  # Código do componente
+    descr = comp[1] or ""
+    if hasattr(descr, 'read'):
+        descr = descr.read().decode('latin-1')
+    
+    # 1. Ignora embalagens
+    if is_embalagem_ou_obs(descr):
+        print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
+        continue
+    
+    # 2. NOVO: Ignora se for o próprio produto (código igual)
+    if str(cdpro_comp).strip() == cdpro_str:
+        print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
+        continue
+    
+    ativos_reais += 1
+    print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
+
+# Só é KIT se tiver 2+ componentes ativos reais DIFERENTES do próprio produto
+if ativos_reais >= 2:
+    print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO! {ativos_reais} ativos reais encontrados")
+    return kit_info
+else:
+    print(f"  [DETECTA_KIT] ✗ Não é KIT: apenas {ativos_reais} ativo(s) real(is)")
+    return None
 ```
 
-**Depois:**
-```python
-def detecta_kit(cursor, cdpro, tpforma=None):
-    # ...
-    if row:
-        kit_info = {...}
-        
-        # =====================================================
-        # VALIDAÇÃO: Só é KIT se tiver componentes farmacêuticos reais
-        # (não apenas insumos de fabricação como ampola/selo/tampa)
-        # =====================================================
-        cdfrm = kit_info["cdfrm"]
-        
-        # Busca componentes da FC05100
-        cursor.execute("""
-            SELECT k.CDPRO, p.DESCR
-            FROM FC05100 k
-            LEFT JOIN FC03000 p ON p.CDPRO = k.CDPRO
-            WHERE k.CDFRM = ?
-        """, (cdfrm,))
-        componentes = cursor.fetchall()
-        
-        # Conta quantos componentes são "ativos reais" (não embalagem)
-        ativos_reais = 0
-        for comp in componentes:
-            descr = comp[1] or ""
-            if hasattr(descr, 'read'):
-                descr = descr.read().decode('latin-1')
-            
-            # Usa a função existente para filtrar embalagens
-            if not is_embalagem_ou_obs(descr):
-                ativos_reais += 1
-        
-        # Só é KIT se tiver 2+ componentes ativos reais
-        if ativos_reais >= 2:
-            print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO! {ativos_reais} ativos reais encontrados")
-            return kit_info
-        else:
-            print(f"  [DETECTA_KIT] ✗ Não é KIT: apenas {ativos_reais} ativo(s) real(is) (resto é embalagem)")
-            return None
-```
+### Estratégia 2 (linhas 386-403)
+Mesma lógica aplicada à busca por CDPRO inteiro.
 
 ---
 
@@ -108,22 +140,17 @@ GLICOSE 75% 2ML (CDPRO=12345)
       │
       └─► detecta_kit(12345)
               │
-              └─► FC05000.CDSAC = 12345 → ENCONTRADO (tem receita)
+              └─► FC05100: Busca componentes do CDFRM
                       │
-                      └─► FC05100: Busca componentes do CDFRM
-                              │
-                              ├─► "ÁGUA PARA INJETÁVEIS" → is_embalagem_ou_obs = TRUE → IGNORA
-                              ├─► "AMPOLA ÂMBAR 2ML"     → is_embalagem_ou_obs = TRUE → IGNORA
-                              ├─► "SELO DE ALUMÍNIO"     → is_embalagem_ou_obs = TRUE → IGNORA
-                              └─► "TAMPA BORRACHA"       → is_embalagem_ou_obs = TRUE → IGNORA
-                              
-                      └─► ativos_reais = 0
-                              │
-                              └─► Retorna None (NÃO É KIT)
-                                      │
-                                      └─► Processado como ITEM ÚNICO
-                                              │
-                                              └─► componentes = []
+                      ├─► CDPRO=12345 "GLICOSE 75%"  → CDPRO == CONSULTADO → IGNORA
+                      ├─► "ÁGUA PARA INJETÁVEIS"     → is_embalagem = TRUE → IGNORA
+                      ├─► "AMPOLA ÂMBAR"             → is_embalagem = TRUE → IGNORA
+                      ├─► "SELO ALUMÍNIO"            → is_embalagem = TRUE → IGNORA
+                      └─► "TAMPA BORRACHA"           → is_embalagem = TRUE → IGNORA
+                      
+              └─► ativos_reais = 0
+                      │
+                      └─► Retorna None (NÃO É KIT) ✅
 ```
 
 ### KIT INTRADERMO (Kit Verdadeiro)
@@ -132,89 +159,44 @@ KIT INTRADERMO (CDPRO=99999)
       │
       └─► detecta_kit(99999)
               │
-              └─► FC05000.CDSAC = 99999 → ENCONTRADO
+              └─► FC05100: Busca componentes do CDFRM
                       │
-                      └─► FC05100: Busca componentes do CDFRM
-                              │
-                              ├─► "LIDOCAÍNA 2%"    → is_embalagem_ou_obs = FALSE → ATIVO REAL ✓
-                              ├─► "ÁGUA ESTÉRIL"    → is_embalagem_ou_obs = TRUE  → IGNORA
-                              ├─► "BICARBONATO..."  → is_embalagem_ou_obs = FALSE → ATIVO REAL ✓
-                              └─► "HIALURONIDASE"   → is_embalagem_ou_obs = FALSE → ATIVO REAL ✓
-                              
-                      └─► ativos_reais = 3
-                              │
-                              └─► Retorna kit_info (É KIT VÁLIDO)
-                                      │
-                                      └─► Processado como KIT
-                                              │
-                                              └─► componentes = [Lidocaína, Bicarbonato, Hialuronidase]
+                      ├─► CDPRO=11111 "LIDOCAÍNA 2%" → CDPRO ≠ 99999 → ATIVO ✅
+                      ├─► CDPRO=22222 "BICARBONATO"  → CDPRO ≠ 99999 → ATIVO ✅
+                      ├─► "ÁGUA ESTÉRIL"             → is_embalagem = TRUE → IGNORA
+                      └─► CDPRO=33333 "HIALURONIDASE"→ CDPRO ≠ 99999 → ATIVO ✅
+                      
+              └─► ativos_reais = 3
+                      │
+                      └─► Retorna kit_info (É KIT VÁLIDO) ✅
 ```
 
 ---
 
-## Arquivos Alterados
+## Garantias
 
-| Arquivo | Linhas | Alteração |
-|---------|--------|-----------|
-| `servidor.py` | 262-349 | Adicionar validação de componentes ativos em `detecta_kit()` |
-
----
-
-## Garantias de Não-Regressão
-
-1. **KITs verdadeiros continuam funcionando** - Eles têm 2+ componentes farmacêuticos reais
-2. **Mesclas não são afetadas** - Lógica de mescla é separada e não depende de `detecta_kit()`
-3. **Aplicação não é afetada** - Extração de aplicação vem de `buscar_aplicacao_nao_kit()`
-4. **Reutiliza função existente** - Usa `is_embalagem_ou_obs()` que já está funcionando
+1. **KITs verdadeiros continuam funcionando** - Componentes diferentes do produto principal são contados
+2. **Itens únicos não viram KIT** - O próprio produto é ignorado da contagem
+3. **Mesclas não afetadas** - Lógica separada
+4. **Aplicação não afetada** - Extração independente
 
 ---
 
 ## Resultado Esperado
 
-**GLICOSE 75% 2ML (Item Único):**
+**GLICOSE 75% 2ML (após correção):**
 ```
 Retorno da API:
 {
   "tipoItem": "PRODUTO ÚNICO",
   "componentes": [],
-  "aplicacao": "EV",
-  "composicao": ""
+  "aplicacao": "EV"
 }
 
 Rótulo:
 AMP GLICOSE 75% – 2ML
 APLICAÇÃO: EV
-L: 12345/25  F: 01/25  V: 01/26
+L: 272989/25  F: 06/05/2028  V: ...
 ```
 
-**KIT INTRADERMO (Kit Verdadeiro):**
-```
-Retorno da API:
-{
-  "tipoItem": "KIT",
-  "componentes": [
-    {"nome": "LIDOCAÍNA 2%", "lote": "001", ...},
-    {"nome": "BICARBONATO...", "lote": "002", ...}
-  ],
-  "aplicacao": "ID"
-}
-
-Rótulo:
-DR. FULANO - CRM 12345/SP
-PACIENTE EXEMPLO
-───────────────────
-LIDOCAÍNA 2%   pH:7.2  L:001  V:01/26
-BICARBONATO    pH:7.0  L:002  V:03/26
-───────────────────
-APLICAÇÃO: ID
-```
-
----
-
-## Teste de Validação
-
-Depois da alteração, testar:
-
-1. ✅ **GLICOSE 75%**: Deve aparecer como ITEM ÚNICO, sem componentes (água/ampola/selo/tampa)
-2. ✅ **Mescla real**: Deve continuar mostrando ativos corretamente
-3. ✅ **KIT verdadeiro**: Deve continuar expandindo componentes farmacêuticos
+Sem água, sem ampola, sem selo, sem tampa!
