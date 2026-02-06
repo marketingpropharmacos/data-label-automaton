@@ -14,6 +14,7 @@ import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from
 import { buscarRequisicao, imprimirRotulos } from "@/services/requisicaoService";
 import { imprimirViaAgente } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
+import logoProPharmacos from "@/assets/logo-propharmacos.png";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -178,25 +179,25 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card border-b border-border shadow-sm">
+      <header className="bg-gradient-to-r from-card via-card to-accent/30 border-b border-border shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-xl">P</span>
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-primary">{pharmacyConfig.nome}</h1>
-                  <p className="text-xs text-muted-foreground">Sistema de Rótulos</p>
-                </div>
+              <img 
+                src={logoProPharmacos} 
+                alt="ProPharmacos" 
+                className="h-12 w-auto"
+              />
+              <div className="hidden sm:block">
+                <h1 className="text-xl font-bold text-primary">Sistema de Rótulos</h1>
+                <p className="text-xs text-muted-foreground">Farmácia de Manipulação</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:inline">Farmácia de Manipulação</span>
-              <Button variant="ghost" size="icon" asChild>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden md:inline">{pharmacyConfig.nome}</span>
+              <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" asChild>
                 <Link to="/configuracoes">
-                  <Settings className="h-5 w-5" />
+                  <Settings className="h-5 w-5 text-primary" />
                 </Link>
               </Button>
             </div>

@@ -489,12 +489,12 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
   };
 
   return (
-    <Card className="p-4 border-2 border-dashed border-primary/30 bg-card hover:border-primary/50 transition-colors">
+    <Card className={`p-4 border-2 transition-all duration-200 ${selected ? 'border-secondary bg-accent/30 shadow-md' : 'border-dashed border-border bg-card hover:border-primary/50 hover:shadow-sm'}`}>
       <div className="flex items-start gap-4">
         <Checkbox
           checked={selected}
           onCheckedChange={() => onToggle(rotulo.id)}
-          className="mt-2"
+          className="mt-2 data-[state=checked]:bg-secondary data-[state=checked]:border-secondary"
         />
         
         <div className="flex-1">
