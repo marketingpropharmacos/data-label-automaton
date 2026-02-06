@@ -334,26 +334,33 @@ def detecta_kit(cursor, cdpro, tpforma=None):
             """, (cdfrm,))
             componentes = cursor.fetchall()
             
-            # Conta quantos componentes são "ativos reais" (não embalagem)
+            # Conta quantos componentes são "ativos reais" (não embalagem E não é o próprio produto)
             ativos_reais = 0
             for comp in componentes:
+                cdpro_comp = comp[0]  # Código do componente
                 descr = comp[1] or ""
                 if hasattr(descr, 'read'):
                     descr = descr.read().decode('latin-1')
                 
-                # Usa a função existente para filtrar embalagens
-                if not is_embalagem_ou_obs(descr):
-                    ativos_reais += 1
-                    print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
-                else:
+                # 1. Ignora embalagens
+                if is_embalagem_ou_obs(descr):
                     print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
+                    continue
+                
+                # 2. NOVO: Ignora se for o próprio produto (código igual)
+                if str(cdpro_comp).strip() == cdpro_str:
+                    print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
+                    continue
+                
+                ativos_reais += 1
+                print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
             
-            # Só é KIT se tiver 2+ componentes ativos reais
+            # Só é KIT se tiver 2+ componentes ativos reais DIFERENTES do próprio produto
             if ativos_reais >= 2:
                 print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO! {ativos_reais} ativos reais encontrados")
                 return kit_info
             else:
-                print(f"  [DETECTA_KIT] ✗ Não é KIT: apenas {ativos_reais} ativo(s) real(is) (resto é embalagem)")
+                print(f"  [DETECTA_KIT] ✗ Não é KIT: apenas {ativos_reais} ativo(s) real(is)")
                 return None
         
         # ESTRATÉGIA 2: CDSAC = CDPRO (inteiro)
@@ -385,15 +392,23 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                 
                 ativos_reais = 0
                 for comp in componentes:
+                    cdpro_comp = comp[0]  # Código do componente
                     descr = comp[1] or ""
                     if hasattr(descr, 'read'):
                         descr = descr.read().decode('latin-1')
                     
-                    if not is_embalagem_ou_obs(descr):
-                        ativos_reais += 1
-                        print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
-                    else:
+                    # 1. Ignora embalagens
+                    if is_embalagem_ou_obs(descr):
                         print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
+                        continue
+                    
+                    # 2. NOVO: Ignora se for o próprio produto (código igual)
+                    if str(cdpro_comp).strip() == cdpro_str:
+                        print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
+                        continue
+                    
+                    ativos_reais += 1
+                    print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
                 
                 if ativos_reais >= 2:
                     print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO (int)! {ativos_reais} ativos reais encontrados")
