@@ -1,258 +1,220 @@
 
+# Plano: Ajustes de Exibição e Correções Pontuais
 
-# Plano: Redesign Visual com Logo ProPharmacos + Novo Layout AMP 10
+## Análise dos Prints de Referência
 
-## Visão Geral
+### Print 289 - Layouts de Referência
+Mostra os padrões de exibição para diferentes layouts:
+- **AMP CAIXA**: Paciente, Prescritor, REQ, Fórmula, pH, Lote, F, V, Tipo Uso, Aplicação, Contém, REG
+- **AMP 10**: Com posologia/uso ("USO EM CONSULTÓRIO/ 2 SERINGAS DE 1ML E 2FR DE 2ML")
+- **TIRZEPATIDA**: Com posologia "APLICAR 5MG POR SEMANA"
 
-Este plano implementa uma atualização visual completa do sistema de rótulos, incluindo:
-1. Adicionar a logo da ProPharmacos ao projeto
-2. Atualizar o design system com as cores da marca
-3. Melhorar a interface do usuário (UI) do frontend
-4. Ajustar o layout de etiqueta AMP 10 conforme referência física
+### Print 290 - Problema do KIT barra 2
+- **Esquerda (REQ:6806-2)**: "KIT POLIREVIT. DESPIGMENT" - NÃO está expandindo componentes!
+- **Direita (REQ:6806-3)**: Lista componentes corretamente (AC GLICOLICO, LIDOCAINA, etc.)
 
----
-
-## 1. Cores Extraídas da Logo ProPharmacos
-
-Da logo fornecida, identifiquei as seguintes cores principais:
-
-| Cor | Uso | HSL |
-|-----|-----|-----|
-| **Azul Escuro** | Texto "pharmacos", fundo do símbolo | hsl(206, 45%, 40%) - #456B8A |
-| **Rosa/Pink** | Texto "pró", pétalas da flor | hsl(343, 55%, 65%) - #D4849A |
-| **Rosa Claro** | Acentos, pétalas claras | hsl(343, 40%, 85%) - #E8C8D0 |
-| **Branco** | Fundo | hsl(0, 0%, 100%) |
+### Print 291 - Problema do SUBTÍTULO
+- Mostra "ALOPECIA - NUTRIÇÃO E ESTÍMULO DE CRESCIMENTO" aparecendo indevidamente
+- Esse é um título de categoria da OBS FICHA, não um ativo!
 
 ---
 
-## 2. Alterações de Arquivos
+## Alterações Planejadas
 
-### 2.1 Copiar Logo para o Projeto
-- **Destino**: `src/assets/logo-propharmacos.png`
-- A logo será usada no header e footer
+### 1. Card Compacto/Expandido (Frontend)
+**Arquivo**: `src/components/LabelCard.tsx`
 
-### 2.2 Atualizar Design System (`src/index.css`)
+Adicionar dois estados de visualização:
 
-Novas variáveis CSS baseadas nas cores da marca:
-
-```text
-Antes:
-  --primary: 212 72% 39%;        (Azul genérico)
-  --secondary: 344 78% 72%;      (Rosa genérico)
-
-Depois:
-  --primary: 206 45% 40%;        (Azul ProPharmacos)
-  --secondary: 343 55% 65%;      (Rosa ProPharmacos)
-  --accent: 343 40% 92%;         (Rosa bem claro para hover)
+**Estado A (compacto - não selecionado)**:
+```
+LENIE ANTONIA ALVES DE SOUZA  REQ:6806-0
+DR. LENIE ANTONIA ALVES DE SOUZA - COREN 826211/SP
+CROMO 20MCG, COBRE 20MCG, VIT B2 10MCG...
+APLICAÇÃO: ID
+REG: 15079
 ```
 
-### 2.3 Atualizar Header da Página Principal (`src/pages/Index.tsx`)
+**Estado B (expandido - selecionado)**:
+Exibe TODOS os campos conforme layout atual
 
-**Antes**:
-- Ícone quadrado com letra "P"
-- Layout simples
+### 2. Posologia - Voltar a Exibir
+**Arquivo**: `src/config/layouts.ts`
 
-**Depois**:
-- Logo real da ProPharmacos (imagem)
-- Design mais profissional
-- Gradiente sutil no header
-- Melhor espaçamento
+- Layout **AMP10**: `posologia.visible = true`, adicionar linha
+- Layout **AMP_CX**: `posologia.visible = true`, adicionar linha 
+- Layout **TIRZ**: já tem posologia visível
 
-### 2.4 Melhorar Interface de Busca (`src/components/SearchRequisition.tsx`)
+### 3. Filtro de Subtítulo da OBS FICHA
+**Arquivo**: `servidor.py` (linha ~3274)
 
-- Adicionar visual mais moderno
-- Bordas arredondadas maiores
-- Sombras suaves
-- Cores da marca nos botões
+Criar função `is_subtitulo_obs_ficha()` para filtrar:
+- "ALOPECIA - NUTRIÇÃO E ESTÍMULO DE CRESCIMENTO"
+- "SKIN CARE - HIDRATAÇÃO"
+- Formato: `TITULO - SUBTITULO` (só letras, sem dosagem)
 
-### 2.5 Atualizar Cards de Rótulo (`src/components/LabelCard.tsx`)
-
-- Bordas com cor da marca quando selecionado
-- Visual mais limpo e profissional
-- Melhor contraste
-
-### 2.6 Atualizar Página de Configurações (`src/pages/Settings.tsx`)
-
-- Consistência visual com a página principal
-- Header com logo
-
----
-
-## 3. Layout AMP 10 (Etiqueta de Referência)
-
-Da foto da etiqueta física fornecida, identifiquei a estrutura:
-
-```text
-┌─────────────────────────────────────────────┐
-│ Logo ProVitae + REQ:006547-N                │
-│ DRA. ISABELLE VICALVI                       │
-│ CRF-SP-92804                                │
-│ ISABELLE VICALVI                            │
-│ LIPOSSOMAS DE DESOXICOLATO 10MG 4amp        │
-│                                             │
-│ pH:     L:      F:      V:                  │
-│ USO EM CONSULTÓRIO                          │
-│ CONTEM: FR. DE ML                           │
-│                                             │
-│ APLICAÇÃO:                                  │
-│ REG:11600                                   │
-├─────────────────────────────────────────────┤
-│ FARM. RESP: VANIA MOLINARI CRF-SP 19619     │
-│ CNPJ 73.119.927/0008-95                     │
-│ R. Campos Sales, 545 - Centro - S.A.        │
-│ TEL: (11) 3777-6087                         │
-└─────────────────────────────────────────────┘
+**Lógica**:
+```python
+def is_subtitulo_obs_ficha(linha: str) -> bool:
+    """
+    Detecta se a linha é um subtítulo/categoria da OBS FICHA.
+    Formato típico: "TITULO - SUBTITULO" (sem MG, ML, %)
+    """
+    if not linha or not linha.strip():
+        return False
+    
+    linha_upper = linha.strip().upper()
+    
+    # Padrão: TITULO - SUBTITULO sem dosagem
+    if ' - ' in linha_upper:
+        indicadores = ['MG', 'MCG', 'ML', 'UI', 'IU', '%', 'G/ML', 'MG/ML']
+        if not any(ind in linha_upper for ind in indicadores):
+            import re
+            # Só letras, espaços, acentos e hífen = provavelmente título
+            if re.match(r'^[A-ZÇÃÕÉÊÍÓÔÚÀ\s-]+$', linha_upper):
+                return True
+    
+    return False
 ```
 
-### Estrutura de Linhas para AMP10:
+Aplicar **antes** de `ativos_mescla.append()` na linha ~3274.
 
-| Linha | Campos | Observação |
-|-------|--------|------------|
-| 1 | `requisicao` | Canto superior direito |
-| 2 | `medico` | Prescritor com prefixo DR./DRA. |
-| 3 | `paciente` | Nome do paciente |
-| 4 | `formula` ou `composicao` | Exclusão mútua |
-| 5 | `ph`, `lote`, `fabricacao`, `validade` | Linha compacta |
-| 6 | `tipoUso` | Ex: "USO EM CONSULTÓRIO" |
-| 7 | `contem` | Ex: "CONTEM: 4 FR. DE 2ML" |
-| 8 | `aplicacao` | Ex: "APLICAÇÃO: ID/SC" |
-| 9 | `registro` | Ex: "REG:11600" |
+### 4. Normalizar Barra da REQ
+**Arquivo**: `src/components/LabelCard.tsx`
+
+Criar função:
+```typescript
+const normalizeReqBarra = (nrReq: string, nrItem: string): string => {
+  const req = (nrReq || "").trim();
+  const barra = (nrItem || "0").trim();
+  return `REQ:${req}-${barra}`;
+};
+```
+
+### 5. KIT Barra 2 (REQ:6806-2) - Debug Específico
+**Arquivo**: `servidor.py`
+
+O problema do **KIT POLIREVIT. DESPIGMENT** não expandir pode ser:
+1. O nome NÃO contém exatamente "KIT" (contém "KIT" mas algo está falhando)
+2. O SERIER não está correto na busca
+
+Verificar se o nome `"KIT POLIREVIT. DESPIGMENT"` passa o filtro `if "KIT" not in descrfrm_upper`.
+
+**Possível correção**: O nome contém "KIT", mas o problema pode ser que `descrfrm` está vindo diferente da FC05000. Vou adicionar log adicional e verificar a lógica.
 
 ---
 
-## 4. Fluxo de Implementação
+## Ordem de Campos nos Layouts de Referência
 
-```text
-1. Copiar logo para src/assets/
-       │
-       ▼
-2. Atualizar index.css (cores da marca)
-       │
-       ▼
-3. Atualizar Index.tsx (header com logo + UI)
-       │
-       ▼
-4. Atualizar SearchRequisition.tsx (visual moderno)
-       │
-       ▼
-5. Atualizar LabelCard.tsx (bordas e cores)
-       │
-       ▼
-6. Atualizar Settings.tsx (consistência visual)
-       │
-       ▼
-7. Atualizar layouts.ts (estrutura AMP10)
+### Layout AMP CAIXA (print 289 - linha 1)
+```
+CAROLINA OLIVEIRA MOURA       REQ:006827-0
+DR(A)CAROLINA OLIVEIRA MOURA  CRBM-SP-43603
+VITAMINA D 600.000UI/ML
+pH:5,0  L:289/25  F:11/25  V:11/26
+USO EM CONSULTÓRIO      APLICAÇÃO:IM
+CONTÉM:10FR. DE 1ML     REG:15136
+```
+
+### Layout AMP 10 (print 289 - linha 2) - com Mescla
+```
+AMPARITO DEL ROCIO V.CASTRO       REQ:006788-0
+DR(A)AMPARITO DEL ROCIO V.CASTRO  COREN-SP-38554
+HIDROXIAPATITA DE CALCIO NANOESFERAS 15%
+pH:7,0  L:12042/26  F:01/26  V:01/27
+COENZIMA Q10 0,5%, SILICIO ORG. 0,5%,
+AC. HIALURONICO N RETIC.0,2%  REG:15010
+pH:7,0  L:333/25  F:11/25  V:11/26  AP:SC SUPERFICIAL
+USO EM CONSULTÓRIO/ 2 SERINGAS DE 1ML E 2FR DE 2ML  ← POSOLOGIA
 ```
 
 ---
 
-## 5. Prévia Visual Esperada
+## Seção Técnica - Alterações por Arquivo
 
-### Header Novo:
-```text
-┌──────────────────────────────────────────────────────────┐
-│  [LOGO ProPharmacos]     Farmácia de Manipulação   [⚙️]  │
-│  Sistema de Rótulos                                      │
-└──────────────────────────────────────────────────────────┘
+### `servidor.py`
+| Linha | Alteração |
+|-------|-----------|
+| ~137 | Adicionar função `is_subtitulo_obs_ficha()` |
+| ~3274 | Chamar filtro antes de `ativos_mescla.append()` |
+
+### `src/components/LabelCard.tsx`
+| Alteração | Descrição |
+|-----------|-----------|
+| Adicionar `renderCompactContent()` | Renderização para estado não-selecionado |
+| Modificar `renderLabelContent()` | Usar compacto quando `!selected` |
+| Adicionar `normalizeReqBarra()` | Função para formatar REQ:XXXXX-N |
+| Linha 332 e 410 | Usar `normalizeReqBarra()` |
+
+### `src/config/layouts.ts`
+| Layout | Alteração |
+|--------|-----------|
+| AMP10 | `posologia.visible = true`, adicionar na estrutura de linhas |
+| AMP_CX | `posologia.visible = true`, adicionar linha 5b |
+
+---
+
+## Casos de Teste
+
+### 1. Item Único (ex: GLICOSE 75%)
+**Esperado**:
+- Card compacto: Paciente, Prescritor, REQ, nome do produto, Aplicação, REG
+- Card expandido: Todos os campos, pH editável
+- **NÃO deve mostrar**: água, ampola, selo, tampa
+
+### 2. Mescla (ex: CAF/CARN, requisição 6806-0)
+**Esperado**:
+- Ativos listados (CROMO, COBRE, VIT B2, etc.)
+- **NÃO deve mostrar**: "ALOPECIA - NUTRIÇÃO E ESTÍMULO DE CRESCIMENTO"
+- Posologia/Uso quando existir
+- pH editável
+
+### 3. KIT (ex: requisição 6806-2 e 6806-3)
+**Esperado**:
+- **6806-2 (KIT POLIREVIT)**: Deve expandir componentes como 6806-3
+- **6806-3**: Já funciona - lista AC GLICOLICO, LIDOCAINA, etc.
+
+---
+
+## Fluxo Visual
+
 ```
-
-### Busca:
-```text
-         ┌─────────────────────────────────────────┐
-         │ 🔍 Digite o número da requisição...     │  [ Buscar ]
-         └─────────────────────────────────────────┘
-                    (bordas arredondadas, sombra suave)
-```
-
-### Cards de Rótulo:
-```text
-┌─────────────────────────────────────────────────┐
-│ ☑ Selecionar                               📝   │  ← Borda rosa quando selecionado
-├─────────────────────────────────────────────────┤
-│ [CONTEÚDO DO RÓTULO]                            │
-│                                                 │
-│                                                 │
-└─────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Usuário busca requisição                                   │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ Card NÃO selecionado (compacto):                      │ │
+│  │ LENIE ANTONIA ALVES  REQ:6806-0                       │ │
+│  │ DR. LENIE ANTONIA - COREN 826211/SP                   │ │
+│  │ CROMO 20MCG, COBRE 20MCG, VIT B2...                   │ │
+│  │ APLICAÇÃO: ID   REG: 15079                            │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                          │                                   │
+│                    clica/seleciona                           │
+│                          ▼                                   │
+│  ┌───────────────────────────────────────────────────────┐ │
+│  │ Card SELECIONADO (expandido):                         │ │
+│  │ [Pró Pharmacos - Header completo]                     │ │
+│  │ LENIE ANTONIA ALVES DE SOUZA  REQ:6806-0              │ │
+│  │ DR. LENIE ANTONIA ALVES DE SOUZA - COREN 826211/SP    │ │
+│  │ CROMO 20MCG, COBRE 20MCG, VIT B2 10MCG, METIONINA 5MG │ │
+│  │ TAURINA 10MG, PROLINA 1MG, VIT B6 100MCG, S. ZINCO... │ │
+│  │ pH: L: 536/26 F: 02/26 V: 08/26                       │ │
+│  │ APLICAÇÃO: ID                                          │ │
+│  │ CONTÉM:                                                │ │
+│  │ REG: 15079                                             │ │
+│  └───────────────────────────────────────────────────────┘ │
+│                                                             │
+│  ✗ NÃO aparece: "ALOPECIA - NUTRIÇÃO E ESTÍMULO..."        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. Seção Técnica
+## Garantias
 
-### Arquivos a Modificar:
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/assets/logo-propharmacos.png` | **CRIAR** - Copiar logo do usuário |
-| `src/index.css` | Atualizar variáveis CSS de cores |
-| `src/pages/Index.tsx` | Redesign do header, adicionar logo |
-| `src/components/SearchRequisition.tsx` | Visual mais moderno |
-| `src/components/LabelCard.tsx` | Bordas e cores da marca |
-| `src/pages/Settings.tsx` | Header com logo |
-| `src/config/layouts.ts` | Ajustar estrutura AMP10 |
-
-### Código da Atualização de Cores (index.css):
-
-```css
-:root {
-  /* Azul ProPharmacos - texto principal, botões primários */
-  --primary: 206 45% 40%;
-  --primary-foreground: 0 0% 100%;
-
-  /* Rosa ProPharmacos - acentos, botões secundários */
-  --secondary: 343 55% 65%;
-  --secondary-foreground: 0 0% 100%;
-
-  /* Rosa claro - backgrounds de destaque */
-  --accent: 343 40% 95%;
-  --accent-foreground: 206 45% 40%;
-
-  /* Ring (foco) - rosa */
-  --ring: 343 55% 65%;
-}
-```
-
-### Código do Novo Header (Index.tsx):
-
-```tsx
-<header className="bg-gradient-to-r from-card to-background border-b border-border shadow-sm">
-  <div className="container mx-auto px-4 py-4">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <img 
-          src={logoProPharmacos} 
-          alt="ProPharmacos" 
-          className="h-12 w-auto"
-        />
-        <div>
-          <h1 className="text-xl font-bold text-primary">Sistema de Rótulos</h1>
-          <p className="text-xs text-muted-foreground">Farmácia de Manipulação</p>
-        </div>
-      </div>
-      {/* ... botões */}
-    </div>
-  </div>
-</header>
-```
-
----
-
-## 7. Garantias
-
-1. **Consistência**: Todas as páginas usarão as mesmas cores da marca
-2. **Logo Visível**: Header de todas as páginas terá a logo
-3. **Responsividade**: Design funciona em desktop e mobile
-4. **Fontes Padronizadas**: Manter Inter como fonte principal, tamanhos consistentes
-5. **Compatibilidade**: Não quebra funcionalidades existentes
-
----
-
-## 8. Resultado Esperado
-
-Após a implementação:
-- Visual profissional alinhado com a identidade da ProPharmacos
-- Cores azul e rosa da marca em toda a interface
-- Logo visível no header
-- Cards de rótulo mais elegantes
-- Layout AMP10 seguindo a referência física fornecida
-
+1. **Lógica existente NÃO alterada** - Apenas filtros e UI
+2. **KITs verdadeiros continuam funcionando** - Só debug do caso 6806-2
+3. **Mesclas não afetadas** - Apenas filtro de subtítulos
+4. **pH sempre visível** - Já implementado
+5. **Posologia volta a aparecer** - Alteração em layouts.ts
