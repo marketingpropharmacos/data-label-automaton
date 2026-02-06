@@ -2529,21 +2529,8 @@ def buscar_requisicao(nr_requisicao):
         
         row = cursor.fetchone()
         
-        # Se não achou pela filial informada (ou mapeada), tenta localizar a requisição em qualquer filial.
-        # Isso evita 404 quando o frontend usa um código de filial diferente do CDFIL do banco.
-        if not row:
-            cursor.execute("""
-                SELECT R.NRRQU, R.CDFIL, R.NOMEPA, R.PFCRM, R.NRCRM, R.UFCRM,
-                       R.DTCAD, R.DTVAL, R.NRREG, R.POSOL, R.TPUSO, R.OBSERFIC,
-                       R.VOLUME, R.UNIVOL, M.NOMEMED, R.TPFORMAFARMA
-                FROM FC12100 R
-                LEFT JOIN FC04000 M ON R.PFCRM = M.PFCRM AND R.NRCRM = M.NRCRM AND R.UFCRM = M.UFCRM
-                WHERE R.NRRQU = ?
-                ORDER BY R.CDFIL
-            """, (int(nr_requisicao),))
-            row = cursor.fetchone()
-            if row:
-                filial_db = int(row[1])
+        # Fallback REMOVIDO: se filial foi especificada, respeitar a escolha do usuário.
+        # Não buscar em outras filiais para evitar retornar dados incorretos.
 
         if not row:
             conn.close()
