@@ -11,46 +11,46 @@ All colors MUST be HSL.
 @layer base {
   :root {
     --background: 0 0% 98%;
-    --foreground: 214 39% 22%;
+    --foreground: 206 35% 25%;
 
     --card: 0 0% 100%;
-    --card-foreground: 214 39% 22%;
+    --card-foreground: 206 35% 25%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 214 39% 22%;
+    --popover-foreground: 206 35% 25%;
 
-    /* Azul Pró #1c5eac = hsl(212, 72%, 39%) */
-    --primary: 212 72% 39%;
+    /* Azul ProPharmacos - #456B8A = hsl(206, 34%, 40%) */
+    --primary: 206 34% 40%;
     --primary-foreground: 0 0% 100%;
 
-    /* Rosa Pró #f080a2 = hsl(344, 78%, 72%) */
-    --secondary: 344 78% 72%;
+    /* Rosa ProPharmacos - #D4849A = hsl(343, 45%, 67%) */
+    --secondary: 343 45% 67%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 206 20% 46%;
 
-    /* Rosa claro como accent */
-    --accent: 344 78% 95%;
-    --accent-foreground: 212 72% 39%;
+    /* Rosa claro ProPharmacos para accent */
+    --accent: 343 40% 95%;
+    --accent-foreground: 206 34% 40%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 212 72% 39%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 343 45% 67%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 212 72% 39%;
+    --sidebar-foreground: 206 35% 25%;
+    --sidebar-primary: 206 34% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 344 78% 95%;
-    --sidebar-accent-foreground: 212 72% 39%;
+    --sidebar-accent: 343 40% 95%;
+    --sidebar-accent-foreground: 206 34% 40%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 212 72% 39%;
+    --sidebar-ring: 343 45% 67%;
   }
 
   .dark {
