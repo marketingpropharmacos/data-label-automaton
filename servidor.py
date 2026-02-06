@@ -320,6 +320,20 @@ def detecta_kit(cursor, cdpro, tpforma=None):
             }
             
             # =====================================================
+            # PRÉ-VALIDAÇÃO: Só considera KIT se o nome indicar isso
+            # MESCLAS têm 2+ ativos na FC05100 mas NÃO são KITs reais
+            # =====================================================
+            descrfrm = kit_info.get("descrfrm", "")
+            if descrfrm and hasattr(descrfrm, 'read'):
+                descrfrm = descrfrm.read().decode('latin-1')
+            descrfrm_upper = (descrfrm or "").upper().strip()
+            
+            # Se o nome NÃO contém "KIT", provavelmente é MESCLA, não KIT
+            if "KIT" not in descrfrm_upper:
+                print(f"  [DETECTA_KIT] ✗ Nome não contém 'KIT': '{descrfrm_upper[:50]}' - Tratando como NÃO-KIT")
+                return None
+            
+            # =====================================================
             # VALIDAÇÃO: Só é KIT se tiver componentes farmacêuticos reais
             # (não apenas insumos de fabricação como ampola/selo/tampa)
             # =====================================================
@@ -347,7 +361,7 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                     print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
                     continue
                 
-                # 2. NOVO: Ignora se for o próprio produto (código igual)
+                # 2. Ignora se for o próprio produto (código igual)
                 if str(cdpro_comp).strip() == cdpro_str:
                     print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
                     continue
@@ -378,6 +392,20 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                 }
                 
                 # =====================================================
+                # PRÉ-VALIDAÇÃO: Só considera KIT se o nome indicar isso
+                # MESCLAS têm 2+ ativos na FC05100 mas NÃO são KITs reais
+                # =====================================================
+                descrfrm = kit_info.get("descrfrm", "")
+                if descrfrm and hasattr(descrfrm, 'read'):
+                    descrfrm = descrfrm.read().decode('latin-1')
+                descrfrm_upper = (descrfrm or "").upper().strip()
+                
+                # Se o nome NÃO contém "KIT", provavelmente é MESCLA, não KIT
+                if "KIT" not in descrfrm_upper:
+                    print(f"  [DETECTA_KIT] ✗ Nome não contém 'KIT': '{descrfrm_upper[:50]}' - Tratando como NÃO-KIT (int)")
+                    return None
+                
+                # =====================================================
                 # VALIDAÇÃO: Só é KIT se tiver componentes farmacêuticos reais
                 # =====================================================
                 cdfrm = kit_info["cdfrm"]
@@ -402,7 +430,7 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                         print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
                         continue
                     
-                    # 2. NOVO: Ignora se for o próprio produto (código igual)
+                    # 2. Ignora se for o próprio produto (código igual)
                     if str(cdpro_comp).strip() == cdpro_str:
                         print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
                         continue
