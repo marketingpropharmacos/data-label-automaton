@@ -849,6 +849,49 @@ def tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier):
         return []
 
 
+def extrair_obsfic_componente(cursor, cdpro_comp):
+    """
+    Busca OBSFIC (observacoes de ficha) de um componente na FC99999.
+    Retorna o texto concatenado por ordem de SUBARGUM, sem filtragem de ativos.
+    Usado EXCLUSIVAMENTE para kits sinonimos.
+    """
+    cdpro_str = str(cdpro_comp).strip()
+    print(f"    [OBSFIC_COMP] Buscando OBSFIC para CDPRO={cdpro_str}")
+    
+    # Busca com ARGUMENTO = 'OBSFIC<CDPRO>'
+    cursor.execute("""
+        SELECT PARAMETRO FROM FC99999 
+        WHERE ARGUMENTO STARTING WITH ?
+        ORDER BY SUBARGUM
+    """, (f'OBSFIC{cdpro_str}',))
+    
+    registros = cursor.fetchall()
+    
+    # Se nao encontrou, tenta com CDPRO padded
+    if not registros:
+        cdpro_padded = cdpro_str.zfill(8)
+        cursor.execute("""
+            SELECT PARAMETRO FROM FC99999 
+            WHERE ARGUMENTO STARTING WITH ?
+            ORDER BY SUBARGUM
+        """, (f'OBSFIC{cdpro_padded}',))
+        registros = cursor.fetchall()
+    
+    # Concatena textos, filtrando apenas linhas de aplicacao
+    textos = []
+    for reg in registros:
+        texto = reg[0]
+        if texto and hasattr(texto, 'read'):
+            texto = texto.read().decode('latin-1')
+        texto = texto.strip() if texto else ""
+        if texto and not texto.upper().startswith("APLICAC"):
+            textos.append(texto)
+    
+    resultado = ", ".join(textos)
+    print(f"    [OBSFIC_COMP] {'✓' if resultado else '✗'} Resultado: {resultado[:80] if resultado else 'vazio'}")
+    return resultado
+
+
 def extrair_composicao_componente(cursor, cdpro_comp):
     """
     Extrai a composição (ativos) de um componente de kit.
@@ -1069,7 +1112,7 @@ def buscar_ph_componente(cursor, cdpro_comp, cdfil):
     return ""
 
 
-def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
+def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinonimo=False):
     """
     Função principal para montar o kit expandido.
     
@@ -1139,8 +1182,11 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
                 fab_str = lote_data.get("dtFab", "")
                 val_str = lote_data.get("dtVal", "")
             
-            # Busca composição (ativos) e pH do componente
-            composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+            # Busca composição: OBSFIC para sinônimo, ativos para kit normal
+            if e_sinonimo:
+                composicao_comp = extrair_obsfic_componente(cursor, cdpro_comp)
+            else:
+                composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
             ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
             
             componentes_final.append({
@@ -1164,7 +1210,10 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
             lote_data = resolve_lote_componente(cursor, cdfil, cdpro_comp)
             
             # Busca composição (ativos) e pH do componente
-            composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+            if e_sinonimo:
+                composicao_comp = extrair_obsfic_componente(cursor, cdpro_comp)
+            else:
+                composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
             ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
             
             componentes_final.append({
@@ -3704,7 +3753,7 @@ def buscar_requisicao(nr_requisicao):
                 print(f"  [SINONIMO] Kit sinônimo detectado: CDPRO={cdpro} -> base={cdpro_resolvido}")
             
             # Usa função principal que encapsula toda a lógica
-            kit_expandido = montar_kit_expandido(cursor, cdpro_resolvido, filial, nr_requisicao, serier)
+            kit_expandido = montar_kit_expandido(cursor, cdpro_resolvido, filial, nr_requisicao, serier, e_sinonimo)
             
             if kit_expandido and len(kit_expandido.get("componentes", [])) > 0:
                 e_kit = True
