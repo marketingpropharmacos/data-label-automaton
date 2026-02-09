@@ -1885,6 +1885,74 @@ def debug_fc99999(cdpro):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+# Debug: OBSFIC bruto de um componente (diagnóstico kit sinônimo)
+@app.route('/api/debug/obsfic/<cdpro>', methods=['GET'])
+def debug_obsfic(cdpro):
+    """Debug: mostra OBSFIC bruto de um componente para diagnóstico"""
+    try:
+        cursor = get_cursor()
+        cdpro_str = str(cdpro).strip()
+        
+        # Busca 1: STARTING WITH (como a funcao extrair_obsfic_componente faz)
+        cursor.execute("""
+            SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
+            FROM FC99999 
+            WHERE ARGUMENTO STARTING WITH ?
+            ORDER BY SUBARGUM
+        """, (f'OBSFIC{cdpro_str}',))
+        resultado_starting = []
+        for row in cursor.fetchall():
+            arg = row[0]
+            if hasattr(arg, 'read'):
+                arg = arg.read().decode('latin-1')
+            param = row[2]
+            if param and hasattr(param, 'read'):
+                param = param.read().decode('latin-1')
+            descrpar = row[3]
+            if descrpar and hasattr(descrpar, 'read'):
+                descrpar = descrpar.read().decode('latin-1')
+            resultado_starting.append({
+                "argumento": str(arg).strip(),
+                "subargum": str(row[1]).strip(),
+                "parametro": str(param).strip() if param else "",
+                "descrpar": str(descrpar).strip() if descrpar else ""
+            })
+        
+        # Busca 2: LIKE (mais flexivel - detecta formatos alternativos)
+        cursor.execute("""
+            SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
+            FROM FC99999 
+            WHERE ARGUMENTO LIKE ?
+            ORDER BY SUBARGUM
+        """, (f'%OBSFIC%{cdpro_str}%',))
+        resultado_like = []
+        for row in cursor.fetchall():
+            arg = row[0]
+            if hasattr(arg, 'read'):
+                arg = arg.read().decode('latin-1')
+            param = row[2]
+            if param and hasattr(param, 'read'):
+                param = param.read().decode('latin-1')
+            descrpar = row[3]
+            if descrpar and hasattr(descrpar, 'read'):
+                descrpar = descrpar.read().decode('latin-1')
+            resultado_like.append({
+                "argumento": str(arg).strip(),
+                "subargum": str(row[1]).strip(),
+                "parametro": str(param).strip() if param else "",
+                "descrpar": str(descrpar).strip() if descrpar else ""
+            })
+        
+        return jsonify({
+            "cdpro": cdpro_str,
+            "starting_with": resultado_starting,
+            "like": resultado_like,
+            "count_starting": len(resultado_starting),
+            "count_like": len(resultado_like)
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route('/api/debug/observacoes-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_observacoes_requisicao(nr_requisicao):
     filial = request.args.get('filial', '1')
