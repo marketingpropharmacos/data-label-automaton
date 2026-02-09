@@ -310,6 +310,51 @@ def buscar_aplicacao_nao_kit(cursor, cdpro_int, cdprin_int=None):
 #   - FC05100.CDFRM -> lista de componentes (CDPRO dos ativos)
 # =====================================================
 
+def resolver_sinonimo(cursor, cdpro):
+    """
+    Resolve sinônimos de produtos via FC03200.
+    Se o CDPRO informado é sinônimo de outro produto (CDSIN), retorna o CDPRO base.
+    Caso contrário, retorna o próprio código.
+    
+    FC03200: CDPRO = produto base, CDSIN = sinônimo
+    """
+    cdpro_str = str(cdpro).strip()
+    
+    try:
+        # Estratégia 1: busca como string
+        cursor.execute("""
+            SELECT FIRST 1 CDPRO FROM FC03200 WHERE CDSIN = ?
+        """, (cdpro_str,))
+        row = cursor.fetchone()
+        
+        if row:
+            cdpro_base = str(row[0]).strip()
+            print(f"  [SINONIMO] ✓ CDPRO={cdpro_str} é sinônimo de {cdpro_base} (via FC03200)")
+            return cdpro_base
+        
+        # Estratégia 2: busca como inteiro (fallback)
+        try:
+            cdpro_int = int(cdpro_str)
+            cursor.execute("""
+                SELECT FIRST 1 CDPRO FROM FC03200 WHERE CDSIN = ?
+            """, (cdpro_int,))
+            row = cursor.fetchone()
+            
+            if row:
+                cdpro_base = str(row[0]).strip()
+                print(f"  [SINONIMO] ✓ CDPRO={cdpro_str} é sinônimo de {cdpro_base} (via FC03200, busca int)")
+                return cdpro_base
+        except (ValueError, TypeError):
+            pass
+        
+        print(f"  [SINONIMO] CDPRO={cdpro_str} não é sinônimo (usando original)")
+        return cdpro_str
+        
+    except Exception as e:
+        print(f"  [SINONIMO] Erro ao consultar FC03200: {e} - usando CDPRO original {cdpro_str}")
+        return cdpro_str
+
+
 def detecta_kit(cursor, cdpro, tpforma=None):
     """
     Detecta se um produto é um KIT usando FC05000.
@@ -3407,8 +3452,11 @@ def buscar_requisicao(nr_requisicao):
             componentes_kit = []
             kit_expandido = None
             
+            # Resolve sinônimos antes da detecção de kit (FC03200)
+            cdpro_resolvido = resolver_sinonimo(cursor, cdpro)
+            
             # Usa função principal que encapsula toda a lógica
-            kit_expandido = montar_kit_expandido(cursor, cdpro, filial, nr_requisicao, serier)
+            kit_expandido = montar_kit_expandido(cursor, cdpro_resolvido, filial, nr_requisicao, serier)
             
             if kit_expandido and len(kit_expandido.get("componentes", [])) > 0:
                 e_kit = True
@@ -4004,6 +4052,48 @@ def imprimir_rotulos():
         return jsonify({"success": True, "impressos": impressos, "erros": erros})
     else:
         return jsonify({"success": False, "error": "Nenhum rótulo impresso", "erros": erros}), 500
+
+
+# Debug: sinônimos de um produto via FC03200
+@app.route('/api/debug/sinonimos/<cdpro>', methods=['GET'])
+def debug_sinonimos(cdpro):
+    """Retorna sinônimos de um produto (tanto como base quanto como sinônimo)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cdpro_str = str(cdpro).strip()
+        
+        resultado = {
+            "cdpro_consultado": cdpro_str,
+            "e_sinonimo_de": None,
+            "sinonimos_cadastrados": []
+        }
+        
+        # Verifica se é sinônimo de outro produto
+        cursor.execute("SELECT CDPRO FROM FC03200 WHERE CDSIN = ?", (cdpro_str,))
+        row = cursor.fetchone()
+        if row:
+            resultado["e_sinonimo_de"] = str(row[0]).strip()
+        
+        # Busca todos os sinônimos deste produto (como base)
+        cursor.execute("SELECT CDSIN, EQUIV FROM FC03200 WHERE CDPRO = ?", (cdpro_str,))
+        for row in cursor.fetchall():
+            resultado["sinonimos_cadastrados"].append({
+                "cdsin": str(row[0]).strip(),
+                "equiv": str(row[1]).strip() if row[1] else ""
+            })
+        
+        # Se é sinônimo, busca também os irmãos (outros sinônimos do mesmo base)
+        if resultado["e_sinonimo_de"]:
+            base = resultado["e_sinonimo_de"]
+            cursor.execute("SELECT CDSIN FROM FC03200 WHERE CDPRO = ?", (base,))
+            resultado["todos_sinonimos_do_base"] = [str(r[0]).strip() for r in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "data": resultado})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == '__main__':
