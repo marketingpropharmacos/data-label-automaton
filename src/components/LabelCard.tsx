@@ -111,19 +111,15 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     
     const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
     const tipo = tiposPrescritores[codigo] || { prefixo: 'DR.', conselho: 'CRM' };
-    
-    // Detecta gênero e ajusta prefixo
-    const genero = detectarGenero(rotulo.nomeMedico);
-    const prefixo = genero === 'F' ? 'DRA.' : 'DR.';
     const conselho = tipo.conselho;
     
     if (rotulo.nomeMedico) {
       if (conselho) {
-        return `${prefixo} ${rotulo.nomeMedico.toUpperCase()} - ${conselho} ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
+        return `DR(A)${rotulo.nomeMedico.toUpperCase()}  ${conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`;
       }
-      return `${prefixo} ${rotulo.nomeMedico.toUpperCase()}`;
+      return `DR(A)${rotulo.nomeMedico.toUpperCase()}`;
     }
-    return `${conselho} ${rotulo.numeroCRM}/${rotulo.ufCRM}`;
+    return `${conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`;
   };
 
   const formatarDataCurta = (data: string) => {
@@ -426,7 +422,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       <div className="p-2 space-y-0.5 overflow-hidden">
         {/* Paciente + Requisição (primeiro, conforme referência) */}
         <div className="flex justify-between text-[9px] leading-tight">
-          <span className="font-bold uppercase">{rotulo.nomePaciente}</span>
+          <span className="uppercase">{rotulo.nomePaciente}</span>
           <span>{normalizeReqBarra(rotulo.nrRequisicao, rotulo.nrItem)}</span>
         </div>
         
@@ -436,7 +432,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         {/* Lista de componentes do kit: composição/nome na linha, metadados na seguinte */}
         {rotulo.componentes.map((comp, idx) => (
           <div key={idx} className="mt-0.5">
-            <div className="text-[9px] leading-tight font-semibold uppercase">
+            <div className="text-[9px] leading-tight uppercase">
               {rotulo.eSinonimo
                 ? (comp.composicao || formatarNomeComponente(comp.nome))
                 : formatarNomeComponente(comp.nome)}
@@ -488,9 +484,9 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     return (
       <div className="p-2 space-y-0.5 overflow-hidden">
         {/* Linha 1: Paciente + REQ */}
-        <div className="flex justify-between text-[10px] leading-tight">
-          <span className="font-bold uppercase">{rotulo.nomePaciente}</span>
-          <span className="text-[9px]">{normalizeReqBarra(rotulo.nrRequisicao, rotulo.nrItem)}</span>
+        <div className="flex justify-between text-[9px] leading-tight">
+          <span className="uppercase">{rotulo.nomePaciente}</span>
+          <span>{normalizeReqBarra(rotulo.nrRequisicao, rotulo.nrItem)}</span>
         </div>
         
         {/* Linha 2: Prescritor */}
@@ -541,7 +537,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
           return (
             <div 
               key={linha.id} 
-              className="flex flex-wrap items-baseline gap-1 text-[10px] leading-snug"
+              className="flex flex-wrap items-baseline gap-1 text-[9px] leading-snug"
             >
               {camposVisiveis.map((fieldId) => {
                 const config = layoutConfig.campoConfig[fieldId];
@@ -550,8 +546,8 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
                 return (
                   <span
                     key={fieldId}
-                    className={`${config.bold ? 'font-bold' : ''} ${config.uppercase ? 'uppercase' : ''} break-words`}
-                    style={{ fontSize: `${Math.min(config.fontSize, 11)}px` }}
+              className={`${config.uppercase ? 'uppercase' : ''} break-words`}
+                    style={{ fontSize: `${config.fontSize}px` }}
                   >
                     {content}
                   </span>

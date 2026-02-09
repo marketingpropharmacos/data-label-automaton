@@ -1,25 +1,25 @@
 import { LayoutType, LayoutConfig, LabelFieldId, FieldConfig, LineConfig } from "@/types/requisicao";
 
-// Configuração padrão dos campos
+// Configuração padrão dos campos - tudo fontSize 9, sem bold
 const defaultFieldConfig: Record<LabelFieldId, FieldConfig> = {
-  paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
+  paciente: { visible: true, fontSize: 9, bold: false, uppercase: true },
   composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
   requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-  formula: { visible: true, fontSize: 11, bold: true, uppercase: true },
+  formula: { visible: true, fontSize: 9, bold: false, uppercase: true },
   lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
   fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
   validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
   ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
   tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
-  aplicacao: { visible: true, fontSize: 9, bold: true, uppercase: true },
+  aplicacao: { visible: true, fontSize: 9, bold: false, uppercase: true },
   contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
-  registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
+  registro: { visible: true, fontSize: 9, bold: false, uppercase: false },
   medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-  posologia: { visible: true, fontSize: 8, bold: false, uppercase: false },
-  observacoes: { visible: true, fontSize: 8, bold: false, uppercase: false },
+  posologia: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  observacoes: { visible: true, fontSize: 9, bold: false, uppercase: false },
 };
 
-// Linhas padrão para organização dos campos - ordem lógica e limpa
+// Linhas padrão para organização dos campos
 const defaultLines: LineConfig[] = [
   { id: 'linha1', campos: ['medico'], spacing: 'normal' },
   { id: 'linha2', campos: ['paciente'], spacing: 'normal' },
@@ -32,9 +32,34 @@ const defaultLines: LineConfig[] = [
   { id: 'linha9', campos: ['observacoes', 'registro'], spacing: 'compact' },
 ];
 
+// Campo config base: tudo fontSize 9, sem bold
+const baseCampoConfig = (overrides: Partial<Record<LabelFieldId, Partial<FieldConfig>>> = {}): Record<LabelFieldId, FieldConfig> => {
+  const base: Record<LabelFieldId, FieldConfig> = {
+    paciente: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    formula: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    aplicacao: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    registro: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
+    posologia: { visible: true, fontSize: 9, bold: false, uppercase: false },
+    observacoes: { visible: true, fontSize: 9, bold: false, uppercase: false },
+  };
+  for (const [key, val] of Object.entries(overrides)) {
+    base[key as LabelFieldId] = { ...base[key as LabelFieldId], ...val };
+  }
+  return base;
+};
+
 // Configurações padrão para cada tipo de layout
 export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
-  // Layout 1: AMP_CX (Ampola Caixa) - 7 linhas
+  // Layout 1: AMP_CX (Ampola Caixa) - 6 linhas
   AMP_CX: {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
@@ -45,26 +70,12 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha3', campos: ['composicao', 'formula'], spacing: 'normal' },
       { id: 'linha4', campos: ['ph', 'lote', 'fabricacao', 'validade'], spacing: 'compact' },
       { id: 'linha5', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
-      { id: 'linha6', campos: ['contem'], spacing: 'normal' },
-      { id: 'linha7', campos: ['registro'], spacing: 'normal' },
+      { id: 'linha6', campos: ['contem', 'registro'], spacing: 'normal' },
     ],
-    campoConfig: {
-      paciente: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      formula: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      aplicacao: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      registro: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      posologia: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      observacoes: { visible: false, fontSize: 9, bold: false, uppercase: false },
-    },
+    campoConfig: baseCampoConfig({
+      posologia: { visible: false },
+      observacoes: { visible: false },
+    }),
   },
 
   // Layout 2: AMP10 (Ampola 10) - 7 linhas
@@ -80,23 +91,11 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha6', campos: ['ph', 'lote', 'validade', 'aplicacao'], spacing: 'compact' },
       { id: 'linha7', campos: ['tipoUso', 'posologia'], spacing: 'normal' },
     ],
-    campoConfig: {
-      paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
-      composicao: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      formula: { visible: true, fontSize: 10, bold: true, uppercase: true },
-      lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      fabricacao: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      aplicacao: { visible: true, fontSize: 9, bold: true, uppercase: true },
-      contem: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
-      medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      posologia: { visible: true, fontSize: 8, bold: false, uppercase: true },
-      observacoes: { visible: false, fontSize: 8, bold: false, uppercase: false },
-    },
+    campoConfig: baseCampoConfig({
+      fabricacao: { visible: false },
+      contem: { visible: false },
+      observacoes: { visible: false },
+    }),
   },
 
   // Layout 3: A_PAC_PEQ (Ampola Pacote Pequeno) - 3 linhas
@@ -109,23 +108,19 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
       { id: 'linha3', campos: ['registro'], spacing: 'normal' },
     ],
-    campoConfig: {
-      paciente: { visible: true, fontSize: 8, bold: true, uppercase: true },
-      composicao: { visible: false, fontSize: 8, bold: false, uppercase: true },
-      requisicao: { visible: true, fontSize: 8, bold: false, uppercase: false },
-      formula: { visible: false, fontSize: 8, bold: false, uppercase: true },
-      lote: { visible: false, fontSize: 8, bold: false, uppercase: false },
-      fabricacao: { visible: false, fontSize: 8, bold: false, uppercase: false },
-      validade: { visible: false, fontSize: 8, bold: false, uppercase: false },
-      ph: { visible: false, fontSize: 8, bold: false, uppercase: false },
-      tipoUso: { visible: false, fontSize: 8, bold: false, uppercase: true },
-      aplicacao: { visible: false, fontSize: 8, bold: false, uppercase: true },
-      contem: { visible: false, fontSize: 8, bold: false, uppercase: true },
-      registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
-      medico: { visible: true, fontSize: 8, bold: false, uppercase: true },
-      posologia: { visible: false, fontSize: 8, bold: false, uppercase: false },
-      observacoes: { visible: false, fontSize: 8, bold: false, uppercase: false },
-    },
+    campoConfig: baseCampoConfig({
+      composicao: { visible: false },
+      formula: { visible: false },
+      lote: { visible: false },
+      fabricacao: { visible: false },
+      validade: { visible: false },
+      ph: { visible: false },
+      tipoUso: { visible: false },
+      aplicacao: { visible: false },
+      contem: { visible: false },
+      posologia: { visible: false },
+      observacoes: { visible: false },
+    }),
   },
 
   // Layout 4: A_PAC_GRAN (Ampola Pacote Grande) - 2 linhas
@@ -137,23 +132,19 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico', 'registro'], spacing: 'normal' },
     ],
-    campoConfig: {
-      paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
-      composicao: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      formula: { visible: false, fontSize: 10, bold: true, uppercase: true },
-      lote: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      fabricacao: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      validade: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      ph: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      tipoUso: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      aplicacao: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      contem: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
-      medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      posologia: { visible: false, fontSize: 9, bold: false, uppercase: false },
-      observacoes: { visible: false, fontSize: 9, bold: false, uppercase: false },
-    },
+    campoConfig: baseCampoConfig({
+      composicao: { visible: false },
+      formula: { visible: false },
+      lote: { visible: false },
+      fabricacao: { visible: false },
+      validade: { visible: false },
+      ph: { visible: false },
+      tipoUso: { visible: false },
+      aplicacao: { visible: false },
+      contem: { visible: false },
+      posologia: { visible: false },
+      observacoes: { visible: false },
+    }),
   },
 
   // Layout 5: TIRZ (Tirzepatida) - 7 linhas
@@ -170,23 +161,10 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       { id: 'linha6', campos: ['tipoUso', 'aplicacao'], spacing: 'normal' },
       { id: 'linha7', campos: ['contem', 'registro'], spacing: 'normal' },
     ],
-    campoConfig: {
-      paciente: { visible: true, fontSize: 10, bold: true, uppercase: true },
-      composicao: { visible: false, fontSize: 9, bold: false, uppercase: true },
-      requisicao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      formula: { visible: true, fontSize: 11, bold: true, uppercase: true },
-      lote: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      fabricacao: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      validade: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      ph: { visible: true, fontSize: 9, bold: false, uppercase: false },
-      tipoUso: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      aplicacao: { visible: true, fontSize: 9, bold: true, uppercase: true },
-      contem: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      registro: { visible: true, fontSize: 8, bold: false, uppercase: false },
-      medico: { visible: true, fontSize: 9, bold: false, uppercase: true },
-      posologia: { visible: true, fontSize: 9, bold: true, uppercase: true },
-      observacoes: { visible: false, fontSize: 8, bold: false, uppercase: false },
-    },
+    campoConfig: baseCampoConfig({
+      composicao: { visible: false },
+      observacoes: { visible: false },
+    }),
   },
 };
 
@@ -211,12 +189,10 @@ export const fieldLabels: Record<LabelFieldId, string> = {
 
 const STORAGE_KEY = 'label_layouts_v2';
 
-// Função auxiliar para deep clone
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
 }
 
-// Funções para persistência
 export function getLayouts(): Record<LayoutType, LayoutConfig> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -266,7 +242,6 @@ export function resetAllLayouts(): void {
   console.log('[Layouts] Todos layouts resetados');
 }
 
-// Layout selecionado atualmente
 const SELECTED_LAYOUT_KEY = 'selected_layout';
 
 export function getSelectedLayout(): LayoutType {
@@ -278,7 +253,7 @@ export function getSelectedLayout(): LayoutType {
   } catch (e) {
     console.error('Erro ao carregar layout selecionado:', e);
   }
-  return 'AMP_CX'; // Layout padrão agora é AMP_CX
+  return 'AMP_CX';
 }
 
 export function setSelectedLayout(tipo: LayoutType): void {
