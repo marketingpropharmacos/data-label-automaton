@@ -1,26 +1,89 @@
 
 
-# Correcao do Rotulo KIT - Req 6806-2
+# Correcao: OBSFIC para Kit Sinonimo
 
-## Status: IMPLEMENTADO ✓
+## Problema
 
-## Alterações Realizadas
+A funcao `extrair_composicao_componente` atual aplica filtros agressivos (is_ativo_mescla, is_embalagem_ou_obs, is_subtitulo_obs_ficha) projetados para extrair ingredientes individuais de mesclas. Para kits sinonimos, isso descarta o texto clinico/operacional que deveria aparecer no rotulo.
 
-### 1. `extrair_composicao_componente` - Fallback CDPRIN ✓
-- Função refatorada em duas: `extrair_composicao_componente` (wrapper com fallback) e `_extrair_composicao_por_codigo` (busca real)
-- Se CDPRO direto não encontra ativos, busca CDPRIN via FC03000 e tenta novamente
-- Garante que kits sinônimos exibam composição técnica em vez de nomes genéricos
+O resultado: composicao retorna vazio e o frontend faz fallback para o nome do produto (DESCR), que e incorreto para kits sinonimos.
 
-### 2. Aplicação para KITs ✓
-- Removida restrição `if not e_kit` na busca de aplicação (linha ~3780)
-- Agora `buscar_aplicacao_nao_kit()` é chamada para TODOS os tipos de item
-- KITs passam a exibir campos como "AP:MICROAGULHAMENTO"
+## Solucao
 
-### 3. Frontend - Sem alterações necessárias ✓
-- `LabelCard.tsx` já renderiza aplicacao, tipoUso, contem para KITs
-- O problema era dados vazios chegando do backend
+### 1. Nova funcao no backend: `extrair_obsfic_componente`
 
-## Próximos Passos
-- Reiniciar `servidor.py` no servidor local
-- Testar req 6806-2 e verificar composição, pH, aplicação
-- Verificar se tipoUso e contem estão populados no banco
+Criar uma funcao dedicada em `servidor.py` que busca as observacoes de ficha (OBSFIC) de um componente de kit **sem filtros de ingredientes**:
+
+```python
+def extrair_obsfic_componente(cursor, cdpro_comp):
+    """
+    Busca OBSFIC (observacoes de ficha) de um componente na FC99999.
+    Retorna o texto concatenado por ordem de SUBARGUM, sem filtragem de ativos.
+    Usado EXCLUSIVAMENTE para kits sinonimos.
+    """
+    cdpro_str = str(cdpro_comp).strip()
+    
+    # Busca com ARGUMENTO = 'OBSFIC<CDPRO>'
+    cursor.execute("""
+        SELECT PARAMETRO FROM FC99999 
+        WHERE ARGUMENTO STARTING WITH ?
+        ORDER BY SUBARGUM
+    """, (f'OBSFIC{cdpro_str}',))
+    
+    registros = cursor.fetchall()
+    
+    # Se nao encontrou, tenta com CDPRO padded
+    if not registros:
+        cdpro_padded = cdpro_str.zfill(8)
+        cursor.execute("""
+            SELECT PARAMETRO FROM FC99999 
+            WHERE ARGUMENTO STARTING WITH ?
+            ORDER BY SUBARGUM
+        """, (f'OBSFIC{cdpro_padded}',))
+        registros = cursor.fetchall()
+    
+    # Concatena textos, filtrando apenas linhas de aplicacao
+    textos = []
+    for reg in registros:
+        texto = reg[0]
+        if texto and hasattr(texto, 'read'):
+            texto = texto.read().decode('latin-1')
+        texto = texto.strip() if texto else ""
+        if texto and not texto.upper().startswith("APLICAC"):
+            textos.append(texto)
+    
+    return ", ".join(textos)
+```
+
+### 2. Alterar `montar_kit_expandido` para receber flag `e_sinonimo`
+
+Adicionar parametro `e_sinonimo` a funcao `montar_kit_expandido`. Quando `e_sinonimo=True`, usar `extrair_obsfic_componente` em vez de `extrair_composicao_componente` para cada componente.
+
+Nos dois blocos onde a composicao e buscada (linhas ~1142 e ~1167):
+
+```python
+if e_sinonimo:
+    composicao_comp = extrair_obsfic_componente(cursor, cdpro_comp)
+else:
+    composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+```
+
+### 3. Atualizar chamada de `montar_kit_expandido`
+
+Na chamada existente no loop principal (~linha 3730), passar o flag:
+
+```python
+kit_data = montar_kit_expandido(cursor, cdpro_resolvido, cdfrm, cdfil, nrrqu, serier, e_sinonimo)
+```
+
+### 4. Frontend - Sem alteracoes
+
+O `LabelCard.tsx` ja tem a logica correta: quando `eSinonimo=true`, usa `comp.composicao` (que agora tera o texto OBSFIC). Nenhuma mudanca necessaria no frontend.
+
+## Arquivos Modificados
+
+- `servidor.py` - nova funcao + alteracao em `montar_kit_expandido`
+
+## Resultado Esperado
+
+Kit sinonimo (req 6806-2) exibira o texto clinico das observacoes de ficha (ex: "ACIDO HIALURONICO N RETIC. 5MG") em vez do nome do produto (ex: "POLIREVITALIZANTE AC HIA 2").
