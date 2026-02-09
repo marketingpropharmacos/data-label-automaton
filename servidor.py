@@ -854,6 +854,7 @@ def extrair_composicao_componente(cursor, cdpro_comp):
     Extrai a composição (ativos) de um componente de kit.
     Busca PRIMEIRO na FC03300 (mesma fonte do fluxo principal),
     com fallback para FC99999.
+    Se não encontrar com CDPRO direto, tenta CDPRIN (código base via FC03000).
     
     Returns:
         string com ativos concatenados por vírgula, ou "" se não encontrar.
@@ -861,6 +862,39 @@ def extrair_composicao_componente(cursor, cdpro_comp):
     cdpro_str = str(cdpro_comp).strip()
     
     print(f"    [COMPOSICAO_COMP] Buscando ativos para CDPRO={cdpro_str}")
+    
+    # Tenta primeiro com CDPRO direto
+    resultado = _extrair_composicao_por_codigo(cursor, cdpro_str)
+    
+    if resultado:
+        return resultado
+    
+    # Fallback: busca CDPRIN do componente na FC03000
+    try:
+        cursor.execute("""
+            SELECT CDPRIN FROM FC03000 WHERE CDPRO = ? OR CDPRO = ?
+        """, (int(cdpro_str) if cdpro_str.isdigit() else 0, cdpro_str))
+        row = cursor.fetchone()
+        if row and row[0]:
+            cdprin_str = str(row[0]).strip()
+            if cdprin_str and cdprin_str != cdpro_str and cdprin_str != '0':
+                print(f"    [COMPOSICAO_COMP] Fallback: tentando CDPRIN={cdprin_str}")
+                resultado = _extrair_composicao_por_codigo(cursor, cdprin_str)
+                if resultado:
+                    return resultado
+    except Exception as e:
+        print(f"    [COMPOSICAO_COMP] Erro ao buscar CDPRIN: {e}")
+    
+    print(f"    [COMPOSICAO_COMP] ✗ Sem ativos encontrados (nem CDPRO nem CDPRIN)")
+    return ""
+
+
+def _extrair_composicao_por_codigo(cursor, cdpro_str):
+    """
+    Busca composição para um código específico (CDPRO ou CDPRIN).
+    Returns: string com ativos ou "" se não encontrar.
+    """
+    print(f"    [COMPOSICAO_COMP] Tentando código={cdpro_str}")
     
     try:
         # Converte para inteiro para compatibilidade com campos numéricos
@@ -3776,21 +3810,17 @@ def buscar_requisicao(nr_requisicao):
             # =====================================================
             # FC03300: Extrai APLICAÇÃO + OBSERVAÇÕES (ativos adicionais)
             # =====================================================
-            # APLICAÇÃO: usa busca específica apenas para NÃO-KIT
-            if not e_kit:
-                # Tenta busca específica para não-kit (OBSFIC + APLIC)
-                # REGRA DE OURO: Passa CDPRIN para mesclas usarem o código correto
-                aplicacao_nao_kit = buscar_aplicacao_nao_kit(cursor, cdpro, cdprin)
-                if aplicacao_nao_kit:
-                    aplicacao = aplicacao_nao_kit
-                    print(f"  [APLICAÇÃO] Usando busca não-kit: '{aplicacao}'")
-                else:
-                    # Fallback para busca já existente
-                    aplicacao = aplicacao_fc99999
-                    print(f"  [APLICAÇÃO] Usando fallback FC99999: '{aplicacao}'")
-            else:
-                # KIT: mantém comportamento atual (não alterar!)
+            # APLICAÇÃO: busca para TODOS os tipos (incluindo KIT)
+            aplicacao_nao_kit = buscar_aplicacao_nao_kit(cursor, cdpro, cdprin)
+            if aplicacao_nao_kit:
+                aplicacao = aplicacao_nao_kit
+                print(f"  [APLICAÇÃO] Usando busca OBSFIC: '{aplicacao}'")
+            elif aplicacao_fc99999:
                 aplicacao = aplicacao_fc99999
+                print(f"  [APLICAÇÃO] Usando fallback FC99999: '{aplicacao}'")
+            else:
+                aplicacao = ""
+                print(f"  [APLICAÇÃO] Nenhuma aplicação encontrada")
             
             descricao_produto = ""
             observacoes_fc03300 = []  # Lista de ativos/observações relevantes
