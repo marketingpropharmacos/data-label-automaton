@@ -851,79 +851,155 @@ def tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier):
 
 def extrair_composicao_componente(cursor, cdpro_comp):
     """
-    Extrai a composição (ativos) de um componente de kit via FC99999.
-    Reutiliza as funções is_embalagem_ou_obs() e is_ativo_mescla() já existentes.
+    Extrai a composição (ativos) de um componente de kit.
+    Busca PRIMEIRO na FC03300 (mesma fonte do fluxo principal),
+    com fallback para FC99999.
     
     Returns:
         string com ativos concatenados por vírgula, ou "" se não encontrar.
     """
     cdpro_str = str(cdpro_comp).strip()
-    cdpro_padded = cdpro_str.zfill(8)
     
     print(f"    [COMPOSICAO_COMP] Buscando ativos para CDPRO={cdpro_str}")
     
     try:
-        # Busca na FC99999 (mesmo padrão do loop principal)
-        cursor.execute("""
-            SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
-            FROM FC99999 
-            WHERE ARGUMENTO = ? 
-               OR ARGUMENTO = ?
-               OR ARGUMENTO = ?
-               OR ARGUMENTO = ?
-            ORDER BY SUBARGUM
-        """, (cdpro_str, cdpro_padded, f'OBSFIC{cdpro_str}', f'OBSFIC{cdpro_padded}'))
-        registros = cursor.fetchall()
+        # Converte para inteiro para compatibilidade com campos numéricos
+        try:
+            codigo_int = int(cdpro_str)
+        except:
+            codigo_int = 0
         
-        if not registros:
-            # Tenta CONTAINING como fallback
+        # =====================================================
+        # ESTRATÉGIA 1: FC03300 (fonte principal, mesma do fluxo de mesclas)
+        # =====================================================
+        # Verifica se FRFAR existe na FC03300
+        cursor.execute("""
+            SELECT 1 FROM RDB$RELATION_FIELDS 
+            WHERE RDB$RELATION_NAME = 'FC03300' AND RDB$FIELD_NAME = 'FRFAR'
+        """)
+        tem_frfar = cursor.fetchone() is not None
+        
+        if tem_frfar:
+            cursor.execute("""
+                SELECT FRFAR, CDICP, OBSER 
+                FROM FC03300 
+                WHERE CDPRO = ? OR CDPRO = ?
+                ORDER BY FRFAR, CDICP
+            """, (codigo_int, cdpro_str))
+        else:
+            cursor.execute("""
+                SELECT NULL AS FRFAR, CDICP, OBSER 
+                FROM FC03300 
+                WHERE CDPRO = ? OR CDPRO = ?
+                ORDER BY CDICP
+            """, (codigo_int, cdpro_str))
+        
+        registros_fc03300 = cursor.fetchall()
+        
+        ativos = []
+        if registros_fc03300:
+            print(f"    [COMPOSICAO_COMP] FC03300: {len(registros_fc03300)} registros encontrados")
+            for obs in registros_fc03300:
+                cdicp = str(obs[1]).strip().zfill(5)
+                texto = obs[2]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                texto = texto.strip() if texto else ""
+                
+                if not texto:
+                    continue
+                
+                texto_upper = texto.upper()
+                
+                # Ignora aplicação
+                texto_normalizado = ''.join(
+                    c for c in unicodedata.normalize('NFD', texto_upper) 
+                    if unicodedata.category(c) != 'Mn'
+                )
+                if 'APLICACAO:' in texto_normalizado or texto_upper.startswith("APLICAÇÃO:"):
+                    continue
+                
+                # Ignora descrição do produto (CDICP 00004)
+                if cdicp == '00004':
+                    continue
+                
+                # Filtra embalagem/obs
+                if is_embalagem_ou_obs(texto):
+                    continue
+                
+                # Ignora textos muito longos
+                if len(texto) > 200:
+                    continue
+                
+                # Remove prefixo CONTÉM:
+                texto_limpo = texto
+                if texto_upper.startswith("CONTÉM:"):
+                    texto_limpo = texto[7:].strip()
+                
+                # Valida se é ativo real
+                if not is_ativo_mescla(texto_limpo):
+                    continue
+                
+                if texto_limpo.strip() and texto_limpo.strip() not in ativos:
+                    ativos.append(texto_limpo.strip())
+        
+        # =====================================================
+        # ESTRATÉGIA 2: FC99999 (fallback)
+        # =====================================================
+        if not ativos:
+            cdpro_padded = cdpro_str.zfill(8)
             cursor.execute("""
                 SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
                 FROM FC99999 
-                WHERE ARGUMENTO CONTAINING ?
-                ORDER BY ARGUMENTO, SUBARGUM
-            """, (cdpro_str,))
+                WHERE ARGUMENTO = ? 
+                   OR ARGUMENTO = ?
+                   OR ARGUMENTO = ?
+                   OR ARGUMENTO = ?
+                ORDER BY SUBARGUM
+            """, (cdpro_str, cdpro_padded, f'OBSFIC{cdpro_str}', f'OBSFIC{cdpro_padded}'))
             registros = cursor.fetchall()
-        
-        ativos = []
-        for reg in registros:
-            texto = reg[2]
-            if texto and hasattr(texto, 'read'):
-                texto = texto.read().decode('latin-1')
-            texto = texto.strip() if texto else ""
             
-            if not texto:
-                continue
+            if not registros:
+                cursor.execute("""
+                    SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
+                    FROM FC99999 
+                    WHERE ARGUMENTO CONTAINING ?
+                    ORDER BY ARGUMENTO, SUBARGUM
+                """, (cdpro_str,))
+                registros = cursor.fetchall()
             
-            texto_upper = texto.upper()
-            
-            # Ignora se for aplicação
-            texto_norm = ''.join(
-                c for c in unicodedata.normalize('NFD', texto_upper) 
-                if unicodedata.category(c) != 'Mn'
-            )
-            if 'APLICACAO:' in texto_norm or 'APLICAÇÃO:' in texto_upper:
-                continue
-            
-            # Remove prefixo OBS:
-            texto_limpo = texto
-            if texto_upper.startswith("OBS:"):
-                texto_limpo = texto[4:].strip()
-            elif texto_upper.startswith("OBS :"):
-                texto_limpo = texto[5:].strip()
-            
-            # Filtra embalagem/obs
-            if is_embalagem_ou_obs(texto_limpo):
-                continue
-            
-            if not is_ativo_mescla(texto_limpo):
-                continue
-            
-            if is_subtitulo_obs_ficha(texto_limpo):
-                continue
-            
-            if texto_limpo.strip():
-                ativos.append(texto_limpo.strip())
+            for reg in registros:
+                texto = reg[2]
+                if texto and hasattr(texto, 'read'):
+                    texto = texto.read().decode('latin-1')
+                texto = texto.strip() if texto else ""
+                
+                if not texto:
+                    continue
+                
+                texto_upper = texto.upper()
+                texto_norm = ''.join(
+                    c for c in unicodedata.normalize('NFD', texto_upper) 
+                    if unicodedata.category(c) != 'Mn'
+                )
+                if 'APLICACAO:' in texto_norm or 'APLICAÇÃO:' in texto_upper:
+                    continue
+                
+                texto_limpo = texto
+                if texto_upper.startswith("OBS:"):
+                    texto_limpo = texto[4:].strip()
+                elif texto_upper.startswith("OBS :"):
+                    texto_limpo = texto[5:].strip()
+                
+                if is_embalagem_ou_obs(texto_limpo):
+                    continue
+                if not is_ativo_mescla(texto_limpo):
+                    continue
+                if is_subtitulo_obs_ficha(texto_limpo):
+                    continue
+                
+                if texto_limpo.strip() and texto_limpo.strip() not in ativos:
+                    ativos.append(texto_limpo.strip())
         
         composicao = ", ".join(ativos)
         if composicao:
