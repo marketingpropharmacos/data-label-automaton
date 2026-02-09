@@ -216,9 +216,11 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     const prescritor = formatarPrescritor();
     if (prescritor) lines.push(prescritor);
     
-    // Linhas de componentes do kit (nome + metadados na linha seguinte)
+    // Linhas de componentes do kit (composição ou nome + metadados na linha seguinte)
     rotulo.componentes.forEach((comp) => {
-      lines.push(formatarNomeComponente(comp.nome));
+      // Se tem composição (ativos extraídos), usa ela; senão usa o nome do produto
+      const nomeExibicao = comp.composicao || formatarNomeComponente(comp.nome);
+      lines.push(nomeExibicao);
       const metaLine: string[] = [];
       if (comp.ph) metaLine.push(`pH:${comp.ph}`);
       if (comp.lote) metaLine.push(`L:${comp.lote}`);
@@ -428,11 +430,11 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         {/* Prescritor (segundo) */}
         <div className="text-[9px] leading-tight uppercase">{formatarPrescritor()}</div>
         
-        {/* Lista de componentes do kit: nome na linha, metadados na seguinte */}
+        {/* Lista de componentes do kit: composição/nome na linha, metadados na seguinte */}
         {rotulo.componentes.map((comp, idx) => (
           <div key={idx} className="mt-0.5">
             <div className="text-[9px] leading-tight font-semibold uppercase">
-              {formatarNomeComponente(comp.nome)}
+              {comp.composicao || formatarNomeComponente(comp.nome)}
             </div>
             <div className="text-[9px] leading-tight flex flex-wrap gap-1">
               {comp.ph && <span>pH:{comp.ph}</span>}

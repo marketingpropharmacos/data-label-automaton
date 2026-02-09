@@ -849,6 +849,116 @@ def tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier):
         return []
 
 
+def extrair_composicao_componente(cursor, cdpro_comp):
+    """
+    Extrai a composição (ativos) de um componente de kit via FC99999.
+    Reutiliza as funções is_embalagem_ou_obs() e is_ativo_mescla() já existentes.
+    
+    Returns:
+        string com ativos concatenados por vírgula, ou "" se não encontrar.
+    """
+    cdpro_str = str(cdpro_comp).strip()
+    cdpro_padded = cdpro_str.zfill(8)
+    
+    print(f"    [COMPOSICAO_COMP] Buscando ativos para CDPRO={cdpro_str}")
+    
+    try:
+        # Busca na FC99999 (mesmo padrão do loop principal)
+        cursor.execute("""
+            SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
+            FROM FC99999 
+            WHERE ARGUMENTO = ? 
+               OR ARGUMENTO = ?
+               OR ARGUMENTO = ?
+               OR ARGUMENTO = ?
+            ORDER BY SUBARGUM
+        """, (cdpro_str, cdpro_padded, f'OBSFIC{cdpro_str}', f'OBSFIC{cdpro_padded}'))
+        registros = cursor.fetchall()
+        
+        if not registros:
+            # Tenta CONTAINING como fallback
+            cursor.execute("""
+                SELECT ARGUMENTO, SUBARGUM, PARAMETRO, DESCRPAR 
+                FROM FC99999 
+                WHERE ARGUMENTO CONTAINING ?
+                ORDER BY ARGUMENTO, SUBARGUM
+            """, (cdpro_str,))
+            registros = cursor.fetchall()
+        
+        ativos = []
+        for reg in registros:
+            texto = reg[2]
+            if texto and hasattr(texto, 'read'):
+                texto = texto.read().decode('latin-1')
+            texto = texto.strip() if texto else ""
+            
+            if not texto:
+                continue
+            
+            texto_upper = texto.upper()
+            
+            # Ignora se for aplicação
+            texto_norm = ''.join(
+                c for c in unicodedata.normalize('NFD', texto_upper) 
+                if unicodedata.category(c) != 'Mn'
+            )
+            if 'APLICACAO:' in texto_norm or 'APLICAÇÃO:' in texto_upper:
+                continue
+            
+            # Remove prefixo OBS:
+            texto_limpo = texto
+            if texto_upper.startswith("OBS:"):
+                texto_limpo = texto[4:].strip()
+            elif texto_upper.startswith("OBS :"):
+                texto_limpo = texto[5:].strip()
+            
+            # Filtra embalagem/obs
+            if is_embalagem_ou_obs(texto_limpo):
+                continue
+            
+            if not is_ativo_mescla(texto_limpo):
+                continue
+            
+            if is_subtitulo_obs_ficha(texto_limpo):
+                continue
+            
+            if texto_limpo.strip():
+                ativos.append(texto_limpo.strip())
+        
+        composicao = ", ".join(ativos)
+        if composicao:
+            print(f"    [COMPOSICAO_COMP] ✓ Encontrou: '{composicao[:80]}...'")
+        else:
+            print(f"    [COMPOSICAO_COMP] ✗ Sem ativos encontrados")
+        
+        return composicao
+        
+    except Exception as e:
+        print(f"    [COMPOSICAO_COMP ERRO] {e}")
+        return ""
+
+
+def buscar_ph_componente(cursor, cdpro_comp, cdfil):
+    """
+    Busca pH de um componente na FC06100.
+    Returns: string com valor do pH ou "".
+    """
+    try:
+        cursor.execute("""
+            SELECT FIRST 1 PH FROM FC06100
+            WHERE CDPRO = ? AND CDFIL = ?
+            ORDER BY DTVAL DESC
+        """, (int(cdpro_comp), int(cdfil)))
+        row = cursor.fetchone()
+        if row and row[0]:
+            ph_val = str(row[0]).strip()
+            if ph_val and ph_val != '0':
+                return ph_val
+    except Exception as e:
+        print(f"    [PH_COMP] Erro ao buscar pH para {cdpro_comp}: {e}")
+    return ""
+
+
 def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
     """
     Função principal para montar o kit expandido.
@@ -919,12 +1029,18 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
                 fab_str = lote_data.get("dtFab", "")
                 val_str = lote_data.get("dtVal", "")
             
+            # Busca composição (ativos) e pH do componente
+            composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+            ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
+            
             componentes_final.append({
                 "cdpro": cdpro_comp,
                 "descr": comp.get("descr", ""),
                 "lote": lote_final,
                 "dtFab": fab_str,
-                "dtVal": val_str
+                "dtVal": val_str,
+                "composicao": composicao_comp,
+                "ph": ph_comp
             })
     else:
         # FALLBACK: Busca componentes via FC05100
@@ -937,12 +1053,18 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None):
             # Resolve lote via FC03140
             lote_data = resolve_lote_componente(cursor, cdfil, cdpro_comp)
             
+            # Busca composição (ativos) e pH do componente
+            composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+            ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
+            
             componentes_final.append({
                 "cdpro": cdpro_comp,
                 "descr": comp.get("descr", "") or comp.get("nomred", ""),
                 "lote": lote_data.get("lote", ""),
                 "dtFab": lote_data.get("dtFab", ""),
-                "dtVal": lote_data.get("dtVal", "")
+                "dtVal": lote_data.get("dtVal", ""),
+                "composicao": composicao_comp,
+                "ph": ph_comp
             })
     
     print(f"  [MONTAR_KIT] Kit montado com {len(componentes_final)} componentes")
@@ -3482,7 +3604,8 @@ def buscar_requisicao(nr_requisicao):
                         "ph": comp.get("ph", ""),
                         "lote": comp.get("lote", ""),
                         "fabricacao": comp.get("dtFab", ""),
-                        "validade": comp.get("dtVal", "")
+                        "validade": comp.get("dtVal", ""),
+                        "composicao": comp.get("composicao", "")
                     })
                 print(f"  [KIT] ✓ SERIER={serier} detectado via FC05000.CDSAC com {len(componentes_kit)} componentes")
             else:

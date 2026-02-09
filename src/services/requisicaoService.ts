@@ -15,6 +15,7 @@ const mapearComponenteKit = (comp: any) => ({
   lote: comp.lote || "",
   fabricacao: comp.fabricacao || "",
   validade: comp.validade || "",
+  composicao: comp.composicao || "",
 });
 
 // Mapeia cada fórmula da API para um rótulo
