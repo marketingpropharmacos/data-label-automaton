@@ -1,16 +1,24 @@
 
 
-# Correcao da Renderizacao de KIT no Rotulo AMP.CX
+# Correcao do Rotulo KIT - Req 6806-2
 
-## Problema
-O rotulo de KIT esta quase correto apos a resolucao de sinonimos, porem faltam informacoes comparado com o sistema original do FormulaCerta. A imagem de referencia mostra o formato correto para Req 392-6806 -2.
+## Problema Atual
 
-## Diferencas Identificadas (referencia vs codigo atual)
+O rotulo atual mostra:
+```
+LENIE ANTONIA ALVES DE SOUZA          REQ:6806-2
+DR. LENIE ANTONIA ALVES DE SOUZA - COREN 826211/SP
+POLIREVITALIZANTE AC HIA 2
+L:12012 F:12/25 V:12/26
+REVITALIZANTE DESPIGMENT
+L:705 F:01/26 V:01/27
+REG:15079
+```
 
-Referencia do FormulaCerta:
-```text
-LENIE ANTONIA ALVES DE SOUZA    REQ:006806-2
-DR(A)LENIE ANTONIA A.DE SOUZA    COREN-SP-826211
+O correto (referencia FormulaCerta) e:
+```
+LENIE ANTONIA ALVES DE SOUZA          REQ:006806-2
+DR(A) LENIE ANTONIA A.DE SOUZA  COREN-SP-826211
 ACIDO HIALURONICO N RETIC. 5MG
 pH:6,0  L:12012/25   F:12/25  V:12/26
 ACIDO TRANEXAMICO 8MG, TGP2 20MG, BELIDES 2%
@@ -20,74 +28,60 @@ USO EM CONSULTORIO  AP:MICROAGULHAMENTO
 CONTEM: 4FR. DE 2ML   REG:15081
 ```
 
-### Problemas encontrados:
+## Diferencas Identificadas
 
-1. **Fabricacao (F:) ausente nos componentes do kit** - O frontend (`renderKitContent`) exibe lote e validade mas NAO exibe a fabricacao de cada componente, embora o backend envie `comp.fabricacao`.
+1. **Nomes de componentes em vez de composicao** - Mostra "POLIREVITALIZANTE AC HIA 2" em vez de "ACIDO HIALURONICO N RETIC. 5MG". Isso indica que `eSinonimo` nao esta sendo detectado corretamente, ou que `extrair_composicao_componente` esta retornando vazio para esses produtos.
 
-2. **pH dos componentes sempre vazio** - No backend (linha 3469), o pH e hardcoded como `""` com comentario "sera preenchido manualmente". A referencia mostra pH individual por componente (6,0 e 6,5).
+2. **pH ausente** - Nao aparece "pH:6,0" nem "pH:6,5". A funcao `buscar_ph_componente` pode estar falhando ou o campo esta vazio no banco.
 
-3. **Tipo de Uso (USO EM CONSULTORIO) ausente** - O `renderKitContent` nao exibe o campo `tipoUso`, mas a referencia mostra na penultima linha.
+3. **Tipo de Uso ausente** - "USO EM CONSULTORIO" nao aparece. O campo `tipoUso` provavelmente esta vazio ou numerico (filtrado pela validacao).
 
-4. **CONTEM ausente** - O `renderKitContent` nao exibe o campo `contem` ("4FR. DE 2ML"), mas a referencia mostra na ultima linha junto com REG.
+4. **Aplicacao ausente** - "AP:MICROAGULHAMENTO" nao aparece. O campo `aplicacao` provavelmente esta vazio no rotulo do kit.
 
-5. **Formato AP: vs APLICACAO:** - A referencia usa "AP:MICROAGULHAMENTO" (abreviado na mesma linha do tipoUso), nao "APLICACAO:" em linha separada.
+5. **CONTEM ausente** - "4FR. DE 2ML" nao aparece. O campo `contem` provavelmente esta vazio.
 
-## Alteracoes Necessarias
+6. **Formato do lote** - Referencia mostra "L:12012/25" (com /25), codigo atual mostra "L:12012" (sem sufixo).
 
-### 1. Frontend: `src/components/LabelCard.tsx` - renderKitContent()
+## Acoes de Diagnostico e Correcao
 
-Adicionar os campos ausentes na renderizacao de KIT:
-- Incluir `comp.fabricacao` (F:) na linha de cada componente
-- Adicionar linha de `tipoUso` + `aplicacao` (formato: "USO EM CONSULTORIO  AP:MICROAGULHAMENTO")
-- Adicionar `contem` na mesma linha do registro (formato: "CONTEM: 4FR. DE 2ML   REG:15081")
+### 1. Backend - Diagnostico via logs do terminal
 
-### 2. Frontend: `src/components/LabelCard.tsx` - generateKitText()
+Ao buscar req 6806-2, verificar nos logs do `servidor.py`:
+- Se `[SINONIMO] Kit sinonimo detectado` aparece (confirma `eSinonimo=true`)
+- Se `[COMPOSICAO_COMP] Buscando ativos para CDPRO=X` retorna resultados
+- Se `buscar_ph_componente` encontra dados na FC06100
 
-Atualizar o texto de edicao livre para incluir:
-- Fabricacao na linha de metadados de cada componente
-- tipoUso + aplicacao na mesma linha
-- contem + registro na mesma linha
+### 2. Backend - Correcao da composicao (`servidor.py`)
 
-### 3. Backend: `servidor.py` - Mapeamento de componentes (linha 3469)
+Se `extrair_composicao_componente` retorna vazio, pode ser porque:
+- O CDPRO do componente na FC05100 nao tem registros na FC03300/FC99999
+- Precisa usar CDPRIN do componente em vez de CDPRO direto
 
-O pH esta hardcoded como vazio. Verificar se o `kit_expandido` ja traz pH dos componentes ou se e necessario buscar. Se o campo existir no backend, mapear corretamente em vez de forcar "".
+**Correcao**: Na funcao `extrair_composicao_componente`, adicionar fallback buscando pelo CDPRIN do componente (via FC03000) se a busca direta por CDPRO retornar vazio.
+
+### 3. Backend - Campos tipoUso, aplicacao, contem no KIT
+
+Verificar se estes campos estao sendo incluidos no rotulo de KIT. Atualmente o `dados_base` do cabecalho da requisicao ja traz `tipoUso`, mas para KITs o campo `aplicacao` e extraido da FC03300 apenas para nao-KITs (linha 3780: `if not e_kit`).
+
+**Correcao**: Garantir que `aplicacao` tambem e extraida para KITs, ou buscar a aplicacao do produto principal do kit.
+
+### 4. Frontend - Sem alteracoes necessarias
+
+A logica de renderizacao em `LabelCard.tsx` ja esta correta (renderKitContent ja suporta pH, tipoUso, aplicacao, contem). O problema e que os dados estao chegando vazios do backend.
 
 ## Detalhes Tecnicos
 
-### LabelCard.tsx - renderKitContent (linhas 402-446)
+### servidor.py - Alteracao 1: Aplicacao para KITs (linha ~3780)
 
-Estrutura atual:
-```
-Prescritor
-Paciente | REQ
----
-Componente1 pH L: V:
-Componente2 pH L: V:
----
-APLICACAO: xxx
-REG: xxx
-```
+Remover a condicao `if not e_kit` da busca de aplicacao na FC03300, ou adicionar busca separada de aplicacao para KITs usando o CDPRO original (ou resolvido).
 
-Estrutura corrigida (conforme referencia):
-```
-Paciente | REQ
-Prescritor
-Componente1
-pH:x,x  L:xxx  F:mm/aa  V:mm/aa
-Componente2
-pH:x,x  L:xxx  F:mm/aa  V:mm/aa
-TIPO_USO  AP:xxx
-CONTEM: xxx   REG:xxx
-```
+### servidor.py - Alteracao 2: Composicao do componente com fallback CDPRIN
 
-Mudancas especificas:
-- Inverter ordem: Paciente primeiro, Prescritor segundo (conforme referencia)
-- Separar nome do componente dos metadados (nome em uma linha, pH/L/F/V na linha seguinte)
-- Adicionar `comp.fabricacao` com formato `F:mm/aa`
-- Adicionar linha `tipoUso` + `AP:aplicacao` (juntos, sem "APLICACAO:", usar "AP:")
-- Adicionar linha `CONTEM: xxx   REG:xxxxx` (juntos na mesma linha)
+Na funcao `extrair_composicao_componente`, apos falhar com CDPRO direto:
+1. Buscar CDPRIN do componente na FC03000
+2. Se CDPRIN diferente, repetir busca FC03300/FC99999 com CDPRIN
 
-### servidor.py - pH dos componentes (linha 3469)
+### servidor.py - Alteracao 3: Campos contem e tipoUso
 
-Verificar se `comp.get("ph", "")` existe nos dados do kit_expandido. Se nao existir no backend, manter vazio (editavel manualmente). Se existir, mapear corretamente.
+Verificar se `tipoUso` do cabecalho esta sendo mapeado para o rotulo de KIT (deve ja estar em `dados_base`). O campo `contem` geralmente e manual (editavel pelo usuario), entao pode ficar vazio por padrao.
 
