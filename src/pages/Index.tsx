@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Printer, CheckSquare, Square, Settings, Edit, LogOut } from "lucide-react";
+import { Printer, CheckSquare, Square, Settings, Edit, LogOut, ChevronDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import SearchRequisition from "@/components/SearchRequisition";
 import LabelCard from "@/components/LabelCard";
 import LayoutSelector from "@/components/LayoutSelector";
@@ -15,6 +16,7 @@ import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from
 import { buscarRequisicao, imprimirRotulos } from "@/services/requisicaoService";
 import { imprimirViaAgente } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
+import { listarImpressoras } from "@/services/printAgentService";
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
 
 const Index = () => {
@@ -28,8 +30,23 @@ const Index = () => {
   const [layoutType, setLayoutType] = useState<LayoutType>(getSelectedLayout());
   const [layoutConfig, setLayoutConfig] = useState<LayoutConfig>(getLayout(layoutType));
   const [editorOpen, setEditorOpen] = useState(false);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>("");
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const { toast } = useToast();
   const { isAdmin, signOut, user } = useAuth();
+
+  // Carregar impressoras do agente
+  useEffect(() => {
+    const agentConfig = getPrintAgentConfig();
+    if (agentConfig.enabled && agentConfig.agentUrl) {
+      setSelectedPrinter(agentConfig.impressora || "");
+      listarImpressoras(agentConfig.agentUrl).then(result => {
+        if (result.success && result.data) {
+          setAvailablePrinters(result.data.impressoras);
+        }
+      });
+    }
+  }, []);
 
   // Resetar layouts ao inicializar para aplicar mudanças recentes
   useEffect(() => {
@@ -142,9 +159,10 @@ const Index = () => {
     let result;
     
     if (agentConfig.enabled) {
-      // Usa agente HTTP local
+      // Usa agente HTTP local — com impressora selecionada na tela
+      const configComImpressora = { ...agentConfig, impressora: selectedPrinter || agentConfig.impressora };
       result = await imprimirViaAgente(
-        agentConfig,
+        configComImpressora,
         rotulosSelecionados,
         layoutType,
         farmaciaData
@@ -268,6 +286,21 @@ const Index = () => {
                     <Square className="h-4 w-4 mr-1" />
                     <span className="hidden sm:inline">Limpar</span>
                   </Button>
+                  {availablePrinters.length > 0 && (
+                    <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
+                      <SelectTrigger className="w-[180px] h-8 text-xs">
+                        <Printer className="h-3.5 w-3.5 mr-1 shrink-0" />
+                        <SelectValue placeholder="Impressora" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover">
+                        {availablePrinters.map((printer) => (
+                          <SelectItem key={printer} value={printer}>
+                            {printer}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button 
                     size="sm" 
                     onClick={handlePrint}
