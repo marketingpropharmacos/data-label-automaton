@@ -228,6 +228,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       if (comp.lote) metaLine.push(`L:${comp.lote}`);
       if (comp.fabricacao) metaLine.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) metaLine.push(`V:${formatarDataCurta(comp.validade)}`);
+      if (comp.aplicacao) metaLine.push(`AP:${comp.aplicacao}`);
       if (metaLine.length > 0) lines.push(metaLine.join("  "));
     });
     
@@ -445,6 +446,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
               {comp.lote && <span>L:{comp.lote}</span>}
               {comp.fabricacao && <span>F:{formatarDataCurta(comp.fabricacao)}</span>}
               {comp.validade && <span>V:{formatarDataCurta(comp.validade)}</span>}
+              {comp.aplicacao && <span>AP:{comp.aplicacao}</span>}
             </div>
           </div>
         ))}

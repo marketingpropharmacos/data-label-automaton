@@ -59,6 +59,7 @@ export interface ComponenteKit {
   fabricacao: string;
   validade: string;
   composicao?: string;  // Ativos extraídos da FC99999 (ex: "ACIDO TRANEXAMICO 8MG, TGP2 20MG")
+  aplicacao?: string;   // Aplicação extraída da OBSFIC (ex: "MICROAGULHAMENTO")
 }
 
 export interface FieldPosition {

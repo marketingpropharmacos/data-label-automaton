@@ -877,19 +877,30 @@ def extrair_obsfic_componente(cursor, cdpro_comp):
         """, (f'OBSFIC{cdpro_padded}',))
         registros = cursor.fetchall()
     
-    # Concatena textos, filtrando apenas linhas de aplicacao
+    # Concatena textos, separando linhas de aplicacao
     textos = []
+    aplicacao_comp = ""
     for reg in registros:
         texto = reg[0]
         if texto and hasattr(texto, 'read'):
             texto = texto.read().decode('latin-1')
         texto = texto.strip() if texto else ""
-        if texto and not texto.upper().startswith("APLICAC"):
+        if not texto:
+            continue
+        # Normaliza acentos para comparar (APLICAÇÃO -> APLICACAO)
+        texto_norm = norm_texto(texto.upper())
+        if texto_norm.startswith("APLIC") or "APLICAC" in texto_norm:
+            # Extrai valor após ":"
+            if ":" in texto:
+                aplicacao_comp = texto.split(":", 1)[1].strip()
+            print(f"    [OBSFIC_COMP] Aplicação extraída: {aplicacao_comp}")
+        else:
             textos.append(texto)
     
-    resultado = ", ".join(textos)
-    print(f"    [OBSFIC_COMP] {'✓' if resultado else '✗'} Resultado: {resultado[:80] if resultado else 'vazio'}")
-    return resultado
+    composicao = ", ".join(textos)
+    print(f"    [OBSFIC_COMP] {'✓' if composicao else '✗'} Composição: {composicao[:80] if composicao else 'vazio'}")
+    print(f"    [OBSFIC_COMP] Aplicação: {aplicacao_comp or 'nenhuma'}")
+    return {"composicao": composicao, "aplicacao": aplicacao_comp}
 
 
 def extrair_composicao_componente(cursor, cdpro_comp):
@@ -1184,9 +1195,12 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinoni
             
             # Busca composição: OBSFIC para sinônimo, ativos para kit normal
             if e_sinonimo:
-                composicao_comp = extrair_obsfic_componente(cursor, cdpro_comp)
+                obsfic_data = extrair_obsfic_componente(cursor, cdpro_comp)
+                composicao_comp = obsfic_data["composicao"]
+                aplicacao_comp = obsfic_data["aplicacao"]
             else:
                 composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+                aplicacao_comp = ""
             ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
             
             componentes_final.append({
@@ -1196,6 +1210,7 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinoni
                 "dtFab": fab_str,
                 "dtVal": val_str,
                 "composicao": composicao_comp,
+                "aplicacao": aplicacao_comp,
                 "ph": ph_comp
             })
     else:
@@ -1211,9 +1226,12 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinoni
             
             # Busca composição (ativos) e pH do componente
             if e_sinonimo:
-                composicao_comp = extrair_obsfic_componente(cursor, cdpro_comp)
+                obsfic_data = extrair_obsfic_componente(cursor, cdpro_comp)
+                composicao_comp = obsfic_data["composicao"]
+                aplicacao_comp = obsfic_data["aplicacao"]
             else:
                 composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+                aplicacao_comp = ""
             ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
             
             componentes_final.append({
@@ -1223,6 +1241,7 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinoni
                 "dtFab": lote_data.get("dtFab", ""),
                 "dtVal": lote_data.get("dtVal", ""),
                 "composicao": composicao_comp,
+                "aplicacao": aplicacao_comp,
                 "ph": ph_comp
             })
     
