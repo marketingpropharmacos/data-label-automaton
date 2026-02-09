@@ -228,7 +228,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
       if (comp.lote) metaLine.push(`L:${comp.lote}`);
       if (comp.fabricacao) metaLine.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) metaLine.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (comp.aplicacao) metaLine.push(`AP:${comp.aplicacao}`);
+      if (comp.aplicacao) metaLine.push(`APLICAÇÃO:${comp.aplicacao}`);
       if (metaLine.length > 0) lines.push(metaLine.join("  "));
     });
     
@@ -238,7 +238,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
     const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
     const usoApLine: string[] = [];
     if (tipoUsoValido) usoApLine.push(tipoUsoValido);
-    if (aplicacao) usoApLine.push(`AP:${aplicacao}`);
+    if (aplicacao) usoApLine.push(`APLICAÇÃO:${aplicacao}`);
     if (usoApLine.length > 0) lines.push(usoApLine.join("  "));
     
     // Contém + Registro (mesma linha)
@@ -446,7 +446,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
               {comp.lote && <span>L:{comp.lote}</span>}
               {comp.fabricacao && <span>F:{formatarDataCurta(comp.fabricacao)}</span>}
               {comp.validade && <span>V:{formatarDataCurta(comp.validade)}</span>}
-              {comp.aplicacao && <span>AP:{comp.aplicacao}</span>}
+              {comp.aplicacao && <span>APLICAÇÃO:{comp.aplicacao}</span>}
             </div>
           </div>
         ))}
@@ -454,7 +454,7 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
         {/* Tipo de Uso + Aplicação (mesma linha) */}
         {(tipoUsoValido || aplicacao) && (
           <div className="text-[9px] leading-tight uppercase">
-            {tipoUsoValido}{tipoUsoValido && aplicacao ? '  ' : ''}{aplicacao ? `AP:${aplicacao}` : ''}
+            {tipoUsoValido}{tipoUsoValido && aplicacao ? '  ' : ''}{aplicacao ? `APLICAÇÃO:${aplicacao}` : ''}
           </div>
         )}
         
