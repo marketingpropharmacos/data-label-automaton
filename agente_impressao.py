@@ -289,7 +289,7 @@ def teste_impressao():
 
 @app.route('/imprimir', methods=['POST'])
 def imprimir():
-    """Recebe JSON com dados dos rótulos e imprime via PPLB."""
+    """Recebe JSON com dados dos rótulos e imprime via PPLB em um único job."""
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "Nenhum dado recebido"}), 400
@@ -303,27 +303,29 @@ def imprimir():
         return jsonify({"success": False, "error": "Nenhum rótulo para imprimir"}), 400
 
     gerador = GERADORES_PPLB.get(layout_tipo, gerar_pplb_ampcx)
-    impressos = 0
-    erros = []
 
+    # Concatenar TODOS os comandos PPLB em uma única string
+    comandos_todos = ""
+    erros_geracao = []
     for rotulo in rotulos:
         try:
             comandos = gerador(rotulo, farmacia)
-            print(f"[AGENTE] Imprimindo rótulo {rotulo.get('id', '?')} layout={layout_tipo} impressora={impressora}")
-            resultado = enviar_para_impressora(impressora, comandos)
-            if resultado["success"]:
-                impressos += 1
-            else:
-                erros.append(f"Rótulo {rotulo.get('id', '?')}: {resultado['error']}")
+            comandos_todos += comandos
+            print(f"[AGENTE] Rótulo {rotulo.get('id', '?')} layout={layout_tipo} adicionado ao batch")
         except Exception as e:
-            erros.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
+            erros_geracao.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
 
-    if impressos == len(rotulos):
-        return jsonify({"success": True, "impressos": impressos})
-    elif impressos > 0:
-        return jsonify({"success": True, "impressos": impressos, "erros": erros})
+    if not comandos_todos:
+        return jsonify({"success": False, "error": "Nenhum comando gerado", "erros": erros_geracao}), 500
+
+    # Enviar TUDO em um único job de impressão
+    print(f"[AGENTE] Enviando batch de {len(rotulos)} rótulos para '{impressora}'")
+    resultado = enviar_para_impressora(impressora, comandos_todos)
+
+    if resultado["success"]:
+        return jsonify({"success": True, "impressos": len(rotulos) - len(erros_geracao), "erros": erros_geracao if erros_geracao else None})
     else:
-        return jsonify({"success": False, "error": "Nenhum rótulo impresso", "erros": erros}), 500
+        return jsonify({"success": False, "error": resultado["error"], "erros": erros_geracao}), 500
 
 
 if __name__ == '__main__':
