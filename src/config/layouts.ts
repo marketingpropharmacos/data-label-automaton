@@ -63,7 +63,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   AMP_CX: {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
-    dimensoes: { larguraMM: 60, alturaMM: 10 },
+    dimensoes: { larguraMM: 109, alturaMM: 25 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
@@ -82,7 +82,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   AMP10: {
     tipo: 'AMP10',
     nome: 'Ampola 10',
-    dimensoes: { larguraMM: 54, alturaMM: 12 },
+    dimensoes: { larguraMM: 89, alturaMM: 38 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
@@ -103,7 +103,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   A_PAC_PEQ: {
     tipo: 'A_PAC_PEQ',
     nome: 'Ampola Pacote Pequeno',
-    dimensoes: { larguraMM: 50, alturaMM: 20 },
+    dimensoes: { larguraMM: 35, alturaMM: 25 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
@@ -128,7 +128,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   A_PAC_GRAN: {
     tipo: 'A_PAC_GRAN',
     nome: 'Ampola Pacote Grande',
-    dimensoes: { larguraMM: 100, alturaMM: 25 },
+    dimensoes: { larguraMM: 35, alturaMM: 25 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico', 'registro'], spacing: 'normal' },
@@ -152,7 +152,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   TIRZ: {
     tipo: 'TIRZ',
     nome: 'Tirzepatida',
-    dimensoes: { larguraMM: 76, alturaMM: 35 },
+    dimensoes: { larguraMM: 109, alturaMM: 25 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
