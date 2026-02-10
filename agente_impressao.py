@@ -38,15 +38,19 @@ def pplb_text(rot, font, wmult, hmult, y, x, data):
     return f"1{rot}{font}{wmult}{hmult}{y:05d}{x:05d}{data}"
 
 
-def pplb_label(linhas):
+def pplb_label(linhas, largura_dots=608, altura_dots=280, gap_dots=24):
     """
-    Monta um label PPLB completo.
-    linhas = lista de strings (cada uma é um comando PPLB de texto/barcode)
+    Monta um label PPLB completo com dimensões explícitas.
+    largura_dots = largura da etiqueta em dots
+    altura_dots = altura da etiqueta em dots
+    gap_dots = espaço entre etiquetas em dots
     """
     partes = [
-        "\x02L",       # STX + início do label
-        "H10",         # Heat setting
-        "D11",         # Density
+        "\x02L",                        # STX + início do label
+        "H10",                          # Heat setting
+        "D11",                          # Density
+        f"q{largura_dots}",             # Largura da etiqueta
+        f"Q{altura_dots},{gap_dots}",   # Altura + gap
     ]
     partes.extend(linhas)
     partes.append("E")  # Fim / imprimir
@@ -59,8 +63,8 @@ def pplb_label(linhas):
 # Argox OS-2140 @ 203dpi: 76mm ≈ 608 dots, 35mm ≈ 280 dots
 
 def gerar_pplb_ampcx(rotulo, farmacia):
-    """Layout AMP_CX (76x35mm) - 7 linhas"""
-    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    """Layout AMP_CX (4.3x1 pol = 873x203 dots) - 8 linhas, LPP=8"""
+    paciente = (rotulo.get('nomePaciente', '') or '')[:17].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
@@ -71,21 +75,22 @@ def gerar_pplb_ampcx(rotulo, farmacia):
     contem = (rotulo.get('contem', '') or '')[:30].upper()
     registro = rotulo.get('numeroRegistro', '')
 
+    # 8 linhas em 203 dots de altura, ~25 dots por linha
     return pplb_label([
-        pplb_text(1, 2, 1, 1, 10, 10, paciente),
-        pplb_text(1, 2, 1, 1, 10, 450, f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 50, 10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 80, 10, composicao),
-        pplb_text(1, 2, 1, 1, 115, 10, linha_meta),
-        pplb_text(1, 2, 1, 1, 145, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 175, 10, f"CONTEM: {contem}"),
-        pplb_text(1, 2, 1, 1, 205, 10, f"Reg: {registro}"),
-    ])
+        pplb_text(1, 2, 1, 1, 5,   10, paciente),
+        pplb_text(1, 2, 1, 1, 5,  450, f"REQ:{nr_req}-{nr_item}"),
+        pplb_text(1, 2, 1, 1, 30,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
+        pplb_text(1, 2, 1, 1, 55,  10, composicao),
+        pplb_text(1, 2, 1, 1, 80,  10, linha_meta),
+        pplb_text(1, 2, 1, 1, 105, 10, f"APLICACAO: {aplicacao}"),
+        pplb_text(1, 2, 1, 1, 130, 10, f"CONTEM: {contem}"),
+        pplb_text(1, 2, 1, 1, 155, 10, f"Reg: {registro}"),
+    ], largura_dots=873, altura_dots=203, gap_dots=24)
 
 
 def gerar_pplb_amp10(rotulo, farmacia):
-    """Layout AMP10 (76x35mm) - 7 linhas, registro na linha 5"""
-    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    """Layout AMP10 (3.5x1.5 pol = 711x305 dots) - 8 linhas, LPP=8"""
+    paciente = (rotulo.get('nomePaciente', '') or '')[:17].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
@@ -96,52 +101,59 @@ def gerar_pplb_amp10(rotulo, farmacia):
     aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
     contem = (rotulo.get('contem', '') or '')[:30].upper()
 
+    # 8 linhas em 305 dots de altura, ~38 dots por linha
     return pplb_label([
-        pplb_text(1, 2, 1, 1, 10, 10, paciente),
-        pplb_text(1, 2, 1, 1, 10, 450, f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 50, 10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 80, 10, composicao),
-        pplb_text(1, 2, 1, 1, 115, 10, linha_meta),
+        pplb_text(1, 2, 1, 1, 5,   10, paciente),
+        pplb_text(1, 2, 1, 1, 5,  400, f"REQ:{nr_req}-{nr_item}"),
+        pplb_text(1, 2, 1, 1, 40,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
+        pplb_text(1, 2, 1, 1, 75,  10, composicao),
+        pplb_text(1, 2, 1, 1, 110, 10, linha_meta),
         pplb_text(1, 2, 1, 1, 145, 10, f"REG: {registro}  {composicao[:20]}"),
-        pplb_text(1, 2, 1, 1, 175, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 205, 10, f"CONTEM: {contem}"),
-    ])
+        pplb_text(1, 2, 1, 1, 180, 10, f"APLICACAO: {aplicacao}"),
+        pplb_text(1, 2, 1, 1, 215, 10, f"CONTEM: {contem}"),
+    ], largura_dots=711, altura_dots=305, gap_dots=24)
 
 
 def gerar_pplb_a_pac_peq(rotulo, farmacia):
-    """Layout A.PAC.PEQ - 3 linhas mínimas"""
-    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    """Layout A.PAC.PEQ (1.39x1 pol = 282x203 dots) - 3 linhas"""
+    paciente = (rotulo.get('nomePaciente', '') or '')[:20].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
     registro = rotulo.get('numeroRegistro', '')
 
+    # 3 linhas em 203 dots
     return pplb_label([
-        pplb_text(1, 2, 1, 1, 20, 10, f"{paciente}  REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 60, 10, f"DR. {nome_medico[:30]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 100, 10, f"REG: {registro}"),
-    ])
+        pplb_text(1, 2, 1, 1, 10,  10, f"{paciente}"),
+        pplb_text(1, 2, 1, 1, 50,  10, f"REQ:{nr_req}-{nr_item}"),
+        pplb_text(1, 2, 1, 1, 90,  10, f"DR.{nome_medico[:15]}"),
+        pplb_text(1, 2, 1, 1, 130, 10, f"CRM {crm}"),
+        pplb_text(1, 2, 1, 1, 165, 10, f"REG:{registro}"),
+    ], largura_dots=282, altura_dots=203, gap_dots=24)
 
 
 def gerar_pplb_a_pac_gran(rotulo, farmacia):
-    """Layout A.PAC.GRAN - 2 linhas compactas"""
-    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    """Layout A.PAC.GRAN (1.39x1 pol = 282x203 dots) - 2 linhas compactas"""
+    paciente = (rotulo.get('nomePaciente', '') or '')[:20].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
     registro = rotulo.get('numeroRegistro', '')
 
+    # 2 linhas em 203 dots
     return pplb_label([
-        pplb_text(1, 2, 1, 1, 20, 10, f"{paciente}  REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 60, 10, f"DR. {nome_medico[:25]} CRM {crm}  REG:{registro}"),
-    ])
+        pplb_text(1, 2, 1, 1, 10,  10, f"{paciente}"),
+        pplb_text(1, 2, 1, 1, 50,  10, f"REQ:{nr_req}-{nr_item}"),
+        pplb_text(1, 2, 1, 1, 90,  10, f"DR.{nome_medico[:15]}"),
+        pplb_text(1, 2, 1, 1, 130, 10, f"CRM {crm} REG:{registro}"),
+    ], largura_dots=282, altura_dots=203, gap_dots=24)
 
 
 def gerar_pplb_tirz(rotulo, farmacia):
-    """Layout TIRZ (Tirzepatida) - 7 linhas com posologia"""
-    paciente = (rotulo.get('nomePaciente', '') or '')[:35].upper()
+    """Layout TIRZ (Tirzepatida) - usa mesmas dimensões do AMP.CX por enquanto (4.3x1 pol = 873x203 dots)"""
+    paciente = (rotulo.get('nomePaciente', '') or '')[:17].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
@@ -154,15 +166,15 @@ def gerar_pplb_tirz(rotulo, farmacia):
     registro = rotulo.get('numeroRegistro', '')
 
     return pplb_label([
-        pplb_text(1, 2, 1, 1, 10, 10, paciente),
-        pplb_text(1, 2, 1, 1, 10, 450, f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 50, 10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 80, 10, composicao),
-        pplb_text(1, 2, 1, 1, 115, 10, posologia),
-        pplb_text(1, 2, 1, 1, 145, 10, linha_meta),
-        pplb_text(1, 2, 1, 1, 175, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 205, 10, f"CONTEM: {contem}  REG:{registro}"),
-    ])
+        pplb_text(1, 2, 1, 1, 5,   10, paciente),
+        pplb_text(1, 2, 1, 1, 5,  450, f"REQ:{nr_req}-{nr_item}"),
+        pplb_text(1, 2, 1, 1, 30,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
+        pplb_text(1, 2, 1, 1, 55,  10, composicao),
+        pplb_text(1, 2, 1, 1, 80,  10, posologia),
+        pplb_text(1, 2, 1, 1, 105, 10, linha_meta),
+        pplb_text(1, 2, 1, 1, 130, 10, f"APLICACAO: {aplicacao}"),
+        pplb_text(1, 2, 1, 1, 155, 10, f"CONTEM: {contem}  REG:{registro}"),
+    ], largura_dots=873, altura_dots=203, gap_dots=24)
 
 
 # ============================================
@@ -265,8 +277,8 @@ def teste_impressao():
         pplb_text(1, 3, 1, 1, 30, 10, "*** TESTE DE IMPRESSAO ***"),
         pplb_text(1, 2, 1, 1, 80, 10, "Argox OS-2140 - PPLB"),
         pplb_text(1, 2, 1, 1, 120, 10, "Agente de Impressao OK!"),
-        pplb_text(1, 0, 1, 1, 170, 10, f"Impressora: {impressora}"),
-    ])
+        pplb_text(1, 2, 1, 1, 160, 10, f"Impressora: {impressora}"),
+    ], largura_dots=873, altura_dots=203, gap_dots=24)
 
     resultado = enviar_para_impressora(impressora, comandos)
     if resultado["success"]:
