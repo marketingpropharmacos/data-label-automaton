@@ -63,7 +63,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   AMP_CX: {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
-    dimensoes: { larguraMM: 76, alturaMM: 35 },
+    dimensoes: { larguraMM: 60, alturaMM: 10 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
@@ -82,6 +82,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   AMP10: {
     tipo: 'AMP10',
     nome: 'Ampola 10',
+    dimensoes: { larguraMM: 54, alturaMM: 12 },
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
