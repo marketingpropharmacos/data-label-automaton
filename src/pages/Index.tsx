@@ -24,6 +24,7 @@ const Index = () => {
   const [isPrinting, setIsPrinting] = useState(false);
   const [rotulos, setRotulos] = useState<RotuloItem[]>([]);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
+  const [labelQuantities, setLabelQuantities] = useState<Record<string, number>>({});
   const [searchedRequisition, setSearchedRequisition] = useState("");
   const [pharmacyConfig, setPharmacyConfig] = useState<PharmacyConfig>(getPharmacyConfig());
   const [labelConfig, setLabelConfig] = useState<LabelConfig>(getLabelConfig());
@@ -87,6 +88,10 @@ const Index = () => {
     if (result.success && result.data && result.data.length > 0) {
       setRotulos(result.data);
       setSelectedLabels(new Set(result.data.map(r => r.id)));
+      // Inicializar todas as quantidades em 1
+      const qtds: Record<string, number> = {};
+      result.data.forEach(r => { qtds[r.id] = 1; });
+      setLabelQuantities(qtds);
       toast({
         title: "Requisição encontrada!",
         description: `${result.data.length} rótulo(s) pronto(s) para impressão.`,
@@ -94,6 +99,7 @@ const Index = () => {
     } else {
       setRotulos([]);
       setSelectedLabels(new Set());
+      setLabelQuantities({});
       toast({
         title: "Requisição não encontrada",
         description: result.error || "Verifique o número e tente novamente.",
@@ -122,6 +128,10 @@ const Index = () => {
     ));
   };
 
+  const updateQuantity = (id: string, qty: number) => {
+    setLabelQuantities(prev => ({ ...prev, [id]: qty }));
+  };
+
   const selectAll = () => {
     setSelectedLabels(new Set(rotulos.map(r => r.id)));
   };
@@ -143,8 +153,16 @@ const Index = () => {
 
     setIsPrinting(true);
     
-    // Filtra apenas os rótulos selecionados
-    const rotulosSelecionados = rotulos.filter(r => selectedLabels.has(r.id));
+    // Filtra apenas os rótulos selecionados e expande por quantidade
+    const rotulosSelecionados: RotuloItem[] = [];
+    rotulos.filter(r => selectedLabels.has(r.id)).forEach(r => {
+      const qty = labelQuantities[r.id] || 1;
+      for (let i = 0; i < qty; i++) {
+        rotulosSelecionados.push(r);
+      }
+    });
+    
+    const totalLabels = rotulosSelecionados.length;
     
     // Dados da farmácia
     const farmaciaData = {
@@ -185,7 +203,7 @@ const Index = () => {
     if (result.success) {
       toast({
         title: "Impressão concluída!",
-        description: `${result.data?.impressos || selectedCount} rótulo(s) enviado(s) para a impressora.`,
+        description: `${result.data?.impressos || totalLabels} rótulo(s) enviado(s) para a impressora.`,
       });
     } else {
       toast({
@@ -322,8 +340,10 @@ const Index = () => {
                       labelConfig={labelConfig}
                       layoutConfig={layoutConfig}
                       selected={selectedLabels.has(rotulo.id)}
+                      quantity={labelQuantities[rotulo.id] || 1}
                       onToggle={toggleLabel}
                       onUpdate={updateRotulo}
+                      onQuantityChange={updateQuantity}
                     />
                   ))}
                 </div>

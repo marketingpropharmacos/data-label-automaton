@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Edit, Save, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Edit, Save, X, Minus, Plus } from "lucide-react";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutConfig, LabelFieldId } from "@/types/requisicao";
 import PharmacyHeader from "./PharmacyHeader";
 
@@ -13,20 +14,25 @@ interface LabelCardProps {
   labelConfig: LabelConfig;
   layoutConfig: LayoutConfig;
   selected: boolean;
+  quantity: number;
   onToggle: (id: string) => void;
   onUpdate?: (id: string, field: string, value: string) => void;
+  onQuantityChange?: (id: string, qty: number) => void;
 }
 
-const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected, onToggle, onUpdate }: LabelCardProps) => {
+const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected, quantity, onToggle, onUpdate, onQuantityChange }: LabelCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
 
+  // Usar dimensões do layout específico, com fallback para labelConfig
+  const layoutDimMM = layoutConfig.dimensoes || { larguraMM: labelConfig.larguraMM, alturaMM: labelConfig.alturaMM };
+  
   // Converter mm para pixels aproximados (96 DPI / 25.4mm)
   const mmToPx = (mm: number) => Math.round(mm * 3.78);
   
   // Tamanho do rótulo responsivo com máximo para caber no card
-  const labelWidth = Math.min(mmToPx(labelConfig.larguraMM), 320);
-  const labelHeight = Math.min(mmToPx(labelConfig.alturaMM), 220);
+  const labelWidth = Math.min(mmToPx(layoutDimMM.larguraMM), 320);
+  const labelHeight = Math.min(mmToPx(layoutDimMM.alturaMM), 220);
   
   const labelStyle = {
     width: `${labelWidth}px`,
@@ -574,11 +580,42 @@ const LabelCard = ({ rotulo, pharmacyConfig, labelConfig, layoutConfig, selected
   return (
     <Card className={`p-4 border-2 transition-all duration-200 ${selected ? 'border-secondary bg-accent/30 shadow-md' : 'border-dashed border-border bg-card hover:border-primary/50 hover:shadow-sm'}`}>
       <div className="flex items-start gap-4">
-        <Checkbox
-          checked={selected}
-          onCheckedChange={() => onToggle(rotulo.id)}
-          className="mt-2 data-[state=checked]:bg-secondary data-[state=checked]:border-secondary"
-        />
+        <div className="flex flex-col items-center gap-2 mt-2">
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggle(rotulo.id)}
+            className="data-[state=checked]:bg-secondary data-[state=checked]:border-secondary"
+          />
+          {/* Seletor de quantidade */}
+          {selected && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onQuantityChange?.(rotulo.id, Math.max(1, quantity - 1))}
+              >
+                <Minus className="h-3 w-3" />
+              </Button>
+              <Input
+                type="number"
+                min={1}
+                max={99}
+                value={quantity}
+                onChange={(e) => onQuantityChange?.(rotulo.id, Math.max(1, Math.min(99, parseInt(e.target.value) || 1)))}
+                className="h-6 w-10 text-center text-xs p-0"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => onQuantityChange?.(rotulo.id, Math.min(99, quantity + 1))}
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
         
         <div className="flex-1">
           {/* Modo Edição - Textarea como bloco de notas */}
