@@ -2,6 +2,8 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import fdb
 import platform
+import os
+import requests as http_requests
 
 # Importa win32print apenas no Windows
 if platform.system() == 'Windows':
@@ -4356,84 +4358,97 @@ def verificar_impressora():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+AGENTE_URL = os.environ.get(
+    "AGENTE_URL",
+    "https://lizzie-inventoriable-mercedez.ngrok-free.dev"
+)
+
+AGENTE_HEADERS = {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true"
+}
+
+
+def _mapear_para_agente(data: dict) -> dict:
+    """Converte payload do frontend para o formato esperado pelo agente."""
+    impressora = data.get("caminho") or data.get("impressora") or ""
+    layout_tipo = data.get("layoutTipo") or data.get("layout_tipo") or "AMP_CX"
+
+    rotulos_in = data.get("rotulos") or []
+    rotulos_out = []
+
+    for r in rotulos_in:
+        rotulos_out.append({
+            "nrRequisicao": str(r.get("nrRequisicao") or r.get("req") or ""),
+            "nrItem": str(r.get("nrItem") or r.get("item") or "1"),
+            "nomePaciente": str(r.get("nomePaciente") or r.get("paciente") or ""),
+            "nomeMedico": str(r.get("nomeMedico") or ""),
+            "prefixoCRM": str(r.get("prefixoCRM") or ""),
+            "numeroCRM": str(r.get("numeroCRM") or ""),
+            "ufCRM": str(r.get("ufCRM") or ""),
+            "composicao": str(r.get("composicao") or r.get("formula") or ""),
+            "dataFabricacao": str(r.get("dataFabricacao") or ""),
+            "dataValidade": str(r.get("dataValidade") or ""),
+            "numeroRegistro": str(r.get("numeroRegistro") or r.get("reg") or ""),
+            "posologia": str(r.get("posologia") or ""),
+            "aplicacao": str(r.get("aplicacao") or ""),
+            "contem": str(r.get("contem") or ""),
+            "ph": str(r.get("ph") or ""),
+            "lote": str(r.get("lote") or ""),
+            "componentes": r.get("componentes") or [],
+        })
+
+    return {
+        "impressora": impressora,
+        "layout_tipo": layout_tipo,
+        "farmacia": data.get("farmacia") or {},
+        "rotulos": rotulos_out
+    }
+
+
 @app.route('/api/imprimir-teste', methods=['POST'])
 def imprimir_teste():
-    """Imprime etiqueta de teste."""
-    if not PRINTING_AVAILABLE:
-        return jsonify({"success": False, "error": "pywin32 não instalado no servidor"}), 500
-    
-    data = request.get_json()
-    caminho = data.get('caminho', '')
-    
-    if not caminho:
-        return jsonify({"success": False, "error": "Caminho da impressora não informado"}), 400
-    
-    # Etiqueta de teste simples
-    comandos = [
-        "N",
-        "q608",
-        "Q280,24",
-        'A20,50,0,3,1,1,N,"*** TESTE DE IMPRESSAO ***"',
-        'A20,100,0,2,1,1,N,"Argox OS-2140 - PPLA"',
-        'A20,150,0,2,1,1,N,"Impressora configurada com sucesso!"',
-        'A20,200,0,1,1,1,N,"Sistema de Rotulos - Pro Pharmacos"',
-        "P1",
-    ]
-    
-    resultado = imprimir_compartilhada(caminho, "\r\n".join(comandos))
-    
-    if resultado["success"]:
-        return jsonify({"success": True, "message": "Etiqueta de teste enviada"})
-    else:
-        return jsonify({"success": False, "error": resultado["error"]}), 500
+    """Encaminha teste de impressão para o agente local."""
+    data = request.get_json() or {}
+    impressora = data.get('caminho', '')
+
+    try:
+        resp = http_requests.post(
+            f"{AGENTE_URL}/teste",
+            json={"impressora": impressora},
+            headers=AGENTE_HEADERS,
+            timeout=15
+        )
+        return (
+            resp.text,
+            resp.status_code,
+            {"Content-Type": resp.headers.get("Content-Type", "application/json")}
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Falha ao encaminhar para o agente: {e}"}), 500
 
 
 @app.route('/api/imprimir', methods=['POST'])
 def imprimir_rotulos():
-    """Imprime rótulos selecionados."""
-    if not PRINTING_AVAILABLE:
-        return jsonify({"success": False, "error": "pywin32 não instalado no servidor"}), 500
-    
-    data = request.get_json()
-    caminho = data.get('caminho', '')
-    rotulos = data.get('rotulos', [])
-    layout_tipo = data.get('layoutTipo', 'AMP_CX')
-    farmacia = data.get('farmacia', {})
-    
-    if not caminho:
-        return jsonify({"success": False, "error": "Caminho da impressora não informado"}), 400
-    
-    if not rotulos:
-        return jsonify({"success": False, "error": "Nenhum rótulo para imprimir"}), 400
-    
-    impressos = 0
-    erros = []
-    
-    for rotulo in rotulos:
-        try:
-            # Gera comandos PPLA (por enquanto só AMP_CX)
-            if layout_tipo == 'AMP_CX':
-                comandos = gerar_ppla_ampcx(rotulo, farmacia)
-            else:
-                # Para outros layouts, usa o mesmo por enquanto
-                comandos = gerar_ppla_ampcx(rotulo, farmacia)
-            
-            resultado = imprimir_compartilhada(caminho, comandos)
-            
-            if resultado["success"]:
-                impressos += 1
-            else:
-                erros.append(f"Rótulo {rotulo.get('id', '?')}: {resultado['error']}")
-        
-        except Exception as e:
-            erros.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
-    
-    if impressos == len(rotulos):
-        return jsonify({"success": True, "impressos": impressos})
-    elif impressos > 0:
-        return jsonify({"success": True, "impressos": impressos, "erros": erros})
-    else:
-        return jsonify({"success": False, "error": "Nenhum rótulo impresso", "erros": erros}), 500
+    """Encaminha rótulos para o agente de impressão local."""
+    data = request.get_json(force=True) or {}
+
+    payload_agente = _mapear_para_agente(data)
+
+    try:
+        resp = http_requests.post(
+            f"{AGENTE_URL}/imprimir",
+            json=payload_agente,
+            headers=AGENTE_HEADERS,
+            timeout=30
+        )
+        return (
+            resp.text,
+            resp.status_code,
+            {"Content-Type": resp.headers.get("Content-Type", "application/json")}
+        )
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Falha ao encaminhar para o agente: {e}"}), 500
 
 
 # Debug: sinônimos de um produto via FC03200
