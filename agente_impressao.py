@@ -330,6 +330,15 @@ def imprimir():
     if not comandos_todos:
         return jsonify({"success": False, "error": "Nenhum comando gerado", "erros": erros_geracao}), 500
 
+    # DEBUG: Mostrar os comandos PPLB gerados
+    print(f"\n{'='*60}")
+    print(f"[DEBUG PPLB] Comandos completos ({len(comandos_todos)} bytes):")
+    print(f"{'='*60}")
+    for i, line in enumerate(comandos_todos.split('\r\n')):
+        display = line.replace('\x02', '<STX>')
+        print(f"  [{i:02d}] {display}")
+    print(f"{'='*60}\n")
+
     # Enviar TUDO em um único job de impressão
     print(f"[AGENTE] Enviando batch de {len(rotulos)} rótulos para '{impressora}' (q{dims['largura_dots']}/Q{dims['altura_dots']})")
     resultado = enviar_para_impressora(impressora, comandos_todos)
