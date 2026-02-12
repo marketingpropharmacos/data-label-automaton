@@ -1,14 +1,12 @@
 import { useState, useEffect } from "react";
-import { Printer, CheckSquare, Square, Settings, Edit, LogOut, ChevronDown, ListOrdered } from "lucide-react";
+import { Printer, Settings, LogOut, ListOrdered } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import SearchRequisition from "@/components/SearchRequisition";
-import LabelCard from "@/components/LabelCard";
+import LabelTextEditor from "@/components/LabelTextEditor";
 import LayoutSelector from "@/components/LayoutSelector";
 import LayoutEditor from "@/components/LayoutEditor";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { getPharmacyConfig, getLabelConfig, getPrinterConfig, getPrintAgentConfig } from "@/config/api";
@@ -18,13 +16,13 @@ import { imprimirViaAgente } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 import { listarImpressoras } from "@/services/printAgentService";
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
+import { Edit } from "lucide-react";
 
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [rotulos, setRotulos] = useState<RotuloItem[]>([]);
-  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
-  const [labelQuantities, setLabelQuantities] = useState<Record<string, number>>({});
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [searchedRequisition, setSearchedRequisition] = useState("");
   const [pharmacyConfig, setPharmacyConfig] = useState<PharmacyConfig>(getPharmacyConfig());
   const [labelConfig, setLabelConfig] = useState<LabelConfig>(getLabelConfig());
@@ -49,7 +47,7 @@ const Index = () => {
     }
   }, []);
 
-  // Resetar layouts ao inicializar para aplicar mudanças recentes
+  // Resetar layouts ao inicializar
   useEffect(() => {
     resetAllLayouts();
     setLayoutConfig(getLayout(layoutType));
@@ -66,14 +64,12 @@ const Index = () => {
     return () => window.removeEventListener("focus", handleFocus);
   }, [layoutType]);
 
-  // Atualizar layout quando o tipo muda
   const handleLayoutChange = (newType: LayoutType) => {
     setLayoutType(newType);
     setSelectedLayout(newType);
     setLayoutConfig(getLayout(newType));
   };
 
-  // Salvar layout editado
   const handleLayoutEditorSave = (newLayout: LayoutConfig) => {
     setLayoutConfig(newLayout);
     setEditorOpen(false);
@@ -87,19 +83,14 @@ const Index = () => {
     
     if (result.success && result.data && result.data.length > 0) {
       setRotulos(result.data);
-      setSelectedLabels(new Set(result.data.map(r => r.id)));
-      // Inicializar todas as quantidades em 1
-      const qtds: Record<string, number> = {};
-      result.data.forEach(r => { qtds[r.id] = 1; });
-      setLabelQuantities(qtds);
+      setCurrentIndex(0);
       toast({
         title: "Requisição encontrada!",
-        description: `${result.data.length} rótulo(s) pronto(s) para impressão.`,
+        description: `${result.data.length} rótulo(s) carregado(s).`,
       });
     } else {
       setRotulos([]);
-      setSelectedLabels(new Set());
-      setLabelQuantities({});
+      setCurrentIndex(0);
       toast({
         title: "Requisição não encontrada",
         description: result.error || "Verifique o número e tente novamente.",
@@ -110,92 +101,34 @@ const Index = () => {
     setIsLoading(false);
   };
 
-  const toggleLabel = (id: string) => {
-    setSelectedLabels(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
-      } else {
-        newSet.add(id);
-      }
-      return newSet;
-    });
-  };
-
-  const updateRotulo = (id: string, field: string, value: string) => {
-    setRotulos(prev => prev.map(r => 
-      r.id === id ? { ...r, [field]: value } : r
-    ));
-  };
-
-  const updateQuantity = (id: string, qty: number) => {
-    setLabelQuantities(prev => ({ ...prev, [id]: qty }));
-  };
-
-  const selectAll = () => {
-    setSelectedLabels(new Set(rotulos.map(r => r.id)));
-  };
-
-  const deselectAll = () => {
-    setSelectedLabels(new Set());
+  const handleTextChange = (id: string, text: string) => {
+    setRotulos(prev => prev.map(r => r.id === id ? { ...r, textoLivre: text } : r));
   };
 
   const handlePrint = async () => {
-    const selectedCount = selectedLabels.size;
-    if (selectedCount === 0) {
-      toast({
-        title: "Nenhum rótulo selecionado",
-        description: "Selecione pelo menos um rótulo para imprimir.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (rotulos.length === 0) return;
 
     setIsPrinting(true);
     
-    // Filtra apenas os rótulos selecionados e expande por quantidade
-    const rotulosSelecionados: RotuloItem[] = [];
-    rotulos.filter(r => selectedLabels.has(r.id)).forEach(r => {
-      const qty = labelQuantities[r.id] || 1;
-      for (let i = 0; i < qty; i++) {
-        rotulosSelecionados.push(r);
-      }
-    });
+    const rotuloAtual = rotulos[currentIndex];
+    const rotulosSelecionados = [rotuloAtual];
     
-    const totalLabels = rotulosSelecionados.length;
-    
-    // Dados da farmácia
     const farmaciaData = {
       nome: pharmacyConfig.nome,
       farmaceutico: pharmacyConfig.farmaceutico,
       crf: pharmacyConfig.crf,
     };
 
-    // Verifica se deve usar o agente HTTP
     const agentConfig = getPrintAgentConfig();
-    
     let result;
     
     if (agentConfig.enabled) {
-      // Usa agente HTTP local — com impressora selecionada na tela
       const configComImpressora = { ...agentConfig, impressora: selectedPrinter || agentConfig.impressora };
-      result = await imprimirViaAgente(
-        configComImpressora,
-        rotulosSelecionados,
-        layoutType,
-        farmaciaData
-      );
+      result = await imprimirViaAgente(configComImpressora, rotulosSelecionados, layoutType, farmaciaData);
     } else {
-      // Usa servidor Flask via compartilhamento
       const printerConfig = getPrinterConfig();
       const caminho = `\\\\${printerConfig.nomePC}\\${printerConfig.nomeCompartilhamento}`;
-      
-      result = await imprimirRotulos(
-        caminho,
-        rotulosSelecionados,
-        layoutType,
-        farmaciaData
-      );
+      result = await imprimirRotulos(caminho, rotulosSelecionados, layoutType, farmaciaData);
     }
     
     setIsPrinting(false);
@@ -203,12 +136,12 @@ const Index = () => {
     if (result.success) {
       toast({
         title: "Impressão concluída!",
-        description: `${result.data?.impressos || totalLabels} rótulo(s) enviado(s) para a impressora.`,
+        description: `Rótulo ${currentIndex + 1}/${rotulos.length} enviado para a impressora.`,
       });
     } else {
       toast({
         title: "Erro na impressão",
-        description: result.error || "Não foi possível imprimir os rótulos.",
+        description: result.error || "Não foi possível imprimir o rótulo.",
         variant: "destructive",
       });
     }
@@ -221,11 +154,7 @@ const Index = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <img 
-                src={logoProPharmacos} 
-                alt="ProPharmacos" 
-                className="h-12 w-auto"
-              />
+              <img src={logoProPharmacos} alt="ProPharmacos" className="h-12 w-auto" />
               <div className="hidden sm:block">
                 <h1 className="text-xl font-bold text-primary">Sistema de Rótulos</h1>
                 <p className="text-xs text-muted-foreground">Farmácia de Manipulação</p>
@@ -234,24 +163,14 @@ const Index = () => {
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground hidden md:inline">{user?.email}</span>
               <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" asChild>
-                <Link to="/fila">
-                  <ListOrdered className="h-5 w-5 text-primary" />
-                </Link>
+                <Link to="/fila"><ListOrdered className="h-5 w-5 text-primary" /></Link>
               </Button>
               {isAdmin && (
                 <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" asChild>
-                  <Link to="/configuracoes">
-                    <Settings className="h-5 w-5 text-primary" />
-                  </Link>
+                  <Link to="/configuracoes"><Settings className="h-5 w-5 text-primary" /></Link>
                 </Button>
               )}
-              <Button 
-                variant="outline" 
-                size="icon" 
-                className="border-primary/20 hover:bg-accent"
-                onClick={signOut}
-                title="Sair"
-              >
+              <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" onClick={signOut} title="Sair">
                 <LogOut className="h-5 w-5 text-muted-foreground" />
               </Button>
             </div>
@@ -262,11 +181,9 @@ const Index = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {/* Search Section */}
-        <section className="mb-12">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-foreground mb-2">
-              Gerador de Rótulos
-            </h2>
+        <section className="mb-8">
+          <div className="text-center mb-6">
+            <h2 className="text-3xl font-bold text-foreground mb-2">Gerador de Rótulos</h2>
             <p className="text-muted-foreground text-lg">
               Digite o número da requisição para gerar os rótulos automaticamente
             </p>
@@ -274,87 +191,33 @@ const Index = () => {
           <SearchRequisition onSearch={handleSearch} isLoading={isLoading} />
         </section>
 
-        {/* Labels Section */}
+        {/* Layout selector (only when rotulos loaded) */}
         {rotulos.length > 0 && (
-          <section>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-                <div>
-                  <CardTitle className="text-xl">
-                    Rótulos da Requisição #{searchedRequisition}
-                  </CardTitle>
-                    <div className="flex items-center gap-4 mt-2">
-                    <p className="text-sm text-muted-foreground">
-                      {selectedLabels.size} de {rotulos.length} selecionados
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <LayoutSelector value={layoutType} onChange={handleLayoutChange} />
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => setEditorOpen(true)}
-                        title="Editar layout"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={selectAll}>
-                    <CheckSquare className="h-4 w-4 mr-1" />
-                    <span className="hidden sm:inline">Selecionar Todos</span>
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={deselectAll}>
-                    <Square className="h-4 w-4 mr-1" />
-                    <span className="hidden sm:inline">Limpar</span>
-                  </Button>
-                  {availablePrinters.length > 0 && (
-                    <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
-                      <SelectTrigger className="w-[180px] h-8 text-xs">
-                        <Printer className="h-3.5 w-3.5 mr-1 shrink-0" />
-                        <SelectValue placeholder="Impressora" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {availablePrinters.map((printer) => (
-                          <SelectItem key={printer} value={printer}>
-                            {printer}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  <Button 
-                    size="sm" 
-                    onClick={handlePrint}
-                    disabled={selectedLabels.size === 0 || isPrinting}
-                    className="bg-secondary hover:bg-secondary/90"
-                  >
-                    <Printer className={`h-4 w-4 mr-1 ${isPrinting ? 'animate-pulse' : ''}`} />
-                    {isPrinting ? 'Imprimindo...' : 'Imprimir'}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {rotulos.map((rotulo) => (
-                    <LabelCard
-                      key={rotulo.id}
-                      rotulo={rotulo}
-                      pharmacyConfig={pharmacyConfig}
-                      labelConfig={labelConfig}
-                      layoutConfig={layoutConfig}
-                      selected={selectedLabels.has(rotulo.id)}
-                      quantity={labelQuantities[rotulo.id] || 1}
-                      onToggle={toggleLabel}
-                      onUpdate={updateRotulo}
-                      onQuantityChange={updateQuantity}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </section>
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <LayoutSelector value={layoutType} onChange={handleLayoutChange} />
+            <Button variant="ghost" size="icon" onClick={() => setEditorOpen(true)} title="Editar layout">
+              <Edit className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
+        {/* Editor */}
+        {rotulos.length > 0 && (
+          <LabelTextEditor
+            rotulos={rotulos}
+            currentIndex={currentIndex}
+            onIndexChange={setCurrentIndex}
+            onTextChange={handleTextChange}
+            layoutConfig={layoutConfig}
+            layoutType={layoutType}
+            pharmacyConfig={pharmacyConfig}
+            searchedRequisition={searchedRequisition}
+            onPrint={handlePrint}
+            isPrinting={isPrinting}
+            availablePrinters={availablePrinters}
+            selectedPrinter={selectedPrinter}
+            onPrinterChange={setSelectedPrinter}
+          />
         )}
 
         {/* Layout Editor Dialog */}
@@ -383,9 +246,7 @@ const Index = () => {
             <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-accent flex items-center justify-center">
               <Printer className="h-12 w-12 text-primary" />
             </div>
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Nenhuma requisição buscada
-            </h3>
+            <h3 className="text-xl font-semibold text-foreground mb-2">Nenhuma requisição buscada</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
               Digite o número de uma requisição no campo acima para visualizar e imprimir os rótulos dos produtos.
             </p>
