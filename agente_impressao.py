@@ -107,7 +107,7 @@ def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
         f"Q{altura_dots},{gap_dots}",
         "D11",
     ]
-    return "\r\n".join(partes) + "\r\n"
+    return "\n".join(partes) + "\n"
 
 
 def pplb_label(linhas):
@@ -118,7 +118,7 @@ def pplb_label(linhas):
     ]
     partes.extend(linhas)
     partes.append("E")
-    return "\r\n".join(partes) + "\r\n"
+    return "\n".join(partes) + "\n"
 
 
 # ============================================
@@ -461,7 +461,74 @@ def imprimir():
         }), 500
 
 
-if __name__ == '__main__':
+@app.route('/analisar-prn', methods=['POST'])
+def analisar_prn():
+    """Recebe caminho de um arquivo .PRN capturado e analisa os bytes."""
+    data = request.get_json() or {}
+    caminho = data.get('caminho', '')
+
+    if not caminho or not os.path.exists(caminho):
+        return jsonify({"success": False, "error": f"Arquivo não encontrado: {caminho}"}), 400
+
+    try:
+        with open(caminho, 'rb') as f:
+            raw = f.read()
+
+        tamanho = len(raw)
+        hex_dump = raw[:2000].hex(' ')
+
+        # Análise de terminadores
+        count_crlf = raw.count(b'\r\n')
+        count_lf = raw.count(b'\n') - count_crlf
+        count_cr = raw.count(b'\r') - count_crlf
+
+        # Encontrar STX (\x02) e ETX/E
+        stx_positions = [i for i, b in enumerate(raw) if b == 0x02]
+
+        # Decodificar como texto para análise
+        try:
+            texto = raw.decode('cp850', errors='replace')
+        except Exception:
+            texto = raw.decode('latin-1', errors='replace')
+
+        linhas = texto.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+        linhas_display = []
+        for i, linha in enumerate(linhas[:100]):
+            display = linha.replace('\x02', '<STX>').replace('\x03', '<ETX>')
+            linhas_display.append(f"[{i:03d}] {display}")
+
+        resultado = {
+            "success": True,
+            "tamanho_bytes": tamanho,
+            "terminadores": {
+                "CRLF (\\r\\n)": count_crlf,
+                "LF (\\n)": count_lf,
+                "CR (\\r)": count_cr,
+            },
+            "stx_positions": stx_positions[:20],
+            "total_stx": len(stx_positions),
+            "hex_primeiros_500bytes": raw[:500].hex(' '),
+            "linhas_texto": linhas_display,
+        }
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"[ANÁLISE PRN] Arquivo: {caminho}")
+        logger.info(f"  Tamanho: {tamanho} bytes")
+        logger.info(f"  CRLF: {count_crlf} | LF: {count_lf} | CR: {count_cr}")
+        logger.info(f"  STX encontrados: {len(stx_positions)} em posições: {stx_positions[:10]}")
+        logger.info(f"  Primeiras linhas:")
+        for l in linhas_display[:30]:
+            logger.info(f"    {l}")
+        logger.info(f"{'='*60}")
+
+        return jsonify(resultado)
+
+    except Exception as e:
+        logger.error(f"Erro ao analisar PRN: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+
     port = int(os.environ.get("PORT", 5001))
     logger.info("=" * 50)
     logger.info("Agente de Impressão PPLB - ProPharmacos V2.3")
