@@ -4521,10 +4521,242 @@ def debug_sinonimos(cdpro):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# =====================================================
+# DEBUG: INVESTIGACAO FC12300, FC12B00, FC90100
+# Endpoints para inspecionar estrutura de rotulos/fila
+# =====================================================
+
+@app.route('/api/debug/estrutura-tabela/<tabela>', methods=['GET'])
+def debug_estrutura_tabela_generica(tabela):
+    """Mostra colunas de qualquer tabela do Firebird."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        tabela_upper = tabela.upper().strip()
+        cursor.execute("""
+            SELECT RF.RDB$FIELD_NAME, F.RDB$FIELD_TYPE, F.RDB$FIELD_LENGTH, F.RDB$FIELD_SUB_TYPE
+            FROM RDB$RELATION_FIELDS RF
+            JOIN RDB$FIELDS F ON RF.RDB$FIELD_SOURCE = F.RDB$FIELD_NAME
+            WHERE RF.RDB$RELATION_NAME = ?
+            ORDER BY RF.RDB$FIELD_POSITION
+        """, (tabela_upper,))
+        colunas = []
+        for row in cursor.fetchall():
+            tipo_num = row[1]
+            subtipo = row[3]
+            tipo_nome = {7: 'SMALLINT', 8: 'INTEGER', 10: 'FLOAT', 12: 'DATE',
+                         13: 'TIME', 14: 'CHAR', 16: 'BIGINT', 27: 'DOUBLE',
+                         35: 'TIMESTAMP', 37: 'VARCHAR', 261: 'BLOB'}.get(tipo_num, f'TIPO_{tipo_num}')
+            if tipo_num == 261 and subtipo == 1:
+                tipo_nome = 'BLOB TEXT'
+            elif tipo_num == 261 and subtipo == 0:
+                tipo_nome = 'BLOB BINARY'
+            colunas.append({
+                "nome": row[0].strip(),
+                "tipo": tipo_nome,
+                "tipo_num": tipo_num,
+                "tamanho": row[2],
+                "subtipo": subtipo
+            })
+        cursor.close()
+        conn.close()
+        return jsonify({"success": True, "tabela": tabela_upper, "colunas": colunas})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/debug/fc12300/<nr_requisicao>', methods=['GET'])
+def debug_fc12300(nr_requisicao):
+    """Inspeciona FC12300 (rotulos) para uma requisicao. Mostra campos e hex do ROTUTX."""
+    filial = request.args.get('filial', '1')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Descobre colunas
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS
+            WHERE RDB$RELATION_NAME = 'FC12300'
+            ORDER BY RDB$FIELD_POSITION
+        """)
+        colunas_disponiveis = [r[0] for r in cursor.fetchall()]
+
+        # Busca registros
+        cursor.execute(f"""
+            SELECT FIRST 20 * FROM FC12300
+            WHERE NRRQU = ? AND CDFIL = ?
+        """, (int(nr_requisicao), int(filial)))
+
+        cols = [desc[0].strip() for desc in cursor.description]
+        registros = []
+        for row in cursor.fetchall():
+            reg = {}
+            for i, col in enumerate(cols):
+                val = row[i]
+                if val is None:
+                    reg[col] = None
+                elif hasattr(val, 'read'):
+                    raw = val.read()
+                    if col.upper() == 'ROTUTX':
+                        # Mostra primeiros 200 bytes em hex + tentativa texto
+                        reg[col] = {
+                            "tamanho_bytes": len(raw),
+                            "hex_primeiros_200": raw[:200].hex(),
+                            "texto_tentativa": raw[:200].decode('latin-1', errors='replace')
+                        }
+                    else:
+                        try:
+                            reg[col] = raw.decode('latin-1')[:300]
+                        except:
+                            reg[col] = f"[BLOB {len(raw)} bytes]"
+                elif hasattr(val, 'strftime'):
+                    reg[col] = val.strftime('%d/%m/%Y %H:%M:%S')
+                else:
+                    reg[col] = str(val)
+            registros.append(reg)
+
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "tabela": "FC12300",
+            "colunas_disponiveis": colunas_disponiveis,
+            "total": len(registros),
+            "registros": registros
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/debug/fc12b00', methods=['GET'])
+def debug_fc12b00():
+    """Inspeciona FC12B00 (fila de impressao). Mostra ultimos registros."""
+    filial = request.args.get('filial', '1')
+    limite = request.args.get('limite', '30')
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Verifica se tabela existe
+        cursor.execute("""
+            SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = 'FC12B00'
+        """)
+        if cursor.fetchone()[0] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Tabela FC12B00 nao existe no banco"})
+
+        # Descobre colunas
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS
+            WHERE RDB$RELATION_NAME = 'FC12B00'
+            ORDER BY RDB$FIELD_POSITION
+        """)
+        colunas_disponiveis = [r[0] for r in cursor.fetchall()]
+
+        # Busca registros
+        cursor.execute(f"SELECT FIRST {int(limite)} * FROM FC12B00 ORDER BY 1 DESC")
+        cols = [desc[0].strip() for desc in cursor.description]
+        registros = []
+        for row in cursor.fetchall():
+            reg = {}
+            for i, col in enumerate(cols):
+                val = row[i]
+                if val is None:
+                    reg[col] = None
+                elif hasattr(val, 'read'):
+                    try:
+                        reg[col] = val.read().decode('latin-1')[:300]
+                    except:
+                        reg[col] = "[BLOB]"
+                elif hasattr(val, 'strftime'):
+                    reg[col] = val.strftime('%d/%m/%Y %H:%M:%S')
+                else:
+                    reg[col] = str(val)
+            registros.append(reg)
+
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "tabela": "FC12B00",
+            "colunas_disponiveis": colunas_disponiveis,
+            "total": len(registros),
+            "registros": registros
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/debug/fc90100', methods=['GET'])
+def debug_fc90100():
+    """Inspeciona FC90100 (config de impressoras)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Verifica se tabela existe
+        cursor.execute("""
+            SELECT COUNT(*) FROM RDB$RELATIONS WHERE RDB$RELATION_NAME = 'FC90100'
+        """)
+        if cursor.fetchone()[0] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Tabela FC90100 nao existe no banco"})
+
+        # Descobre colunas
+        cursor.execute("""
+            SELECT TRIM(RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS
+            WHERE RDB$RELATION_NAME = 'FC90100'
+            ORDER BY RDB$FIELD_POSITION
+        """)
+        colunas_disponiveis = [r[0] for r in cursor.fetchall()]
+
+        # Busca todos os registros
+        cursor.execute("SELECT * FROM FC90100")
+        cols = [desc[0].strip() for desc in cursor.description]
+        registros = []
+        for row in cursor.fetchall():
+            reg = {}
+            for i, col in enumerate(cols):
+                val = row[i]
+                if val is None:
+                    reg[col] = None
+                elif hasattr(val, 'read'):
+                    try:
+                        reg[col] = val.read().decode('latin-1')[:300]
+                    except:
+                        reg[col] = "[BLOB]"
+                elif hasattr(val, 'strftime'):
+                    reg[col] = val.strftime('%d/%m/%Y %H:%M:%S')
+                else:
+                    reg[col] = str(val)
+            registros.append(reg)
+
+        cursor.close()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "tabela": "FC90100",
+            "colunas_disponiveis": colunas_disponiveis,
+            "total": len(registros),
+            "registros": registros
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Servidor iniciando na porta 5000...")
-    print(f"Impressão disponível: {PRINTING_AVAILABLE}")
+    print(f"Impressao disponivel: {PRINTING_AVAILABLE}")
     print("Teste: http://localhost:5000/api/health")
+    print("Debug rotulos: http://localhost:5000/api/debug/fc12300/<nr_requisicao>")
+    print("Debug fila: http://localhost:5000/api/debug/fc12b00")
+    print("Debug impressoras DB: http://localhost:5000/api/debug/fc90100")
+    print("Debug estrutura: http://localhost:5000/api/debug/estrutura-tabela/<nome>")
     print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
