@@ -109,11 +109,11 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     nome: 'Ampola Pacote Pequeno',
     dimensoes: { larguraMM: 45, alturaMM: 25 },
     colunasMax: 27,
-    linhasMax: 8,
+    linhasMax: 7,
     linhas: [
-      { id: 'linha1', campos: ['paciente'], spacing: 'normal' },
-      { id: 'linha2', campos: ['requisicao'], spacing: 'normal' },
-      { id: 'linha3', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
+      { id: 'linha2', campos: ['medico'], spacing: 'normal' },
+      { id: 'linha3', campos: ['registro'], spacing: 'normal' },
     ],
     campoConfig: baseCampoConfig({
       composicao: { visible: false },
@@ -127,7 +127,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
       contem: { visible: false },
       posologia: { visible: false },
       observacoes: { visible: false },
-      registro: { visible: false },
+      registro: { visible: true },
     }),
   },
 
