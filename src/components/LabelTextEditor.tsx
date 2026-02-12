@@ -60,7 +60,9 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
   'D': { conselho: 'RMS' }, 'E': { conselho: 'CRBio' }, 'F': { conselho: 'CRO' },
 };
 
-function generateText(rotulo: RotuloItem): string {
+function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
+
   const formatarPrescritor = () => {
     if (!rotulo.numeroCRM) return "";
     const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
@@ -93,62 +95,66 @@ function generateText(rotulo: RotuloItem): string {
 
   if (isKit && rotulo.componentes) {
     const lines: string[] = [];
-    if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
-    const prescritor = formatarPrescritor();
-    if (prescritor) lines.push(prescritor);
+    if (vis('paciente') && rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
+    if (vis('medico')) { const p = formatarPrescritor(); if (p) lines.push(p); }
+    if (vis('requisicao')) lines.push(`REQ:${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`);
     rotulo.componentes.forEach((comp) => {
       const nomeExibicao = rotulo.eSinonimo ? (comp.composicao || formatarNomeComponente(comp.nome)) : formatarNomeComponente(comp.nome);
       lines.push(nomeExibicao);
       const meta: string[] = [];
-      if (comp.ph) meta.push(`pH:${comp.ph}`);
-      if (comp.lote) meta.push(`L:${comp.lote}`);
-      if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
-      if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (comp.aplicacao) meta.push(`APLICAÇÃO:${comp.aplicacao}`);
+      if (vis('ph') && comp.ph) meta.push(`pH:${comp.ph}`);
+      if (vis('lote') && comp.lote) meta.push(`L:${comp.lote}`);
+      if (vis('fabricacao') && comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
+      if (vis('validade') && comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
+      if (vis('aplicacao') && comp.aplicacao) meta.push(`APLICAÇÃO:${comp.aplicacao}`);
       if (meta.length > 0) lines.push(meta.join("  "));
     });
     const aplicacao = getAplicacao();
     const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
     const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
     const usoLine: string[] = [];
-    if (tipoUsoValido) usoLine.push(tipoUsoValido);
-    if (aplicacao) usoLine.push(`APLICAÇÃO:${aplicacao}`);
+    if (vis('tipoUso') && tipoUsoValido) usoLine.push(tipoUsoValido);
+    if (vis('aplicacao') && aplicacao) usoLine.push(`APLICAÇÃO:${aplicacao}`);
     if (usoLine.length > 0) lines.push(usoLine.join("  "));
     const contemReg: string[] = [];
-    if (rotulo.contem) contemReg.push(`CONTÉM: ${rotulo.contem}`);
-    if (rotulo.numeroRegistro) contemReg.push(`REG:${rotulo.numeroRegistro}`);
+    if (vis('contem') && rotulo.contem) contemReg.push(`CONTÉM: ${rotulo.contem}`);
+    if (vis('registro') && rotulo.numeroRegistro) contemReg.push(`REG:${rotulo.numeroRegistro}`);
     if (contemReg.length > 0) lines.push(contemReg.join("   "));
     return lines.join('\n');
   }
 
   const aplicacao = getAplicacao();
   const lines: string[] = [];
-  const prescritor = formatarPrescritor();
-  if (prescritor) lines.push(prescritor);
-  if (rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
-  if (mescla) {
+  if (vis('medico')) { const p = formatarPrescritor(); if (p) lines.push(p); }
+  if (vis('paciente') && rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
+  if (vis('requisicao')) lines.push(`REQ:${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`);
+  if (mescla && vis('composicao')) {
     lines.push(rotulo.composicao!.toUpperCase());
-  } else {
+  } else if (!mescla && vis('formula')) {
     const f = formatarFormula(rotulo.formula);
     if (f) lines.push(f);
   }
-  const loteInfo: string[] = [];
-  const lote = formatarLote();
-  if (lote) loteInfo.push(`L: ${lote}`);
-  if (rotulo.dataFabricacao) loteInfo.push(`F: ${formatarDataCurta(rotulo.dataFabricacao)}`);
-  if (rotulo.dataValidade) loteInfo.push(`V: ${formatarDataCurta(rotulo.dataValidade)}`);
-  if (loteInfo.length > 0) lines.push(loteInfo.join('  '));
-  const infoLine: string[] = [];
-  if (rotulo.ph) infoLine.push(`pH: ${rotulo.ph}`);
-  if (aplicacao) infoLine.push(`APLICAÇÃO: ${aplicacao}`);
-  if (rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
-  if (infoLine.length > 0) lines.push(infoLine.join('  '));
-  const tipoUso = rotulo.tipoUso?.toUpperCase();
-  if (tipoUso && !/^\d+$/.test(tipoUso)) lines.push(tipoUso);
-  if (rotulo.posologia) lines.push(`POS: ${rotulo.posologia.toUpperCase()}`);
-  const obs = rotulo.observacoes?.replace(/APLIC(?:AÇÃO|ACAO)?[:\s]+[^\n,;]+[,;\s]*/gi, "").trim();
-  if (obs) lines.push(`OBS: ${obs}`);
-  if (rotulo.numeroRegistro) lines.push(`REG: ${rotulo.numeroRegistro}`);
+  if (vis('lote') || vis('fabricacao') || vis('validade')) {
+    const loteInfo: string[] = [];
+    if (vis('lote')) { const l = formatarLote(); if (l) loteInfo.push(`L: ${l}`); }
+    if (vis('fabricacao') && rotulo.dataFabricacao) loteInfo.push(`F: ${formatarDataCurta(rotulo.dataFabricacao)}`);
+    if (vis('validade') && rotulo.dataValidade) loteInfo.push(`V: ${formatarDataCurta(rotulo.dataValidade)}`);
+    if (loteInfo.length > 0) lines.push(loteInfo.join('  '));
+  }
+  if (vis('ph') || vis('aplicacao') || vis('contem')) {
+    const infoLine: string[] = [];
+    if (vis('ph') && rotulo.ph) infoLine.push(`pH: ${rotulo.ph}`);
+    if (vis('aplicacao') && aplicacao) infoLine.push(`APLICAÇÃO: ${aplicacao}`);
+    if (vis('contem') && rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
+    if (infoLine.length > 0) lines.push(infoLine.join('  '));
+  }
+  if (vis('tipoUso')) { const t = rotulo.tipoUso?.toUpperCase(); if (t && !/^\d+$/.test(t)) lines.push(t); }
+  if (vis('posologia') && rotulo.posologia) lines.push(`POS: ${rotulo.posologia.toUpperCase()}`);
+  if (vis('observacoes')) {
+    const obs = rotulo.observacoes?.replace(/APLIC(?:AÇÃO|ACAO)?[:\s]+[^\n,;]+[,;\s]*/gi, "").trim();
+    if (obs) lines.push(`OBS: ${obs}`);
+  }
+  if (vis('registro') && rotulo.numeroRegistro) lines.push(`REG: ${rotulo.numeroRegistro}`);
   return lines.join('\n');
 }
 
@@ -163,14 +169,14 @@ const LabelTextEditor = ({
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
 
   const rotulo = rotulos[currentIndex];
-  const text = rotulo?.textoLivre ?? generateText(rotulo);
+  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig);
 
-  // Initialize textoLivre if not set
+  // Initialize textoLivre on load or layout change
   useEffect(() => {
-    if (rotulo && !rotulo.textoLivre) {
-      onTextChange(rotulo.id, generateText(rotulo));
+    if (rotulo) {
+      onTextChange(rotulo.id, generateText(rotulo, layoutConfig));
     }
-  }, [rotulo?.id]);
+  }, [rotulo?.id, layoutConfig.tipo]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
