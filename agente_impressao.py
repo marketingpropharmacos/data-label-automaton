@@ -101,24 +101,26 @@ def pplb_text(rot, font, wmult, hmult, y, x, data):
 
 
 def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
-    """Gera comandos de configuração PPLB (antes dos blocos de etiqueta)."""
+    """Gera comandos de configuração PPLB (antes dos blocos de etiqueta).
+    PPLB Argox usa CR puro como terminador."""
     partes = [
         f"q{largura_dots}",
         f"Q{altura_dots},{gap_dots}",
         "D11",
     ]
-    return "\n".join(partes) + "\n"
+    return "\r".join(partes) + "\r"
 
 
 def pplb_label(linhas):
-    """Monta bloco de etiqueta PPLB com STX (sem comandos de dimensão)."""
+    """Monta bloco de etiqueta PPLB com STX (sem comandos de dimensão).
+    PPLB Argox usa CR puro como terminador."""
     partes = [
         "\x02L",
         "H10",
     ]
     partes.extend(linhas)
     partes.append("E")
-    return "\n".join(partes) + "\n"
+    return "\r".join(partes) + "\r"
 
 
 # ============================================
@@ -408,7 +410,7 @@ def imprimir():
 
     # Resolve impressora com match inteligente
     impressora = find_printer_match(impressora_req) or impressora_req
-    logger.info(f"Impressora solicitada: '{impressora_req}' → resolvida: '{impressora}'")
+    logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
 
     gerador = GERADORES_PPLB.get(layout_tipo, gerar_pplb_ampcx)
     dims = get_printer_dims(impressora)
@@ -436,8 +438,8 @@ def imprimir():
     # Debug: mostrar comandos PPLB
     logger.info(f"\n{'='*60}")
     logger.info(f"[DEBUG PPLB] Comandos completos ({len(comandos_todos)} bytes):")
-    for i, line in enumerate(comandos_todos.split('\n')):
-        display = line.replace('\x02', '<STX>')
+    for i, line in enumerate(comandos_todos.split('\r')):
+        display = line.replace('\x02', '<STX>').replace('\n', '<LF>')
         logger.info(f"  [{i:02d}] {display}")
     logger.info(f"{'='*60}")
 
