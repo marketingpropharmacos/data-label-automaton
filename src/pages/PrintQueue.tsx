@@ -37,11 +37,11 @@ const PrintQueue = () => {
     const result = await buscarConfigImpressoras();
     if (result.success && result.data) {
       setImpressoras(result.data);
-      if (result.data.length > 0 && !selectedPrinter) {
-        setSelectedPrinter(result.data[0].portaRede);
+      if (result.data.length > 0) {
+        setSelectedPrinter(prev => prev || result.data![0].portaRede);
       }
     }
-  }, [selectedPrinter]);
+  }, []);
 
   useEffect(() => {
     carregarFila();
