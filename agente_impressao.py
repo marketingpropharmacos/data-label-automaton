@@ -1,5 +1,5 @@
 """
-Agente de Impressão Local Robusto - ProPharmacos V2.2
+Agente de Impressão Local Robusto - ProPharmacos V2.3
 ------------------------------------------------------------
 Compatível com servidor.py (proxy central).
 Protocolo PPLB puro (Argox OS-2140) com batch printing.
@@ -100,14 +100,21 @@ def pplb_text(rot, font, wmult, hmult, y, x, data):
     return f"1{rot}{font}{wmult}{hmult}{y:05d}{x:05d}{data}"
 
 
-def pplb_label(linhas, largura_dots=360, altura_dots=200, gap_dots=24):
-    """Monta bloco de etiqueta PPLB com STX."""
+def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
+    """Gera comandos de configuração PPLB (antes dos blocos de etiqueta)."""
+    partes = [
+        f"q{largura_dots}",
+        f"Q{altura_dots},{gap_dots}",
+        "D11",
+    ]
+    return "\r\n".join(partes) + "\r\n"
+
+
+def pplb_label(linhas):
+    """Monta bloco de etiqueta PPLB com STX (sem comandos de dimensão)."""
     partes = [
         "\x02L",
         "H10",
-        "D11",
-        f"q{largura_dots}",
-        f"Q{altura_dots},{gap_dots}",
     ]
     partes.extend(linhas)
     partes.append("E")
@@ -167,7 +174,7 @@ def gerar_pplb_ampcx(rotulo, farmacia, dims=None):
         pplb_text(1, 2, 1, 1, 105, 10, f"APLICACAO: {aplicacao}"),
         pplb_text(1, 2, 1, 1, 130, 10, f"CONTEM: {contem}"),
         pplb_text(1, 2, 1, 1, 155, 10, f"Reg: {registro}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
 
 
 def gerar_pplb_amp10(rotulo, farmacia, dims=None):
@@ -194,7 +201,7 @@ def gerar_pplb_amp10(rotulo, farmacia, dims=None):
         pplb_text(1, 2, 1, 1, 105, 10, f"REG: {registro}"),
         pplb_text(1, 2, 1, 1, 130, 10, f"APLICACAO: {aplicacao}"),
         pplb_text(1, 2, 1, 1, 155, 10, f"CONTEM: {contem}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
 
 
 def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
@@ -211,7 +218,7 @@ def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
         pplb_text(1, 2, 1, 1, 10,  10, paciente),
         pplb_text(1, 2, 1, 1, 60,  10, f"REQ:{nr_req}-{nr_item}"),
         pplb_text(1, 2, 1, 1, 110, 10, f"DR.{nome_medico[:25]} {crm}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
 
 
 def gerar_pplb_a_pac_gran(rotulo, farmacia, dims=None):
@@ -228,7 +235,7 @@ def gerar_pplb_a_pac_gran(rotulo, farmacia, dims=None):
         pplb_text(1, 2, 1, 1, 10,  10, paciente),
         pplb_text(1, 2, 1, 1, 60,  10, f"REQ:{nr_req}-{nr_item}"),
         pplb_text(1, 2, 1, 1, 110, 10, f"DR.{nome_medico[:40]} {crm}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
 
 
 def gerar_pplb_tirz(rotulo, farmacia, dims=None):
@@ -256,7 +263,7 @@ def gerar_pplb_tirz(rotulo, farmacia, dims=None):
         pplb_text(1, 2, 1, 1, 105, 10, linha_meta),
         pplb_text(1, 2, 1, 1, 130, 10, f"APLICACAO: {aplicacao}"),
         pplb_text(1, 2, 1, 1, 155, 10, f"CONTEM: {contem}  REG:{registro}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
 
 
 # Mapa de geradores
@@ -345,7 +352,7 @@ def health():
         "sistema": platform.system(),
         "impressao_disponivel": PYWIN32_OK,
         "hostname": socket.gethostname(),
-        "version": "2.2.0",
+        "version": "2.3.0",
     })
 
 
@@ -368,12 +375,14 @@ def teste_impressao():
     impressora = find_printer_match(impressora_req) or impressora_req
     dims = get_printer_dims(impressora)
 
-    comandos = pplb_label([
+    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
+    label = pplb_label([
         pplb_text(1, 3, 1, 1, 30, 10, "*** TESTE ***"),
-        pplb_text(1, 2, 1, 1, 80, 10, "PPLB OK - V2.2"),
+        pplb_text(1, 2, 1, 1, 80, 10, "PPLB OK - V2.3"),
         pplb_text(1, 2, 1, 1, 120, 10, f"Imp: {impressora}"),
         pplb_text(1, 2, 1, 1, 155, 10, f"q{dims['largura_dots']} Q{dims['altura_dots']}"),
-    ], largura_dots=dims['largura_dots'], altura_dots=dims['altura_dots'], gap_dots=dims['gap_dots'])
+    ])
+    comandos = setup + label
 
     resultado = enviar_para_impressora(impressora, comandos)
     if resultado.get("success"):
@@ -404,19 +413,25 @@ def imprimir():
     gerador = GERADORES_PPLB.get(layout_tipo, gerar_pplb_ampcx)
     dims = get_printer_dims(impressora)
 
-    # Batch: concatenar TODOS os comandos PPLB
-    comandos_todos = ""
+    # Setup: comandos de dimensão UMA VEZ antes dos blocos de etiqueta
+    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
+
+    # Batch: concatenar TODOS os blocos de etiqueta PPLB
+    labels_todos = ""
     erros_geracao = []
     for rotulo in rotulos:
         try:
-            comandos = gerador(rotulo, farmacia, dims)
-            comandos_todos += comandos
+            label = gerador(rotulo, farmacia, dims)
+            labels_todos += label
             logger.info(f"Rótulo {rotulo.get('id', '?')} layout={layout_tipo} dims=q{dims['largura_dots']}/Q{dims['altura_dots']} adicionado")
         except Exception as e:
             erros_geracao.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
 
-    if not comandos_todos:
+    if not labels_todos:
         return jsonify({"success": False, "error": "Nenhum comando gerado", "erros": erros_geracao}), 500
+
+    # Montar: setup + todos os blocos de etiqueta
+    comandos_todos = setup + labels_todos
 
     # Debug: mostrar comandos PPLB
     logger.info(f"\n{'='*60}")
@@ -449,7 +464,7 @@ def imprimir():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5001))
     logger.info("=" * 50)
-    logger.info("Agente de Impressão PPLB - ProPharmacos V2.2")
+    logger.info("Agente de Impressão PPLB - ProPharmacos V2.3")
     logger.info(f"Hostname: {socket.gethostname()}")
     logger.info(f"Porta: {port}")
     logger.info(f"Impressora padrão: {IMPRESSORA_PADRAO}")
