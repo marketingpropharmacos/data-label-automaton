@@ -4406,6 +4406,34 @@ def _mapear_para_agente(data: dict) -> dict:
     }
 
 
+@app.route('/api/agente/health', methods=['GET'])
+def agente_health():
+    """Proxy: verifica se o agente de impressão está online."""
+    try:
+        resp = http_requests.get(
+            f"{AGENTE_URL}/health",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=5
+        )
+        return (resp.text, resp.status_code, {"Content-Type": resp.headers.get("Content-Type", "application/json")})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Agente offline: {e}"}), 502
+
+
+@app.route('/api/agente/impressoras', methods=['GET'])
+def agente_impressoras():
+    """Proxy: lista impressoras disponíveis no PC do agente."""
+    try:
+        resp = http_requests.get(
+            f"{AGENTE_URL}/impressoras",
+            headers={"ngrok-skip-browser-warning": "true"},
+            timeout=5
+        )
+        return (resp.text, resp.status_code, {"Content-Type": resp.headers.get("Content-Type", "application/json")})
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Falha ao consultar agente: {e}"}), 502
+
+
 @app.route('/api/imprimir-teste', methods=['POST'])
 def imprimir_teste():
     """Encaminha teste de impressão para o agente local."""
