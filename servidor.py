@@ -4753,7 +4753,7 @@ def debug_fc90100():
 # ENDPOINTS DE PRODUÇÃO: FILA DE IMPRESSÃO + IMPRESSORAS
 # =====================================================
 
-@app.route('/api/fila-impressao', methods=['GET'])
+@app.route('/api/fila-impressao', methods=['GET', 'OPTIONS'])
 def fila_impressao():
     """Retorna rótulos pendentes (STATUS=0) da FC12B00 para uma filial."""
     filial = request.args.get('filial', '1')
@@ -4826,7 +4826,7 @@ def fila_impressao():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route('/api/fila-impressao/marcar', methods=['POST'])
+@app.route('/api/fila-impressao/marcar', methods=['POST', 'OPTIONS'])
 def fila_impressao_marcar():
     """Marca rótulos como 'em impressão' (STATUS 0 -> 1)."""
     data = request.get_json()
@@ -4865,7 +4865,7 @@ def fila_impressao_marcar():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route('/api/impressoras-config', methods=['GET'])
+@app.route('/api/impressoras-config', methods=['GET', 'OPTIONS'])
 def impressoras_config():
     """Retorna configurações de impressora da FC90100."""
     try:
