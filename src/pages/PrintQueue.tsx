@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
-import { RefreshCw, Printer, ArrowLeft, CheckSquare, Square } from "lucide-react";
+import { RefreshCw, Printer, ArrowLeft, CheckSquare, Square, ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
 import { FilaImpressaoItem, ImpressoraConfig } from "@/types/requisicao";
 import { buscarFilaImpressao, marcarParaImpressao, buscarConfigImpressoras } from "@/services/filaImpressaoService";
@@ -16,6 +18,7 @@ const PrintQueue = () => {
   const [impressoras, setImpressoras] = useState<ImpressoraConfig[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedPrinter, setSelectedPrinter] = useState<string>("");
+  const [printerOpen, setPrinterOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMarking, setIsMarking] = useState(false);
   const { toast } = useToast();
@@ -124,21 +127,46 @@ const PrintQueue = () => {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 {impressoras.length > 0 && (
-                  <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
-                    <SelectTrigger className="w-[200px] h-9 text-xs">
-                      <Printer className="h-3.5 w-3.5 mr-1 shrink-0" />
-                      <SelectValue placeholder="Selecione impressora" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      {impressoras
-                        .filter((imp) => imp.portaRede && imp.portaRede.trim() !== "")
-                        .map((imp, idx) => (
-                        <SelectItem key={`${imp.portaRede}-${idx}`} value={imp.portaRede}>
-                          {imp.nomePC} — {imp.portaRede}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={printerOpen} onOpenChange={setPrinterOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" aria-expanded={printerOpen} className="w-[250px] h-9 text-xs justify-between">
+                        <Printer className="h-3.5 w-3.5 mr-1 shrink-0" />
+                        <span className="truncate">
+                          {selectedPrinter
+                            ? impressoras.find(i => i.portaRede === selectedPrinter)
+                              ? `${impressoras.find(i => i.portaRede === selectedPrinter)!.nomePC} — ${selectedPrinter}`
+                              : selectedPrinter
+                            : "Selecione impressora"}
+                        </span>
+                        <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-popover z-50">
+                      <Command>
+                        <CommandInput placeholder="Pesquisar impressora..." />
+                        <CommandList>
+                          <CommandEmpty>Nenhuma impressora encontrada.</CommandEmpty>
+                          <CommandGroup>
+                            {impressoras
+                              .filter((imp) => imp.portaRede && imp.portaRede.trim() !== "")
+                              .map((imp, idx) => (
+                                <CommandItem
+                                  key={`${imp.portaRede}-${idx}`}
+                                  value={`${imp.nomePC} ${imp.portaRede}`}
+                                  onSelect={() => {
+                                    setSelectedPrinter(imp.portaRede);
+                                    setPrinterOpen(false);
+                                  }}
+                                >
+                                  <Check className={cn("mr-2 h-4 w-4", selectedPrinter === imp.portaRede ? "opacity-100" : "opacity-0")} />
+                                  {imp.nomePC} — {imp.portaRede}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 )}
                 <Button variant="outline" size="sm" onClick={selectAll}>
                   <CheckSquare className="h-4 w-4 mr-1" /> Todos
