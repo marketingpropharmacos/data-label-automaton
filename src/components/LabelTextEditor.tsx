@@ -34,6 +34,19 @@ function wrapText(text: string, maxCols: number, maxLines: number): string {
   return wrapped.slice(0, maxLines).join('\n');
 }
 
+// ---- Truncate utility (for fixed-grid layouts like A_PAC_PEQ) ----
+function truncateText(text: string, maxCols: number, maxLines: number): string {
+  const lines = text.split('\n').slice(0, maxLines);
+  return lines.map(line => line.substring(0, maxCols)).join('\n');
+}
+
+// ---- Pad line utility: align left+right within fixed width ----
+function padLine(left: string, right: string, width: number): string {
+  const space = width - left.length - right.length;
+  if (space <= 0) return (left + right).substring(0, width);
+  return left + ' '.repeat(space) + right;
+}
+
 interface LabelTextEditorProps {
   rotulos: RotuloItem[];
   currentIndex: number;
@@ -90,7 +103,50 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
   'D': { conselho: 'RMS' }, 'E': { conselho: 'CRBio' }, 'F': { conselho: 'CRO' },
 };
 
+// ---- A_PAC_PEQ specific generator (fixed grid) ----
+function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const maxCols = layoutConfig.colunasMax || 27;
+  const maxLines = layoutConfig.linhasMax || 7;
+
+  const formatarPrescritorPeq = () => {
+    if (!rotulo.numeroCRM) return { name: "", conselho: "" };
+    const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+    const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+    const conselho = tipo.conselho;
+    const name = rotulo.nomeMedico ? `DR(A)${rotulo.nomeMedico.toUpperCase()}` : "";
+    const conselhoStr = conselho ? `${conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}` : "";
+    return { name, conselho: conselhoStr };
+  };
+
+  const lines: string[] = [];
+
+  // Line 1: PACIENTE + REQ right-aligned
+  const paciente = (rotulo.nomePaciente || "").toUpperCase();
+  const req = `REQ:${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`;
+  lines.push(padLine(paciente, req, maxCols));
+
+  // Line 2: DR(A)MEDICO + CONSELHO right-aligned
+  const { name: drName, conselho } = formatarPrescritorPeq();
+  lines.push(padLine(drName, conselho, maxCols));
+
+  // Line 3: REG right-aligned
+  const reg = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+  lines.push(padLine("", reg, maxCols));
+
+  // Lines 4-7: empty (user can edit freely)
+  while (lines.length < maxLines) {
+    lines.push("");
+  }
+
+  return lines.slice(0, maxLines).join('\n');
+}
+
 function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  // Route to specific generator for A_PAC_PEQ
+  if (layoutConfig.tipo === 'A_PAC_PEQ') {
+    return generateTextPacPeq(rotulo, layoutConfig);
+  }
+
   const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
 
   const formatarPrescritor = () => {
@@ -209,7 +265,9 @@ const LabelTextEditor = ({
     if (rotulo) {
       let generated = generateText(rotulo, layoutConfig);
       if (maxCols && maxLines) {
-        generated = wrapText(generated, maxCols, maxLines);
+        generated = layoutConfig.tipo === 'A_PAC_PEQ'
+          ? truncateText(generated, maxCols, maxLines)
+          : wrapText(generated, maxCols, maxLines);
       }
       onTextChange(rotulo.id, generated);
     }
@@ -243,7 +301,9 @@ const LabelTextEditor = ({
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let newText = e.target.value;
     if (maxCols && maxLines) {
-      newText = wrapText(newText, maxCols, maxLines);
+      newText = layoutConfig.tipo === 'A_PAC_PEQ'
+        ? truncateText(newText, maxCols, maxLines)
+        : wrapText(newText, maxCols, maxLines);
     }
     onTextChange(rotulo.id, newText);
     setTimeout(updateCursorInfo, 0);
