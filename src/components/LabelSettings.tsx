@@ -24,7 +24,7 @@ import {
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
 import { verificarAgente, listarImpressoras, testeImpressaoAgente } from "@/services/printAgentService";
 import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig } from "@/types/requisicao";
-import { getLayouts } from "@/config/layouts";
+import { getLayouts, fieldLabels } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
 
 const LabelSettings = () => {
@@ -592,14 +592,27 @@ const LabelSettings = () => {
                 Personalize a posição dos campos em cada tipo de layout. Arraste os campos para reposicioná-los.
               </p>
               
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-1">
                 {(Object.keys(layouts) as LayoutType[]).map((tipo) => {
                   const layout = layouts[tipo];
+                  const visibleFields = Object.entries(layout.campoConfig).filter(([_, c]) => c.visible).length;
+                  const totalFields = Object.keys(layout.campoConfig).length;
+                  
                   return (
                     <Card key={tipo} className="border">
                       <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                          <CardTitle className="text-base">{layout.nome}</CardTitle>
+                          <div className="space-y-1">
+                            <CardTitle className="text-base">{layout.nome}</CardTitle>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{tipo}</span>
+                              {layout.dimensoes && (
+                                <span>{layout.dimensoes.larguraMM}×{layout.dimensoes.alturaMM}mm</span>
+                              )}
+                              <span>{layout.linhas.length} linhas</span>
+                              <span>{visibleFields}/{totalFields} campos</span>
+                            </div>
+                          </div>
                           <Dialog open={editingLayout === tipo} onOpenChange={(open) => setEditingLayout(open ? tipo : null)}>
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm">
@@ -611,7 +624,7 @@ const LabelSettings = () => {
                               <DialogHeader>
                                 <DialogTitle>Editar Layout: {layout.nome}</DialogTitle>
                                 <DialogDescription>
-                                  Arraste os campos para reposicioná-los ou use os controles para ajustar tamanho e posição.
+                                  Organize os campos em linhas e configure tamanho, negrito e visibilidade de cada campo.
                                 </DialogDescription>
                               </DialogHeader>
                               <LayoutEditor 
@@ -623,10 +636,34 @@ const LabelSettings = () => {
                           </Dialog>
                         </div>
                       </CardHeader>
-                      <CardContent>
-                        <p className="text-xs text-muted-foreground">
-                          Tipo: {tipo}
-                        </p>
+                      <CardContent className="pt-0">
+                        <div className="space-y-1">
+                          {layout.linhas.map((linha, idx) => {
+                            const campos = linha.campos.filter(f => layout.campoConfig[f]?.visible);
+                            if (campos.length === 0) return null;
+                            return (
+                              <div key={linha.id} className="flex items-center gap-2 text-xs">
+                                <span className="text-muted-foreground w-14 flex-shrink-0 font-mono">
+                                  L{idx + 1} ({linha.spacing?.[0] || 'n'})
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {campos.map(f => {
+                                    const cfg = layout.campoConfig[f];
+                                    return (
+                                      <span 
+                                        key={f} 
+                                        className={`px-1.5 py-0.5 rounded bg-muted ${cfg.bold ? 'font-bold' : ''} ${cfg.uppercase ? 'uppercase' : ''}`}
+                                        title={`${cfg.fontSize}px${cfg.bold ? ', bold' : ''}${cfg.uppercase ? ', UPPER' : ''}`}
+                                      >
+                                        {fieldLabels[f]} <span className="text-muted-foreground">({cfg.fontSize})</span>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </CardContent>
                     </Card>
                   );
