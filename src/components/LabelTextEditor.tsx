@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RotuloItem, PharmacyConfig, LayoutConfig, LayoutType } from "@/types/requisicao";
@@ -246,6 +246,11 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
 
 // ---- Component ----
 
+const FONT_SIZE_KEY = 'label_editor_font_size';
+const getStoredFontSize = () => {
+  try { return parseInt(localStorage.getItem(FONT_SIZE_KEY) || '14', 10); } catch { return 14; }
+};
+
 const LabelTextEditor = ({
   rotulos, currentIndex, onIndexChange, onTextChange,
   layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
@@ -253,6 +258,7 @@ const LabelTextEditor = ({
 }: LabelTextEditorProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
+  const [editorFontSize, setEditorFontSize] = useState(getStoredFontSize);
 
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
@@ -318,6 +324,14 @@ const LabelTextEditor = ({
 
   const dim = layoutConfig.dimensoes || { larguraMM: 109, alturaMM: 25 };
 
+  const handleFontSizeChange = (delta: number) => {
+    setEditorFontSize(prev => {
+      const next = Math.max(8, Math.min(24, prev + delta));
+      localStorage.setItem(FONT_SIZE_KEY, String(next));
+      return next;
+    });
+  };
+
   if (!rotulo) return null;
 
   return (
@@ -330,6 +344,16 @@ const LabelTextEditor = ({
             Registro: {currentIndex + 1}/{rotulos.length}
           </span>
         </div>
+        <div className="flex items-center gap-1">
+          <Type className="h-3.5 w-3.5 text-muted-foreground" />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(-1)}>
+            <Minus className="h-3 w-3" />
+          </Button>
+          <span className="text-xs text-muted-foreground w-6 text-center">{editorFontSize}</span>
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(1)}>
+            <Plus className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
       {/* Textarea */}
@@ -341,7 +365,8 @@ const LabelTextEditor = ({
           onKeyUp={handleCursorMove}
           onClick={handleCursorMove}
           onFocus={updateCursorInfo}
-          className="w-full bg-background text-foreground font-mono text-sm p-4 resize-none focus:outline-none border-none min-h-[200px]"
+          className="w-full bg-background text-foreground font-mono p-4 resize-none focus:outline-none border-none min-h-[200px]"
+          style={{ fontSize: `${editorFontSize}px`, lineHeight: '1.4' }}
           spellCheck={false}
           rows={Math.max(8, text.split('\n').length + 2)}
         />

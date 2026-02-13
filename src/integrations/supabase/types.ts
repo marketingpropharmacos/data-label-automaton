@@ -14,6 +14,237 @@ export type Database = {
   }
   public: {
     Tables: {
+      raw_alpha_cmv_diario: {
+        Row: {
+          competencia: string
+          created_at: string
+          fonte: string
+          id: number
+          loja_id: number
+          valor_cmv: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id: number
+          valor_cmv: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id?: number
+          valor_cmv?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_cmv_diario_tipo: {
+        Row: {
+          competencia: string
+          created_at: string
+          fonte: string
+          id: number
+          is_manipulado: boolean
+          loja_id: number
+          valor_cmv: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          is_manipulado: boolean
+          loja_id: number
+          valor_cmv: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          is_manipulado?: boolean
+          loja_id?: number
+          valor_cmv?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_dre_receita_diaria: {
+        Row: {
+          competencia: string
+          created_at: string
+          fonte: string
+          id: number
+          loja_id: number
+          valor_receita_bruta: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id: number
+          valor_receita_bruta: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id?: number
+          valor_receita_bruta?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_dre_receita_diaria_tipo: {
+        Row: {
+          competencia: string
+          created_at: string
+          fonte: string
+          id: number
+          is_manipulado: boolean
+          loja_id: number
+          valor_receita: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          is_manipulado: boolean
+          loja_id: number
+          valor_receita: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          is_manipulado?: boolean
+          loja_id?: number
+          valor_receita?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_produto_classificacao: {
+        Row: {
+          classificacao_caminho: string | null
+          classificacao_id: number | null
+          created_at: string
+          is_manipulado: boolean
+          produto_id: number
+        }
+        Insert: {
+          classificacao_caminho?: string | null
+          classificacao_id?: number | null
+          created_at?: string
+          is_manipulado: boolean
+          produto_id: number
+        }
+        Update: {
+          classificacao_caminho?: string | null
+          classificacao_id?: number | null
+          created_at?: string
+          is_manipulado?: boolean
+          produto_id?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_settlement_diario: {
+        Row: {
+          competencia: string
+          created_at: string
+          extra_json: Json | null
+          fonte: string
+          formapagamento_id: number
+          formapagamento_nome: string | null
+          formapagamento_tipo: string | null
+          id: number
+          loja_id: number
+          valor: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          extra_json?: Json | null
+          fonte?: string
+          formapagamento_id: number
+          formapagamento_nome?: string | null
+          formapagamento_tipo?: string | null
+          id?: number
+          loja_id: number
+          valor: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          extra_json?: Json | null
+          fonte?: string
+          formapagamento_id?: number
+          formapagamento_nome?: string | null
+          formapagamento_tipo?: string | null
+          id?: number
+          loja_id?: number
+          valor?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_vendas: {
+        Row: {
+          competencia: string
+          created_at: string | null
+          data_emissao: string | null
+          id: number
+          loja_id: number
+          numero_documento: string | null
+          settlement_method: string | null
+          valor_total: number | null
+        }
+        Insert: {
+          competencia: string
+          created_at?: string | null
+          data_emissao?: string | null
+          id?: number
+          loja_id: number
+          numero_documento?: string | null
+          settlement_method?: string | null
+          valor_total?: number | null
+        }
+        Update: {
+          competencia?: string
+          created_at?: string | null
+          data_emissao?: string | null
+          id?: number
+          loja_id?: number
+          numero_documento?: string | null
+          settlement_method?: string | null
+          valor_total?: number | null
+        }
+        Relationships: []
+      }
+      raw_healthcheck: {
+        Row: {
+          alpha_now: string | null
+          created_at: string
+          id: number
+          source: string
+        }
+        Insert: {
+          alpha_now?: string | null
+          created_at?: string
+          id?: number
+          source: string
+        }
+        Update: {
+          alpha_now?: string | null
+          created_at?: string
+          id?: number
+          source?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -37,7 +268,48 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_compare_dre_dfc_diario: {
+        Row: {
+          competencia: string | null
+          dfc_recebido: number | null
+          diferenca: number | null
+          dre_receita: number | null
+          loja_id: number | null
+        }
+        Relationships: []
+      }
+      vw_dre_diaria_simplificada: {
+        Row: {
+          cmv: number | null
+          competencia: string | null
+          loja_id: number | null
+          lucro_bruto: number | null
+          receita_bruta: number | null
+        }
+        Relationships: []
+      }
+      vw_dre_diaria_tipo: {
+        Row: {
+          cmv: number | null
+          competencia: string | null
+          is_manipulado: boolean | null
+          loja_id: number | null
+          lucro_bruto: number | null
+          receita: number | null
+        }
+        Relationships: []
+      }
+      vw_dre_mensal_tipo: {
+        Row: {
+          cmv: number | null
+          is_manipulado: boolean | null
+          loja_id: number | null
+          lucro_bruto: number | null
+          mes: string | null
+          receita: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
