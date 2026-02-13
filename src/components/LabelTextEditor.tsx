@@ -126,7 +126,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const line2 = padLine(drName, conselhoStr, maxCols);
 
   // Line 3: REG:GGGGGGGG (8 chars) right-aligned
-  const regNum = (rotulo.numeroRegistro || "").substring(0, 8);
+  const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
   const reg = regNum ? `REG:${regNum}` : "";
   const line3 = padLine("", reg, maxCols);
 
