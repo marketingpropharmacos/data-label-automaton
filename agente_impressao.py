@@ -224,11 +224,11 @@ def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
             # Renderizar TODAS as linhas com conteúdo (sem pular)
             if line_text.strip():
-                pplb_lines.append(pplb_text(1, 1, 1, 1, y, 10, line_text[:dims['cols_max']]))
+                pplb_lines.append(pplb_text(1, 0, 1, 1, y, 10, line_text[:dims['cols_max']]))
         if not pplb_lines:
             # Fallback: pelo menos o nome do paciente
             paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:dims['cols_max']].upper()
-            pplb_lines.append(pplb_text(1, 1, 1, 1, 5, 10, paciente))
+            pplb_lines.append(pplb_text(1, 0, 1, 1, 5, 10, paciente))
         return pplb_label(pplb_lines)
 
     # Fallback: geração estruturada com TODOS os campos disponíveis
@@ -253,7 +253,7 @@ def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
     texts = [line1, line2, line3, '', '', '', '']
     for i, y in enumerate(y_positions):
         if texts[i].strip():
-            pplb_lines.append(pplb_text(1, 1, 1, 1, y, 10, texts[i][:w]))
+            pplb_lines.append(pplb_text(1, 0, 1, 1, y, 10, texts[i][:w]))
     return pplb_label(pplb_lines)
 
 
