@@ -4649,7 +4649,107 @@ def imprimir_fc_raw():
         }), 500
 
 
-# Debug: sinônimos de um produto via FC03200
+# =====================================================
+# PARSER DO FORMATO ROTUTX (Fórmula Certa)
+# =====================================================
+# Formato interno FC: cada linha = "NNNN PPPP WWWW XXXX YYYY texto\r\n"
+#   NNNN = número da linha, PPPP = param, WWWW = largura, XXXX/YYYY = posição
+
+def parse_rotutx(data: bytes) -> list:
+    """Faz parse do BLOB ROTUTX do Fórmula Certa em linhas de texto."""
+    try:
+        text = data.decode('latin-1')
+    except Exception:
+        text = data.decode('cp1252', errors='replace')
+
+    results = []
+    raw_lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+
+    for raw_line in raw_lines:
+        raw_line = raw_line.strip()
+        if len(raw_line) < 25:
+            continue
+        parts = raw_line.split(None, 5)
+        if len(parts) < 6:
+            continue
+        try:
+            line_num = int(parts[0])
+            width = int(parts[2])
+            text_content = parts[5].strip()
+            if text_content:
+                results.append({'line_num': line_num, 'width': width, 'text': text_content})
+        except (ValueError, IndexError):
+            continue
+
+    results.sort(key=lambda x: x['line_num'])
+    return results
+
+
+@app.route('/api/imprimir-fc-v2', methods=['POST'])
+def imprimir_fc_v2():
+    """
+    Fluxo V2: Lê ROTUTX do banco, faz parse do formato FC,
+    envia as linhas de texto para o agente converter em PPLA e imprimir.
+    Payload: {"req": 90198, "impressora": "AMP PEQUENO", "filial": 1, "serie": 0}
+    """
+    data = request.get_json(force=True) or {}
+
+    nr_requisicao = data.get("req") or data.get("nrRequisicao") or data.get("nr_requisicao")
+    if nr_requisicao is None:
+        return jsonify({"success": False, "error": "Informe 'req'"}), 400
+
+    impressora = data.get("impressora") or data.get("caminho") or data.get("printer") or ""
+    if not impressora:
+        return jsonify({"success": False, "error": "Informe 'impressora'"}), 400
+
+    filial_in = data.get("filial", 1)
+    filial = mapear_filial(int(filial_in))
+    serie = data.get("serie") or data.get("serier")
+    item = data.get("item") or data.get("nrItem")
+
+    try:
+        rotutx_bytes = buscar_rotutx_fc12300(
+            int(nr_requisicao), filial=filial,
+            serie=(int(serie) if serie is not None else None),
+            item=(int(item) if item is not None else None)
+        )
+        if not rotutx_bytes:
+            return jsonify({"success": False, "error": "ROTUTX não encontrado", "req": int(nr_requisicao)}), 404
+
+        linhas_parsed = parse_rotutx(rotutx_bytes)
+        if not linhas_parsed:
+            return jsonify({"success": False, "error": "Nenhuma linha extraída do ROTUTX", "bytes": len(rotutx_bytes)}), 400
+
+        print(f"\n[IMPRIMIR-FC-V2] REQ={nr_requisicao} -> {len(linhas_parsed)} linhas:")
+        for l in linhas_parsed:
+            print(f"  L{l['line_num']:04d} (w={l['width']:3d}): {l['text'][:60]}")
+
+        payload_agente = {
+            "impressora": impressora,
+            "linhas": [l['text'] for l in linhas_parsed],
+            "req": str(nr_requisicao)
+        }
+
+        url = f"{AGENTE_URL}/imprimir-rotutx"
+        resp = http_requests.post(url, json=payload_agente, headers=AGENTE_HEADERS, timeout=40, verify=REQUESTS_VERIFY_SSL)
+
+        try:
+            agent_json = resp.json()
+        except Exception:
+            agent_json = {"raw": resp.text}
+
+        return jsonify({
+            "success": (200 <= resp.status_code < 300) and bool(agent_json.get("success", True)),
+            "req": int(nr_requisicao), "impressora": impressora,
+            "linhas_extraidas": len(linhas_parsed),
+            "linhas_preview": [l['text'][:60] for l in linhas_parsed[:5]],
+            "agent_status": resp.status_code, "agent_response": agent_json
+        }), (200 if (200 <= resp.status_code < 300) else 502)
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "trace": traceback.format_exc()[:2000]}), 500
+
+
 @app.route('/api/debug/sinonimos/<cdpro>', methods=['GET'])
 def debug_sinonimos(cdpro):
     """Retorna sinônimos de um produto (tanto como base quanto como sinônimo)."""
