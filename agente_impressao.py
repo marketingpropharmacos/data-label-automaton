@@ -96,8 +96,8 @@ def find_printer_match(requested: str) -> Optional[str]:
 # PPLB TEXT HELPER
 # ============================================
 def pplb_text(rot, font, wmult, hmult, y, x, data):
-    """Gera uma linha de texto PPLB."""
-    return f"1{rot}{font}{wmult}{hmult}{y:05d}{x:05d}{data}"
+    """Gera uma linha de texto PPLA (4 dígitos para Y e X conforme spec Argox)."""
+    return f"1{rot}{font}{wmult}{hmult}{y:04d}{x:04d}{data}"
 
 
 def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
@@ -209,7 +209,8 @@ def gerar_pplb_amp10(rotulo, farmacia, dims=None):
 def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
     """Layout A.PAC.PEQ (45x25mm) - 7 linhas, grade fixa, Fonte 1 (menor).
     Se textoLivre estiver presente, usa as linhas editadas pelo usuário.
-    Caso contrário, gera layout padrão com alinhamento por coordenadas."""
+    Caso contrário, gera layout padrão com alinhamento por coordenadas.
+    TODAS as linhas com conteúdo são renderizadas para evitar perda de informação."""
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
 
@@ -221,11 +222,16 @@ def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
         y_positions = [5, 21, 37, 53, 69, 85, 101]
         for i, y in enumerate(y_positions):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+            # Renderizar TODAS as linhas com conteúdo (sem pular)
             if line_text.strip():
                 pplb_lines.append(pplb_text(1, 1, 1, 1, y, 10, line_text[:dims['cols_max']]))
+        if not pplb_lines:
+            # Fallback: pelo menos o nome do paciente
+            paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:dims['cols_max']].upper()
+            pplb_lines.append(pplb_text(1, 1, 1, 1, 5, 10, paciente))
         return pplb_label(pplb_lines)
 
-    # Fallback: geração estruturada
+    # Fallback: geração estruturada com TODOS os campos disponíveis
     paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
@@ -233,7 +239,7 @@ def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
     crm = _crm_completo(rotulo)
     registro = rotulo.get('numeroRegistro', '')
 
-    # Padded alignment (grade fixa 38 cols)
+    # Padded alignment (grade fixa)
     w = dims['cols_max']
     req_str = f"REQ:{nr_req}-{nr_item}"
     line1 = (paciente + ' ' * w)[:w - len(req_str)] + req_str
