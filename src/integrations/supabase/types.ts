@@ -468,6 +468,30 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_planocontas_dre_flags: {
+        Row: {
+          caminho: string | null
+          entra_dre: boolean | null
+          is_financeiro: boolean | null
+          is_imposto: boolean | null
+          natureza: string | null
+        }
+        Insert: {
+          caminho?: string | null
+          entra_dre?: boolean | null
+          is_financeiro?: never
+          is_imposto?: never
+          natureza?: string | null
+        }
+        Update: {
+          caminho?: string | null
+          entra_dre?: boolean | null
+          is_financeiro?: never
+          is_imposto?: never
+          natureza?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {

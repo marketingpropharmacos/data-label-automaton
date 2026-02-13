@@ -106,35 +106,32 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
 
 // ---- A_PAC_PEQ specific generator (fixed grid) ----
 function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  const maxCols = layoutConfig.colunasMax || 27;
-  const maxLines = layoutConfig.linhasMax || 3;
+  const maxCols = layoutConfig.colunasMax || 38;
+  const maxLines = layoutConfig.linhasMax || 8;
 
-  const formatarPrescritorPeq = () => {
-    if (!rotulo.numeroCRM) return { name: "", conselho: "" };
-    const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
-    const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-    const conselho = tipo.conselho;
-    const name = rotulo.nomeMedico ? `DR(A)${rotulo.nomeMedico.toUpperCase()}` : "";
-    const conselhoStr = conselho ? `${conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}` : "";
-    return { name, conselho: conselhoStr };
-  };
+  // Line 1: PACIENTE (25 chars) + REQ:RRRRRRR (7 chars)
+  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, 25);
+  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
+  const req = `REQ:${reqNum}`;
+  const line1 = padLine(paciente, req, maxCols);
 
-  const lines: string[] = [];
+  // Line 2: DR(A)MEDICO (16 chars) + CONSELHO (15 chars)
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, 16) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoStr = tipo.conselho
+    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`.substring(0, 15)
+    : "";
+  const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // Line 1: PACIENTE + REQ right-aligned
-  const paciente = (rotulo.nomePaciente || "").toUpperCase();
-  const req = `REQ:${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`;
-  lines.push(padLine(paciente, req, maxCols));
+  // Line 3: REG:GGGGGGGG (8 chars) right-aligned
+  const regNum = (rotulo.numeroRegistro || "").substring(0, 8);
+  const reg = regNum ? `REG:${regNum}` : "";
+  const line3 = padLine("", reg, maxCols);
 
-  // Line 2: DR(A)MEDICO + CONSELHO right-aligned
-  const { name: drName, conselho } = formatarPrescritorPeq();
-  lines.push(padLine(drName, conselho, maxCols));
-
-  // Line 3: REG right-aligned
-  const reg = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  lines.push(padLine("", reg, maxCols));
-
-  // Ensure exactly maxLines
+  // Lines 4-8: empty (available for manual editing)
+  const lines = [line1, line2, line3];
   while (lines.length < maxLines) {
     lines.push("");
   }
