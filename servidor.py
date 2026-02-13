@@ -4474,7 +4474,8 @@ def buscar_rotutx_fc12300(nr_requisicao: int, filial: int = 1, serie: int | None
         print(f"[ROTUTX DIAG] CR count: {cr_count}")
         print(f"[ROTUTX DIAG] LF count: {lf_count}")
         print(f"[ROTUTX DIAG] CRLF count: {crlf_count}")
-        print(f"[ROTUTX DIAG] STX (0x02) count: {rotutx_bytes.count(b'\\x02')}")
+        stx_count = rotutx_bytes.count(b'\x02')
+        print(f"[ROTUTX DIAG] STX (0x02) count: {stx_count}")
 
         # Salvar arquivo de debug
         try:
