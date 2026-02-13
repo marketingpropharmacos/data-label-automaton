@@ -116,6 +116,33 @@ export type Database = {
         }
         Relationships: []
       }
+      orcamento_rateio_loja: {
+        Row: {
+          ano: number
+          created_at: string | null
+          loja_id: number
+          mes: number
+          updated_at: string | null
+          valor_rateio: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string | null
+          loja_id: number
+          mes: number
+          updated_at?: string | null
+          valor_rateio: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string | null
+          loja_id?: number
+          mes?: number
+          updated_at?: string | null
+          valor_rateio?: number
+        }
+        Relationships: []
+      }
       raw_alpha_cmv_diario: {
         Row: {
           competencia: string
