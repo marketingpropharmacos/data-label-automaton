@@ -1,71 +1,38 @@
 
 
-# Redesign do Layout A_PAC_PEQ - Grade Fixa de Caracteres
+## Problema Identificado
 
-## Objetivo
-Reconfigurar exclusivamente a etiqueta A_PAC_PEQ para seguir um layout de grade fixa com posicionamento por coordenadas de caracteres, conforme o modelo fornecido.
+O layout A_PAC_PEQ no frontend esta com `colunasMax: 27`, enquanto o agente de impressao usa `cols_max: 38`. O texto e truncado no editor antes de chegar ao agente, causando cortes na impressao.
 
-## Layout Alvo (7 linhas, grade fixa)
+A imagem de referencia confirma que cabem ~38 caracteres por linha na etiqueta fisica de 45x25mm com a Fonte 0.
 
-```text
-Linha 1: PACIENTE_________________ REQ:RRRRRRR
-Linha 2: DR(A)MEDICO______________ CONSELHO____
-Linha 3:                            REG:GGGGGGGG
-Linha 4: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-Linha 5: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-Linha 6: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-Linha 7: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-```
+## Plano de Correcao
 
-## Mudancas
+### 1. Atualizar `colunasMax` no layout A_PAC_PEQ (src/config/layouts.ts)
 
-### 1. Configuracao do Layout (src/config/layouts.ts)
-- Habilitar campos que estavam ocultos: `registro` (visible: true)
-- Atualizar `linhasMax: 7` (conforme modelo de 7 linhas)
-- Manter `colunasMax: 27` (limite fisico da impressora confirmado anteriormente)
-- Adicionar linhas ao array `linhas` para refletir a nova estrutura (registro na linha 3, linhas livres 4-7)
+Mudar `colunasMax` de **27** para **38** no layout A_PAC_PEQ para alinhar com o `cols_max` do agente de impressao.
 
-### 2. Geracao de Texto Especifico (src/components/LabelTextEditor.tsx)
-- Adicionar funcao `generateTextPacPeq(rotulo, layoutConfig)` com logica especifica:
-  - **Linha 1**: Nome do paciente + REQ na mesma linha, REQ alinhado a direita com padding de espacos
-  - **Linha 2**: DR(A) + nome medico + conselho/CRM alinhado a direita na mesma linha
-  - **Linha 3**: REG deslocado para a direita (preenchido com espacos a esquerda)
-  - **Linhas 4-7**: Reservadas para conteudo livre (inicialmente vazias ou com dados extras)
-- No `generateText`, detectar `layoutConfig.tipo === 'A_PAC_PEQ'` e desviar para essa funcao especifica
-- Cada campo e truncado (cortado) no limite de colunas, nunca quebrado para a proxima linha
+### 2. Atualizar `generateTextPacPeq` (src/components/LabelTextEditor.tsx)
 
-### 3. Comportamento de Edicao
-- Para A_PAC_PEQ, o `wrapText` deve **truncar** (cortar no limite de colunas) em vez de quebrar linha
-- Texto que ultrapasse o limite da grade e cortado, nao redistribuido
-- O usuario pode editar livremente dentro dos 27 caracteres x 7 linhas
+Ajustar a funcao geradora para considerar os 38 caracteres de largura no alinhamento com `padLine`, garantindo que Paciente+REQ e Medico+Conselho usem toda a largura disponivel.
 
-### 4. Funcao de Truncamento
-- Criar `truncateText(text, maxCols, maxLines)` alternativa ao `wrapText`
-- Cada linha e cortada em `maxCols` caracteres
-- Maximo de `maxLines` linhas, excedentes descartadas
+### 3. Manter a estrutura de 7 linhas
+
+A geracao de texto continua com as 7 linhas, mas agora com largura de 38 colunas:
+- Linha 1: Paciente + REQ (alinhado a direita) - 38 colunas
+- Linha 2: Medico + Conselho - 38 colunas
+- Linha 3: Composicao ou Formula
+- Linha 4: Lote + Fabricacao + Validade
+- Linha 5: Aplicacao + pH
+- Linha 6: Posologia
+- Linha 7: REG (alinhado a direita)
 
 ### Detalhes Tecnicos
 
-**Funcao de alinhamento a direita dentro da linha:**
-```
-function padLine(left: string, right: string, width: number): string {
-  const space = width - left.length - right.length;
-  if (space <= 0) return (left + right).substring(0, width);
-  return left + ' '.repeat(space) + right;
-}
-```
+**Arquivo: src/config/layouts.ts (linha 111)**
+- `colunasMax: 27` alterado para `colunasMax: 38`
 
-**Exemplo de geracao:**
-```
-Linha 1: padLine("MARIA SILVA", "REQ:6806-0", 27)
-         -> "MARIA SILVA      REQ:6806-0"
-Linha 2: padLine("DR(A)JOAO", "CRM-SP-1234", 27)
-         -> "DR(A)JOAO        CRM-SP-1234"
-Linha 3: padLine("", "REG:15079", 27)
-         -> "                  REG:15079"
-```
-
-**Arquivos modificados:**
-- `src/config/layouts.ts` - habilitar registro, ajustar linhasMax para 7
-- `src/components/LabelTextEditor.tsx` - adicionar generateTextPacPeq, funcao truncateText, logica de padding
+**Arquivo: src/components/LabelTextEditor.tsx**
+- A funcao `generateTextPacPeq` ja usa `layoutConfig.colunasMax` dinamicamente, entao basta corrigir o valor na config
+- Nenhuma alteracao necessaria no `agente_impressao.py` (ja usa `cols_max: 38`)
 
