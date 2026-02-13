@@ -107,7 +107,7 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
 // ---- A_PAC_PEQ specific generator (fixed grid) ----
 function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const maxCols = layoutConfig.colunasMax || 27;
-  const maxLines = layoutConfig.linhasMax || 7;
+  const maxLines = layoutConfig.linhasMax || 3;
 
   const formatarPrescritorPeq = () => {
     if (!rotulo.numeroCRM) return { name: "", conselho: "" };
@@ -130,35 +130,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const { name: drName, conselho } = formatarPrescritorPeq();
   lines.push(padLine(drName, conselho, maxCols));
 
-  // Line 3: Composição ou Fórmula
-  const composicao = rotulo.composicao?.trim() || '';
-  const formula = rotulo.formula?.trim() || '';
-  if (isValidComposicao(composicao)) {
-    lines.push(composicao.toUpperCase().substring(0, maxCols));
-  } else if (formula) {
-    lines.push(formula.toUpperCase().substring(0, maxCols));
-  } else {
-    lines.push("");
-  }
-
-  // Line 4: Lote + Fabricação + Validade
-  const metaParts: string[] = [];
-  if (rotulo.lote) metaParts.push(`L:${rotulo.lote}`);
-  if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
-  if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
-  lines.push(metaParts.join(' ').substring(0, maxCols));
-
-  // Line 5: Aplicação + pH
-  const infoParts: string[] = [];
-  if (rotulo.aplicacao?.trim()) infoParts.push(`APL:${rotulo.aplicacao.trim().toUpperCase()}`);
-  if (rotulo.ph?.trim()) infoParts.push(`pH:${rotulo.ph}`);
-  lines.push(infoParts.join(' ').substring(0, maxCols));
-
-  // Line 6: Posologia
-  const posologia = rotulo.posologia?.trim() || '';
-  lines.push(posologia.toUpperCase().substring(0, maxCols));
-
-  // Line 7: REG right-aligned
+  // Line 3: REG right-aligned
   const reg = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
   lines.push(padLine("", reg, maxCols));
 

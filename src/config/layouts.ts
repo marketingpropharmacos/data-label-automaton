@@ -109,7 +109,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     nome: 'Ampola Pacote Pequeno',
     dimensoes: { larguraMM: 45, alturaMM: 25 },
     colunasMax: 27,
-    linhasMax: 7,
+    linhasMax: 3,
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
       { id: 'linha2', campos: ['medico'], spacing: 'normal' },
