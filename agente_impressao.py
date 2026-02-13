@@ -866,7 +866,7 @@ def diagnostico():
 
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5001))
+    port = int(os.environ.get("PORT", 5002))
     logger.info("=" * 50)
     logger.info("Agente de Impressao PPLB - ProPharmacos V2.5")
     logger.info(f"Hostname: {socket.gethostname()}")
