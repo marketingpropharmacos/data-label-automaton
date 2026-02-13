@@ -4468,9 +4468,12 @@ def buscar_rotutx_fc12300(nr_requisicao: int, filial: int = 1, serie: int | None
         # Verificar terminadores
         tem_E_final = rotutx_bytes.strip().endswith(b'E') or rotutx_bytes.strip().endswith(b'^E')
         print(f"[ROTUTX DIAG] Termina com E ou ^E: {tem_E_final}")
-        print(f"[ROTUTX DIAG] CR count: {rotutx_bytes.count(b'\\r')}")
-        print(f"[ROTUTX DIAG] LF count: {rotutx_bytes.count(b'\\n')}")
-        print(f"[ROTUTX DIAG] CRLF count: {rotutx_bytes.count(b'\\r\\n')}")
+        cr_count = rotutx_bytes.count(b'\r')
+        lf_count = rotutx_bytes.count(b'\n')
+        crlf_count = rotutx_bytes.count(b'\r\n')
+        print(f"[ROTUTX DIAG] CR count: {cr_count}")
+        print(f"[ROTUTX DIAG] LF count: {lf_count}")
+        print(f"[ROTUTX DIAG] CRLF count: {crlf_count}")
         print(f"[ROTUTX DIAG] STX (0x02) count: {rotutx_bytes.count(b'\\x02')}")
 
         # Salvar arquivo de debug
