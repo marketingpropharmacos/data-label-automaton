@@ -38,6 +38,48 @@ export type Database = {
         }
         Relationships: []
       }
+      dim_planocontas: {
+        Row: {
+          caminho: string | null
+          entra_dre: boolean
+          folha: boolean | null
+          natureza: string | null
+          nome: string | null
+          planocontas_id: number
+          planocontaspaiid: number | null
+          profundidade: number | null
+          tipo: string | null
+          tiporesultado: string | null
+          updated_at: string
+        }
+        Insert: {
+          caminho?: string | null
+          entra_dre?: boolean
+          folha?: boolean | null
+          natureza?: string | null
+          nome?: string | null
+          planocontas_id: number
+          planocontaspaiid?: number | null
+          profundidade?: number | null
+          tipo?: string | null
+          tiporesultado?: string | null
+          updated_at?: string
+        }
+        Update: {
+          caminho?: string | null
+          entra_dre?: boolean
+          folha?: boolean | null
+          natureza?: string | null
+          nome?: string | null
+          planocontas_id?: number
+          planocontaspaiid?: number | null
+          profundidade?: number | null
+          tipo?: string | null
+          tiporesultado?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       gerencial_lancamentos_ajuste: {
         Row: {
           categoria: string

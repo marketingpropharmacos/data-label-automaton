@@ -248,8 +248,14 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
 // ---- Component ----
 
 const FONT_SIZE_KEY = 'label_editor_font_size';
-const getStoredFontSize = () => {
-  try { return parseInt(localStorage.getItem(FONT_SIZE_KEY) || '14', 10); } catch { return 14; }
+const getStoredFontSize = (layoutTipo?: string) => {
+  try {
+    const stored = localStorage.getItem(FONT_SIZE_KEY);
+    if (stored) return parseInt(stored, 10);
+  } catch {}
+  // A_PAC_PEQ usa fonte mínima por padrão (etiqueta pequena 45x25mm)
+  if (layoutTipo === 'A_PAC_PEQ') return 8;
+  return 14;
 };
 
 const LabelTextEditor = ({
@@ -259,7 +265,7 @@ const LabelTextEditor = ({
 }: LabelTextEditorProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
-  const [editorFontSize, setEditorFontSize] = useState(getStoredFontSize);
+  const [editorFontSize, setEditorFontSize] = useState(() => getStoredFontSize(layoutType));
   const [printQuantity, setPrintQuantity] = useState(1);
 
   const rotulo = rotulos[currentIndex];
@@ -328,7 +334,7 @@ const LabelTextEditor = ({
 
   const handleFontSizeChange = (delta: number) => {
     setEditorFontSize(prev => {
-      const next = Math.max(8, Math.min(24, prev + delta));
+      const next = Math.max(6, Math.min(24, prev + delta));
       localStorage.setItem(FONT_SIZE_KEY, String(next));
       return next;
     });
