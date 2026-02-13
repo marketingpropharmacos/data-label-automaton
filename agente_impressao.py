@@ -207,20 +207,48 @@ def gerar_pplb_amp10(rotulo, farmacia, dims=None):
 
 
 def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
-    """Layout A.PAC.PEQ (45x25mm) - 3 campos: paciente, req, médico."""
+    """Layout A.PAC.PEQ (45x25mm) - 7 linhas, grade fixa, Fonte 1 (menor).
+    Se textoLivre estiver presente, usa as linhas editadas pelo usuário.
+    Caso contrário, gera layout padrão com alinhamento por coordenadas."""
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
+
+    texto_livre = rotulo.get('textoLivre', '')
+    if texto_livre:
+        # Usar texto editado pelo usuário, linha por linha
+        linhas_texto = texto_livre.split('\n')
+        pplb_lines = []
+        y_positions = [5, 30, 55, 80, 105, 130, 155]
+        for i, y in enumerate(y_positions):
+            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+            if line_text.strip():
+                pplb_lines.append(pplb_text(1, 1, 1, 1, y, 10, line_text[:dims['cols_max']]))
+        return pplb_label(pplb_lines)
+
+    # Fallback: geração estruturada
     paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
+    registro = rotulo.get('numeroRegistro', '')
 
-    return pplb_label([
-        pplb_text(1, 2, 1, 1, 10,  10, paciente),
-        pplb_text(1, 2, 1, 1, 60,  10, f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 110, 10, f"DR.{nome_medico[:25]} {crm}"),
-    ])
+    # Padded alignment (grade fixa 38 cols)
+    w = dims['cols_max']
+    req_str = f"REQ:{nr_req}-{nr_item}"
+    line1 = (paciente + ' ' * w)[:w - len(req_str)] + req_str
+    dr_str = f"DR(A){nome_medico[:20]}"
+    line2 = (dr_str + ' ' * w)[:w - len(crm)] + crm
+    reg_str = f"REG:{registro}" if registro else ""
+    line3 = (' ' * (w - len(reg_str))) + reg_str if reg_str else ""
+
+    pplb_lines = []
+    y_positions = [5, 30, 55, 80, 105, 130, 155]
+    texts = [line1, line2, line3, '', '', '', '']
+    for i, y in enumerate(y_positions):
+        if texts[i].strip():
+            pplb_lines.append(pplb_text(1, 1, 1, 1, y, 10, texts[i][:w]))
+    return pplb_label(pplb_lines)
 
 
 def gerar_pplb_a_pac_gran(rotulo, farmacia, dims=None):
