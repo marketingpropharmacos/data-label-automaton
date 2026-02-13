@@ -111,9 +111,24 @@ const Index = () => {
     setIsPrinting(true);
     
     const rotuloAtual = rotulos[currentIndex];
-    // Duplicar o rótulo conforme a quantidade solicitada
     const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual }));
     
+    await executePrint(rotulosSelecionados);
+  };
+
+  const handlePrintAll = async (quantity: number = 1) => {
+    if (rotulos.length === 0) return;
+
+    setIsPrinting(true);
+    
+    const rotulosSelecionados = rotulos.flatMap(r => 
+      Array.from({ length: quantity }, () => ({ ...r }))
+    );
+    
+    await executePrint(rotulosSelecionados);
+  };
+
+  const executePrint = async (rotulosSelecionados: RotuloItem[]) => {
     const farmaciaData = {
       nome: pharmacyConfig.nome,
       farmaceutico: pharmacyConfig.farmaceutico,
@@ -137,7 +152,7 @@ const Index = () => {
     if (result.success) {
       toast({
         title: "Impressão concluída!",
-        description: `Rótulo ${currentIndex + 1}/${rotulos.length} enviado para a impressora.`,
+        description: `${rotulosSelecionados.length} rótulo(s) enviado(s) para a impressora.`,
       });
     } else {
       toast({
@@ -214,6 +229,7 @@ const Index = () => {
             pharmacyConfig={pharmacyConfig}
             searchedRequisition={searchedRequisition}
             onPrint={handlePrint}
+            onPrintAll={handlePrintAll}
             isPrinting={isPrinting}
             availablePrinters={availablePrinters}
             selectedPrinter={selectedPrinter}

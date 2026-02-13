@@ -58,6 +58,7 @@ interface LabelTextEditorProps {
   searchedRequisition: string;
   // Print
   onPrint: (quantity: number) => void;
+  onPrintAll: (quantity: number) => void;
   isPrinting: boolean;
   availablePrinters: string[];
   selectedPrinter: string;
@@ -254,7 +255,7 @@ const getStoredFontSize = () => {
 const LabelTextEditor = ({
   rotulos, currentIndex, onIndexChange, onTextChange,
   layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
-  onPrint, isPrinting, availablePrinters, selectedPrinter, onPrinterChange,
+  onPrint, onPrintAll, isPrinting, availablePrinters, selectedPrinter, onPrinterChange,
 }: LabelTextEditorProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
@@ -425,8 +426,14 @@ const LabelTextEditor = ({
           </div>
           <Button size="sm" onClick={() => onPrint(printQuantity)} disabled={isPrinting} className="bg-secondary hover:bg-secondary/90">
             <Printer className={`h-4 w-4 mr-1 ${isPrinting ? 'animate-pulse' : ''}`} />
-            {isPrinting ? 'Imprimindo...' : `Imprimir${printQuantity > 1 ? ` (${printQuantity})` : ''}`}
+            {isPrinting ? 'Imprimindo...' : `Barra ${(rotulo.nrItem || currentIndex)}${printQuantity > 1 ? ` (x${printQuantity})` : ''}`}
           </Button>
+          {rotulos.length > 1 && (
+            <Button size="sm" variant="outline" onClick={() => onPrintAll(printQuantity)} disabled={isPrinting}>
+              <Printer className={`h-4 w-4 mr-1 ${isPrinting ? 'animate-pulse' : ''}`} />
+              Todas ({rotulos.length * printQuantity})
+            </Button>
+          )}
         </div>
       </div>
     </div>
