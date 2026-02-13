@@ -497,6 +497,73 @@ def imprimir():
         }), 500
 
 
+@app.route('/imprimir-rotutx', methods=['POST'])
+def imprimir_rotutx():
+    """Recebe linhas de texto extraídas do ROTUTX (FC12300) e imprime via PPLA.
+    Payload: {"impressora": "AMP PEQUENO", "linhas": ["linha1", "linha2", ...], "req": "90198"}
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "Nenhum dado recebido"}), 400
+
+    impressora_req = data.get('impressora', '') or IMPRESSORA_PADRAO
+    linhas = data.get('linhas', [])
+    req_num = data.get('req', '?')
+
+    if not linhas:
+        return jsonify({"success": False, "error": "Nenhuma linha de texto recebida"}), 400
+
+    impressora = find_printer_match(impressora_req) or impressora_req
+    dims = get_printer_dims(impressora)
+    logger.info(f"[ROTUTX] REQ={req_num} impressora='{impressora}' linhas={len(linhas)}")
+
+    # Calcula espaçamento Y dinâmico baseado no número de linhas e altura da etiqueta
+    # Reserva 10 dots de margem superior e inferior
+    margem = 10
+    area_util = dims['altura_dots'] - (margem * 2)
+    num_linhas = len(linhas)
+
+    if num_linhas <= 1:
+        espacamento = 0
+    else:
+        espacamento = min(area_util // (num_linhas), 25)  # máximo 25 dots entre linhas
+
+    # Gera comandos PPLA para cada linha
+    pplb_lines = []
+    for i, texto in enumerate(linhas):
+        y = margem + (i * espacamento)
+        # Usa fonte menor (0) para etiquetas pequenas, fonte 2 para grandes
+        font = 0 if 'PEQUEN' in (impressora or '').upper() else 2
+        texto_truncado = texto[:dims['cols_max']]
+        pplb_lines.append(pplb_text(1, font, 1, 1, y, 10, texto_truncado))
+        logger.info(f"  [{i:02d}] Y={y:04d} F={font}: {texto_truncado[:50]}")
+
+    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
+    label = pplb_label(pplb_lines)
+    comandos = setup + label
+
+    # Debug PPLA
+    logger.info(f"\n{'='*60}")
+    logger.info(f"[ROTUTX PPLA] Comandos ({len(comandos)} bytes):")
+    for i, line in enumerate(comandos.split('\r')):
+        display = line.replace('\x02', '<STX>').replace('\n', '<LF>')
+        logger.info(f"  [{i:02d}] {display}")
+    logger.info(f"{'='*60}")
+
+    resultado = enviar_para_impressora(impressora, comandos)
+
+    if resultado.get("success"):
+        return jsonify({
+            "success": True,
+            "linhas_impressas": len(linhas),
+            "printer_used": impressora,
+            "fonte": font,
+            "req": req_num
+        })
+    else:
+        return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
+
+
 @app.route('/analisar-prn', methods=['POST'])
 def analisar_prn():
     """Recebe caminho de um arquivo .PRN capturado e analisa os bytes."""
