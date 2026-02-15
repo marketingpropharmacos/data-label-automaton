@@ -23,7 +23,7 @@ import {
 } from "@/config/api";
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
 import { verificarAgente, listarImpressoras, testeImpressaoAgente } from "@/services/printAgentService";
-import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig } from "@/types/requisicao";
+import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
 
@@ -394,6 +394,82 @@ const LabelSettings = () => {
                   </p>
                 </div>
               )}
+
+              {/* Calibração PPLA: Margem C, Offset R, Contraste H */}
+              <div className="border-t border-border pt-4 mt-4">
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  Calibração PPLA (Ajuste Fino)
+                </h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Ajuste margem e offset para evitar cortes na impressão. Valores em 0.1mm (ex: 10 = 1mm).
+                </p>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="margemC">Margem Esquerda (Cxxxx)</Label>
+                    <Input
+                      id="margemC"
+                      type="number"
+                      min={0}
+                      max={200}
+                      placeholder="0"
+                      value={agentConfig.calibracao?.margem_c ?? 0}
+                      onChange={(e) => setAgentConfigState({
+                        ...agentConfig,
+                        calibracao: {
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          margem_c: Number(e.target.value),
+                        },
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Desloca texto para a direita. 0 = sem margem.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="offsetR">Offset Vertical (Rxxxx)</Label>
+                    <Input
+                      id="offsetR"
+                      type="number"
+                      min={0}
+                      max={200}
+                      placeholder="0"
+                      value={agentConfig.calibracao?.offset_r ?? 0}
+                      onChange={(e) => setAgentConfigState({
+                        ...agentConfig,
+                        calibracao: {
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          offset_r: Number(e.target.value),
+                        },
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Ajusta posição vertical. Corta em cima? Reduza. Corta embaixo? Aumente.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contrasteH">Contraste (Hxx)</Label>
+                    <Input
+                      id="contrasteH"
+                      type="number"
+                      min={5}
+                      max={20}
+                      placeholder="12"
+                      value={agentConfig.calibracao?.contraste ?? 12}
+                      onChange={(e) => setAgentConfigState({
+                        ...agentConfig,
+                        calibracao: {
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          contraste: Number(e.target.value),
+                        },
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      10=padrão, 16=máx recomendado, 20=máximo.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

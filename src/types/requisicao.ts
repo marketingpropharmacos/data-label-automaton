@@ -128,10 +128,17 @@ export interface PrinterConfig {
   nomeCompartilhamento: string;
 }
 
+export interface PrinterCalibrationConfig {
+  margem_c: number;   // Cxxxx - margem esquerda (0.1mm)
+  offset_r: number;   // Rxxxx - compensação vertical (0.1mm)
+  contraste: number;  // Hxx - contraste (10-20)
+}
+
 export interface PrintAgentConfig {
   enabled: boolean;
   agentUrl: string;
   impressora: string;
+  calibracao?: PrinterCalibrationConfig;
 }
 
 // Fila de impressão (FC12B00)
