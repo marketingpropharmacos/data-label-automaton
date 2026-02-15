@@ -1,12 +1,12 @@
 """
-Agente de Impressão Local Robusto - ProPharmacos V2.3
+Agente de Impressão Local Robusto - ProPharmacos V3.0
 ------------------------------------------------------------
 Compatível com servidor.py (proxy central).
-Protocolo PPLB puro (Argox OS-2140) com batch printing.
-Melhorias V2.1 mantidas: logging, match de impressora, diagnóstico.
+Protocolo PPLA modo milímetros (Argox OS-2140) conforme documentação oficial.
+Melhorias V3.0: modo mm, comandos M/C/R configuráveis, encoding cp1252.
 
 Layouts: AMP_CX, AMP10, A_PAC_PEQ, A_PAC_GRAN, TIRZ
-Porta: 5001
+Porta: 5002
 Instalação: pip install flask flask-cors pywin32
 """
 
@@ -37,22 +37,46 @@ except ImportError:
     PYWIN32_OK = False
     logger.warning("Biblioteca 'pywin32' não encontrada. Modo de simulação ativo.")
 
-app = Flask("agente_impressao_v2")
+app = Flask("agente_impressao_v3")
 CORS(app)
 
 IMPRESSORA_PADRAO = "AMP PEQUENO"
 
 # ============================================
-# Configurações de dimensão por impressora
+# Configurações de dimensão por impressora (em mm e dots)
+# Coordenadas PPLA em 0.1mm (modo 'm')
 # ============================================
 PRINTER_CONFIGS = {
-    'PEQUEN': {'largura_dots': 360, 'altura_dots': 200, 'gap_dots': 24, 'cols_max': 38},
-    'GRAND':  {'largura_dots': 607, 'altura_dots': 200, 'gap_dots': 24, 'cols_max': 57},
+    'PEQUEN': {
+        'largura_mm': 45, 'altura_mm': 25,
+        'largura_dots': 360, 'altura_dots': 200, 'gap_dots': 24,
+        'cols_max': 38,
+        # Coordenadas Y em 0.1mm (origem bottom-left, PPLA)
+        # Para 25mm: Y=220 é 3mm do topo, Y=020 é 23mm do topo
+        'y_positions_mm': [220, 180, 140, 100, 70, 40, 20],
+        'font': 2,  # Fonte 2 conforme documentação
+    },
+    'GRAND': {
+        'largura_mm': 109, 'altura_mm': 25,
+        'largura_dots': 873, 'altura_dots': 200, 'gap_dots': 24,
+        'cols_max': 73,
+        'y_positions_mm': [220, 190, 160, 130, 100, 70, 40, 20],
+        'font': 2,
+    },
+    'AMP10': {
+        'largura_mm': 89, 'altura_mm': 38,
+        'largura_dots': 711, 'altura_dots': 305, 'gap_dots': 24,
+        'cols_max': 65,
+        'y_positions_mm': [350, 310, 270, 230, 190, 150, 110, 70, 40, 20],
+        'font': 2,
+    },
 }
 
 def get_printer_dims(nome_impressora):
     """Seleciona dimensões baseado no nome da impressora."""
     nome = (nome_impressora or '').upper()
+    if 'AMP10' in nome or 'AMPOLA 10' in nome:
+        return PRINTER_CONFIGS['AMP10']
     for chave, dims in PRINTER_CONFIGS.items():
         if chave in nome:
             return dims
@@ -60,7 +84,7 @@ def get_printer_dims(nome_impressora):
 
 
 # ============================================
-# Utilitários de Impressora (melhorias V2.1)
+# Utilitários de Impressora
 # ============================================
 def get_available_printers() -> List[str]:
     if not PYWIN32_OK:
@@ -78,14 +102,11 @@ def find_printer_match(requested: str) -> Optional[str]:
     available = get_available_printers()
     requested_clean = re.sub(r'\s+', '', requested).lower()
 
-    # Match exato
     if requested in available:
         return requested
-    # Case-insensitive sem espaços
     for p in available:
         if re.sub(r'\s+', '', p).lower() == requested_clean:
             return p
-    # Match parcial
     for p in available:
         if requested_clean in re.sub(r'\s+', '', p).lower():
             return p
@@ -93,31 +114,76 @@ def find_printer_match(requested: str) -> Optional[str]:
 
 
 # ============================================
-# PPLB TEXT HELPER
+# PPLA MODO MILÍMETROS - Conforme documentação oficial
 # ============================================
-def pplb_text(rot, font, wmult, hmult, y, x, data):
-    """Gera uma linha de texto PPLA (4 dígitos para Y e X conforme spec Argox)."""
-    return f"1{rot}{font}{wmult}{hmult}{y:04d}{x:04d}{data}"
+def ppla_text_mm(rot, font, wmult, hmult, y_01mm, x_01mm, data):
+    """Gera uma linha de texto PPLA em modo milímetros.
+    Coordenadas em 0.1mm (4 dígitos). Ex: 0220 = 22.0mm do bottom."""
+    return f"1{rot}{font}{wmult}{hmult}{y_01mm:04d}{x_01mm:04d}{data}"
 
 
-def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
-    """Gera comandos de configuração PPLB (antes dos blocos de etiqueta).
-    PPLB Argox usa CR puro como terminador."""
+def ppla_setup_mm(altura_mm=25, margem_c=0, offset_r=0, contraste=12, velocidade='C'):
+    """Gera bloco de setup PPLA em modo milímetros.
+    
+    Conforme documentação Argox PPLA:
+    - m: ativa unidade milímetros (0.1mm)
+    - Mxxxx: comprimento máximo da etiqueta (em 0.1mm)
+    - Cxxxx: margem esquerda (em 0.1mm)  
+    - Rxxxx: compensação vertical (em 0.1mm)
+    - Hxx: contraste (10=padrão, 16=máx recomendado, 20=máx)
+    - PC/PB/PD: velocidade
+    - D11: pixel size
+    - Q0001: 1 cópia por bloco
+    """
+    # Comprimento máximo: altura em 0.1mm + margem de tolerância
+    m_value = (altura_mm * 10) + 20  # +2mm margem para gap
+    
     partes = [
-        f"q{largura_dots}",
-        f"Q{altura_dots},{gap_dots}",
-        "D11",
+        f"\x02e",           # Gap sensor ON
+        f"\x02L",           # Entrar modo formatação
+        "m",                # Unidade milímetros
+        f"M{m_value:04d}",  # Comprimento máximo
+        f"P{velocidade}",   # Velocidade
+        f"H{contraste:02d}",# Contraste
+        "D11",              # Pixel size
+        f"C{margem_c:04d}", # Margem esquerda
+        f"R{offset_r:04d}", # Compensação vertical
+        "Q0001",            # 1 cópia
     ]
     return "\r".join(partes) + "\r"
 
 
+def ppla_label_mm(linhas_texto):
+    """Monta bloco de conteúdo PPLA (sem setup, apenas linhas de texto + E).
+    Cada linha já deve ser formatada com ppla_text_mm().
+    Termina com 'E' para finalizar e imprimir."""
+    partes = list(linhas_texto)
+    partes.append("E")
+    return "\r".join(partes) + "\r"
+
+
+def ppla_full_label(linhas_texto, altura_mm=25, margem_c=0, offset_r=0, contraste=12, velocidade='C'):
+    """Monta etiqueta PPLA completa: setup + conteúdo + E."""
+    setup = ppla_setup_mm(altura_mm, margem_c, offset_r, contraste, velocidade)
+    content = "\r".join(linhas_texto)
+    return setup + content + "\r" + "E\r"
+
+
+# ============================================
+# COMPATIBILIDADE: Manter funções PPLB antigas para fallback
+# ============================================
+def pplb_text(rot, font, wmult, hmult, y, x, data):
+    """Gera uma linha de texto PPLA (4 dígitos para Y e X)."""
+    return f"1{rot}{font}{wmult}{hmult}{y:04d}{x:04d}{data}"
+
+def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
+    """Setup PPLB em dots (legado)."""
+    partes = [f"q{largura_dots}", f"Q{altura_dots},{gap_dots}", "D11"]
+    return "\r".join(partes) + "\r"
+
 def pplb_label(linhas):
-    """Monta bloco de etiqueta PPLB com STX (sem comandos de dimensão).
-    PPLB Argox usa CR puro como terminador."""
-    partes = [
-        "\x02L",
-        "H10",
-    ]
+    """Bloco de etiqueta PPLB (legado)."""
+    partes = ["\x02L", "H10"]
     partes.extend(linhas)
     partes.append("E")
     return "\r".join(partes) + "\r"
@@ -150,166 +216,253 @@ def _linha_meta(rotulo):
 
 
 # ============================================
-# GERADORES PPLB POR LAYOUT
+# GERADORES PPLA MODO MILÍMETROS POR LAYOUT
 # ============================================
-def gerar_pplb_ampcx(rotulo, farmacia, dims=None):
-    """Layout AMP_CX - 7 linhas com composição e lote/pH."""
+
+def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout AMP_CX (109x25mm) - 8 linhas em modo milímetros."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
-    paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
+    cal = calibracao or {}
+    cols = dims['cols_max']
+    font = dims.get('font', 2)
+    
+    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
-    composicao = _composicao(rotulo, dims['cols_max'])
+    composicao = _composicao(rotulo, cols)
     linha_meta = _linha_meta(rotulo)
     aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
     contem = (rotulo.get('contem', '') or '')[:30].upper()
-    registro = rotulo.get('numeroRegistro', '')
+    registro = str(rotulo.get('numeroRegistro', '') or '')
+    
+    # Coordenadas Y em 0.1mm (origem bottom-left, 25mm label)
+    # L1=topo(22mm), L2=19mm, L3=16mm, L4=13mm, L5=10mm, L6=7mm, L7=4mm, L8=2mm
+    y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
+    x_start = 10  # 1mm da borda esquerda
+    
+    linhas = [
+        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(1, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, linha_meta),
+        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}"),
+    ]
+    
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 25),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=cal.get('contraste', 12),
+    )
 
-    return pplb_label([
-        pplb_text(1, 2, 1, 1, 5,   10, paciente),
-        pplb_text(1, 2, 1, 1, 5,  max(dims['largura_dots'] - 200, 200), f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 30,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 55,  10, composicao),
-        pplb_text(1, 2, 1, 1, 80,  10, linha_meta),
-        pplb_text(1, 2, 1, 1, 105, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 130, 10, f"CONTEM: {contem}"),
-        pplb_text(1, 2, 1, 1, 155, 10, f"Reg: {registro}"),
-    ])
 
-
-def gerar_pplb_amp10(rotulo, farmacia, dims=None):
-    """Layout AMP10 - 7 linhas, REG na linha 5."""
+def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout AMP10 (89x38mm) - 8 linhas em modo milímetros."""
     if not dims:
-        dims = PRINTER_CONFIGS['GRAND']
-    paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
+        dims = PRINTER_CONFIGS['AMP10']
+    cal = calibracao or {}
+    cols = dims['cols_max']
+    font = dims.get('font', 2)
+    
+    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
-    composicao = _composicao(rotulo, dims['cols_max'])
+    composicao = _composicao(rotulo, cols)
     linha_meta = _linha_meta(rotulo)
-    registro = rotulo.get('numeroRegistro', '')
+    registro = str(rotulo.get('numeroRegistro', '') or '')
     aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
     contem = (rotulo.get('contem', '') or '')[:30].upper()
+    
+    # Coordenadas Y em 0.1mm (origem bottom-left, 38mm label)
+    y_pos = [350, 310, 270, 230, 190, 150, 110, 70]
+    x_start = 10
+    
+    linhas = [
+        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(1, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, linha_meta),
+        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, f"REG: {registro}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}"),
+    ]
+    
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 38),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=cal.get('contraste', 12),
+    )
 
-    return pplb_label([
-        pplb_text(1, 2, 1, 1, 5,   10, paciente),
-        pplb_text(1, 2, 1, 1, 5,  max(dims['largura_dots'] - 200, 200), f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 30,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 55,  10, composicao),
-        pplb_text(1, 2, 1, 1, 80,  10, linha_meta),
-        pplb_text(1, 2, 1, 1, 105, 10, f"REG: {registro}"),
-        pplb_text(1, 2, 1, 1, 130, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 155, 10, f"CONTEM: {contem}"),
-    ])
 
-
-def gerar_pplb_a_pac_peq(rotulo, farmacia, dims=None):
-    """Layout A.PAC.PEQ (45x25mm) - 7 linhas, grade fixa, Fonte 1 (menor).
-    Se textoLivre estiver presente, usa as linhas editadas pelo usuário.
-    Caso contrário, gera layout padrão com alinhamento por coordenadas.
-    TODAS as linhas com conteúdo são renderizadas para evitar perda de informação."""
+def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout A.PAC.PEQ (45x25mm) - modo milímetros conforme documentação.
+    
+    Template de referência (documentação PPLA):
+    Y=0220 (22mm): ©PACIENTE
+    Y=0170 (17mm): ©REQUISICAO  
+    Y=0120 (12mm): ©PRESCRITOR
+    Y=0070 (7mm):  ©CONSELHO
+    Y=0020 (2mm):  ©REGISTRO
+    """
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
-
+    cal = calibracao or {}
+    cols = dims['cols_max']
+    font = dims.get('font', 2)
+    
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         # Usar texto editado pelo usuário, linha por linha
         linhas_texto = texto_livre.split('\n')
+        y_positions = [220, 180, 140, 100, 70, 40, 20]
         pplb_lines = []
-        y_positions = [5, 21, 37, 53, 69, 85, 101]
         for i, y in enumerate(y_positions):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
-            # Renderizar TODAS as linhas com conteúdo (sem pular)
             if line_text.strip():
-                pplb_lines.append(pplb_text(1, 0, 1, 1, y, 10, line_text[:dims['cols_max']]))
+                pplb_lines.append(ppla_text_mm(1, font, 1, 1, y, 10, line_text[:cols]))
         if not pplb_lines:
-            # Fallback: pelo menos o nome do paciente
-            paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:dims['cols_max']].upper()
-            pplb_lines.append(pplb_text(1, 0, 1, 1, 5, 10, paciente))
-        return pplb_label(pplb_lines)
-
-    # Fallback: geração estruturada com TODOS os campos disponíveis
-    paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
+            paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:cols].upper()
+            pplb_lines.append(ppla_text_mm(1, font, 1, 1, 220, 10, paciente))
+        
+        return ppla_full_label(
+            pplb_lines,
+            altura_mm=dims.get('altura_mm', 25),
+            margem_c=cal.get('margem_c', 0),
+            offset_r=cal.get('offset_r', 0),
+            contraste=cal.get('contraste', 12),
+        )
+    
+    # Geração estruturada conforme template da documentação
+    paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
-    nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
-    crm = _crm_completo(rotulo)
-    registro = rotulo.get('numeroRegistro', '')
-
-    # Padded alignment (grade fixa)
-    w = dims['cols_max']
-    req_str = f"REQ:{nr_req}-{nr_item}"
+    nome_medico = (rotulo.get('nomeMedico', '') or '').upper()[:16]
+    crm = _crm_completo(rotulo)[:15]
+    registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
+    
+    # Padded alignment (grade fixa 38 colunas)
+    w = cols
+    req_str = f"REQ:{nr_req}-{nr_item}"[:11]
     line1 = (paciente + ' ' * w)[:w - len(req_str)] + req_str
-    dr_str = f"DR(A){nome_medico[:20]}"
+    dr_str = f"DR(A){nome_medico}"
     line2 = (dr_str + ' ' * w)[:w - len(crm)] + crm
     reg_str = f"REG:{registro}" if registro else ""
     line3 = (' ' * (w - len(reg_str))) + reg_str if reg_str else ""
+    
+    # Coordenadas Y conforme documentação: 220, 170, 120 (0.1mm)
+    linhas = []
+    if line1.strip():
+        linhas.append(ppla_text_mm(1, font, 1, 1, 220, 10, line1[:w]))
+    if line2.strip():
+        linhas.append(ppla_text_mm(1, font, 1, 1, 170, 10, line2[:w]))
+    if line3.strip():
+        linhas.append(ppla_text_mm(1, font, 1, 1, 120, 10, line3[:w]))
+    
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 25),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=cal.get('contraste', 12),
+    )
 
-    pplb_lines = []
-    y_positions = [5, 21, 37, 53, 69, 85, 101]
-    texts = [line1, line2, line3, '', '', '', '']
-    for i, y in enumerate(y_positions):
-        if texts[i].strip():
-            pplb_lines.append(pplb_text(1, 0, 1, 1, y, 10, texts[i][:w]))
-    return pplb_label(pplb_lines)
 
-
-def gerar_pplb_a_pac_gran(rotulo, farmacia, dims=None):
-    """Layout A.PAC.GRAN (76x25mm) - 3 campos: paciente, req, médico."""
+def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout A.PAC.GRAN (76x25mm) - 3 campos em modo milímetros."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
-    paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
+    cal = calibracao or {}
+    cols = dims['cols_max']
+    font = dims.get('font', 2)
+    
+    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
+    
+    # 3 linhas: Y=200 (20mm), Y=130 (13mm), Y=060 (6mm)
+    linhas = [
+        ppla_text_mm(1, font, 1, 1, 200, 10, paciente),
+        ppla_text_mm(1, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(1, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}"),
+    ]
+    
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 25),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=cal.get('contraste', 12),
+    )
 
-    return pplb_label([
-        pplb_text(1, 2, 1, 1, 10,  10, paciente),
-        pplb_text(1, 2, 1, 1, 60,  10, f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 110, 10, f"DR.{nome_medico[:40]} {crm}"),
-    ])
 
-
-def gerar_pplb_tirz(rotulo, farmacia, dims=None):
-    """Layout TIRZ (Tirzepatida) - 7 linhas com posologia."""
+def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout TIRZ/Tirzepatida (109x25mm) - 8 linhas em modo milímetros."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
-    paciente = (rotulo.get('nomePaciente', '') or '')[:dims['cols_max']].upper()
+    cal = calibracao or {}
+    cols = dims['cols_max']
+    font = dims.get('font', 2)
+    
+    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
-    composicao = _composicao(rotulo, dims['cols_max'])
-    posologia = (rotulo.get('posologia', '') or '')[:dims['cols_max']].upper()
+    composicao = _composicao(rotulo, cols)
+    posologia = (rotulo.get('posologia', '') or '')[:cols].upper()
     linha_meta = _linha_meta(rotulo)
     aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
     contem = (rotulo.get('contem', '') or '')[:30].upper()
-    registro = rotulo.get('numeroRegistro', '')
+    registro = str(rotulo.get('numeroRegistro', '') or '')
+    
+    y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
+    x_start = 10
+    
+    linhas = [
+        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(1, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, posologia),
+        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, linha_meta),
+        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}  REG:{registro}"),
+    ]
+    
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 25),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=cal.get('contraste', 12),
+    )
 
-    return pplb_label([
-        pplb_text(1, 2, 1, 1, 5,   10, paciente),
-        pplb_text(1, 2, 1, 1, 5,  max(dims['largura_dots'] - 200, 200), f"REQ:{nr_req}-{nr_item}"),
-        pplb_text(1, 2, 1, 1, 30,  10, f"DR. {nome_medico[:25]} CRM {crm}"),
-        pplb_text(1, 2, 1, 1, 55,  10, composicao),
-        pplb_text(1, 2, 1, 1, 80,  10, posologia),
-        pplb_text(1, 2, 1, 1, 105, 10, linha_meta),
-        pplb_text(1, 2, 1, 1, 130, 10, f"APLICACAO: {aplicacao}"),
-        pplb_text(1, 2, 1, 1, 155, 10, f"CONTEM: {contem}  REG:{registro}"),
-    ])
 
-
-# Mapa de geradores
-GERADORES_PPLB = {
-    'AMP_CX': gerar_pplb_ampcx,
-    'AMP10': gerar_pplb_amp10,
-    'A_PAC_PEQ': gerar_pplb_a_pac_peq,
-    'A_PAC_GRAN': gerar_pplb_a_pac_gran,
-    'TIRZ': gerar_pplb_tirz,
+# Mapa de geradores (V3 - modo milímetros)
+GERADORES_PPLA = {
+    'AMP_CX': gerar_ppla_ampcx,
+    'AMP10': gerar_ppla_amp10,
+    'A_PAC_PEQ': gerar_ppla_a_pac_peq,
+    'A_PAC_GRAN': gerar_ppla_a_pac_gran,
+    'TIRZ': gerar_ppla_tirz,
 }
+
+# Alias para compatibilidade
+GERADORES_PPLB = GERADORES_PPLA
 
 
 # ============================================
@@ -332,22 +485,25 @@ def _detectar_raw_type(nome_impressora):
     return "RAW"
 
 
-def enviar_para_impressora(nome_impressora, comandos_pplb):
-    """Envia comandos PPLB para a impressora com fallback de RAW/XPS_PASS."""
+def enviar_para_impressora(nome_impressora, comandos):
+    """Envia comandos PPLA para a impressora com fallback de RAW/XPS_PASS.
+    Usa encoding cp1252 conforme documentação Argox."""
     if not PYWIN32_OK:
-        logger.info(f"[SIMULAÇÃO] Enviando para {nome_impressora}:\n{comandos_pplb[:500]}")
+        logger.info(f"[SIMULAÇÃO] Enviando para {nome_impressora}:\n{comandos[:500]}")
         return {"success": True, "message": "Simulação OK"}
 
     raw_type = _detectar_raw_type(nome_impressora)
     logger.info(f"Usando datatype '{raw_type}' para '{nome_impressora}'")
 
+    # Encoding cp1252 conforme recomendação da documentação
+    dados = comandos.encode('cp1252', errors='replace')
+
     try:
         hPrinter = win32print.OpenPrinter(nome_impressora)
         try:
-            hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta", None, raw_type))
+            hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta PPLA", None, raw_type))
             try:
                 win32print.StartPagePrinter(hPrinter)
-                dados = comandos_pplb.encode('cp850', errors='replace')
                 win32print.WritePrinter(hPrinter, dados)
                 win32print.EndPagePrinter(hPrinter)
             finally:
@@ -362,10 +518,9 @@ def enviar_para_impressora(nome_impressora, comandos_pplb):
         try:
             hPrinter = win32print.OpenPrinter(nome_impressora)
             try:
-                hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta", None, fallback_type))
+                hJob = win32print.StartDocPrinter(hPrinter, 1, ("Etiqueta PPLA", None, fallback_type))
                 try:
                     win32print.StartPagePrinter(hPrinter)
-                    dados = comandos_pplb.encode('cp850', errors='replace')
                     win32print.WritePrinter(hPrinter, dados)
                     win32print.EndPagePrinter(hPrinter)
                 finally:
@@ -388,7 +543,8 @@ def health():
         "sistema": platform.system(),
         "impressao_disponivel": PYWIN32_OK,
         "hostname": socket.gethostname(),
-        "version": "2.3.0",
+        "version": "3.0.0",
+        "protocolo": "PPLA-mm",
     })
 
 
@@ -406,30 +562,31 @@ def listar_impressoras():
 
 @app.route('/teste', methods=['POST'])
 def teste_impressao():
-    """Imprime etiqueta de teste PPLB."""
+    """Imprime etiqueta de teste PPLA em modo milímetros."""
     impressora_req = (request.json or {}).get('impressora', IMPRESSORA_PADRAO)
     impressora = find_printer_match(impressora_req) or impressora_req
     dims = get_printer_dims(impressora)
 
-    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
-    label = pplb_label([
-        pplb_text(1, 3, 1, 1, 30, 10, "*** TESTE ***"),
-        pplb_text(1, 2, 1, 1, 80, 10, "PPLB OK - V2.3"),
-        pplb_text(1, 2, 1, 1, 120, 10, f"Imp: {impressora}"),
-        pplb_text(1, 2, 1, 1, 155, 10, f"q{dims['largura_dots']} Q{dims['altura_dots']}"),
-    ])
-    comandos = setup + label
+    comandos = ppla_full_label(
+        [
+            ppla_text_mm(1, 3, 1, 1, 200, 10, "*** TESTE V3.0 ***"),
+            ppla_text_mm(1, 2, 1, 1, 150, 10, "PPLA mm OK"),
+            ppla_text_mm(1, 2, 1, 1, 100, 10, f"Imp: {impressora[:30]}"),
+            ppla_text_mm(1, 2, 1, 1, 50,  10, f"{dims['largura_mm']}x{dims['altura_mm']}mm"),
+        ],
+        altura_mm=dims.get('altura_mm', 25),
+    )
 
     resultado = enviar_para_impressora(impressora, comandos)
     if resultado.get("success"):
-        return jsonify({"success": True, "message": "Teste enviado com sucesso"})
+        return jsonify({"success": True, "message": "Teste V3 enviado com sucesso"})
     else:
         return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
 
 
 @app.route('/imprimir', methods=['POST'])
 def imprimir():
-    """Recebe JSON com rótulos e imprime via PPLB em batch único."""
+    """Recebe JSON com rótulos e imprime via PPLA modo milímetros."""
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "Nenhum dado recebido"}), 400
@@ -438,46 +595,43 @@ def imprimir():
     layout_tipo = data.get('layout_tipo', 'AMP_CX')
     farmacia = data.get('farmacia', {})
     rotulos = data.get('rotulos', [])
+    
+    # Calibração: margem C e offset R (enviados pelo frontend)
+    calibracao = data.get('calibracao', {})
 
     if not rotulos:
         return jsonify({"success": False, "error": "Nenhum rótulo para imprimir"}), 400
 
-    # Resolve impressora com match inteligente
     impressora = find_printer_match(impressora_req) or impressora_req
     logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
+    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)}")
 
-    gerador = GERADORES_PPLB.get(layout_tipo, gerar_pplb_ampcx)
+    gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
     dims = get_printer_dims(impressora)
 
-    # Setup: comandos de dimensão UMA VEZ antes dos blocos de etiqueta
-    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
-
-    # Batch: concatenar TODOS os blocos de etiqueta PPLB
-    labels_todos = ""
+    # Gerar todas as etiquetas (cada uma já inclui setup completo em mm)
+    comandos_todos = ""
     erros_geracao = []
     for rotulo in rotulos:
         try:
-            label = gerador(rotulo, farmacia, dims)
-            labels_todos += label
-            logger.info(f"Rótulo {rotulo.get('id', '?')} layout={layout_tipo} dims=q{dims['largura_dots']}/Q{dims['altura_dots']} adicionado")
+            label = gerador(rotulo, farmacia, dims, calibracao)
+            comandos_todos += label
+            logger.info(f"Rótulo {rotulo.get('id', '?')} layout={layout_tipo} {dims['largura_mm']}x{dims['altura_mm']}mm adicionado")
         except Exception as e:
             erros_geracao.append(f"Rótulo {rotulo.get('id', '?')}: {str(e)}")
 
-    if not labels_todos:
+    if not comandos_todos:
         return jsonify({"success": False, "error": "Nenhum comando gerado", "erros": erros_geracao}), 500
 
-    # Montar: setup + todos os blocos de etiqueta
-    comandos_todos = setup + labels_todos
-
-    # Debug: mostrar comandos PPLB
+    # Debug: mostrar comandos PPLA
     logger.info(f"\n{'='*60}")
-    logger.info(f"[DEBUG PPLB] Comandos completos ({len(comandos_todos)} bytes):")
+    logger.info(f"[DEBUG PPLA-mm] Comandos completos ({len(comandos_todos)} bytes):")
     for i, line in enumerate(comandos_todos.split('\r')):
         display = line.replace('\x02', '<STX>').replace('\n', '<LF>')
         logger.info(f"  [{i:02d}] {display}")
     logger.info(f"{'='*60}")
 
-    # Enviar TUDO em um único job
+    # Enviar
     logger.info(f"Enviando batch de {len(rotulos)} rótulos para '{impressora}'")
     resultado = enviar_para_impressora(impressora, comandos_todos)
 
@@ -487,6 +641,7 @@ def imprimir():
             "impressos": len(rotulos) - len(erros_geracao),
             "printer_used": impressora,
             "layout_used": layout_tipo,
+            "protocolo": "PPLA-mm",
             "erros": erros_geracao if erros_geracao else None
         })
     else:
@@ -499,9 +654,7 @@ def imprimir():
 
 @app.route('/imprimir-rotutx', methods=['POST'])
 def imprimir_rotutx():
-    """Recebe linhas de texto extraídas do ROTUTX (FC12300) e imprime via PPLA.
-    Payload: {"impressora": "AMP PEQUENO", "linhas": ["linha1", "linha2", ...], "req": "90198"}
-    """
+    """Recebe linhas de texto extraídas do ROTUTX (FC12300) e imprime via PPLA mm."""
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "Nenhum dado recebido"}), 400
@@ -509,6 +662,7 @@ def imprimir_rotutx():
     impressora_req = data.get('impressora', '') or IMPRESSORA_PADRAO
     linhas = data.get('linhas', [])
     req_num = data.get('req', '?')
+    calibracao = data.get('calibracao', {})
 
     if not linhas:
         return jsonify({"success": False, "error": "Nenhuma linha de texto recebida"}), 400
@@ -517,34 +671,36 @@ def imprimir_rotutx():
     dims = get_printer_dims(impressora)
     logger.info(f"[ROTUTX] REQ={req_num} impressora='{impressora}' linhas={len(linhas)}")
 
-    # Calcula espaçamento Y dinâmico baseado no número de linhas e altura da etiqueta
-    # Reserva 10 dots de margem superior e inferior
-    margem = 10
-    area_util = dims['altura_dots'] - (margem * 2)
+    # Espaçamento Y dinâmico em 0.1mm
+    altura_mm = dims.get('altura_mm', 25)
+    margem_01mm = 20  # 2mm margem
+    area_util = (altura_mm * 10) - (margem_01mm * 2)
     num_linhas = len(linhas)
-
+    
     if num_linhas <= 1:
         espacamento = 0
     else:
-        espacamento = min(area_util // (num_linhas), 25)  # máximo 25 dots entre linhas
+        espacamento = min(area_util // num_linhas, 50)  # máximo 5mm entre linhas
 
-    # Gera comandos PPLA para cada linha
-    pplb_lines = []
+    font = dims.get('font', 2)
+    ppla_lines = []
     for i, texto in enumerate(linhas):
-        y = margem + (i * espacamento)
-        # Usa fonte menor (0) para etiquetas pequenas, fonte 2 para grandes
-        font = 0 if 'PEQUEN' in (impressora or '').upper() else 2
+        # Y começa do topo (alto valor) e desce
+        y = (altura_mm * 10) - margem_01mm - (i * espacamento)
         texto_truncado = texto[:dims['cols_max']]
-        pplb_lines.append(pplb_text(1, font, 1, 1, y, 10, texto_truncado))
+        ppla_lines.append(ppla_text_mm(1, font, 1, 1, max(y, margem_01mm), 10, texto_truncado))
         logger.info(f"  [{i:02d}] Y={y:04d} F={font}: {texto_truncado[:50]}")
 
-    setup = pplb_setup(dims['largura_dots'], dims['altura_dots'], dims['gap_dots'])
-    label = pplb_label(pplb_lines)
-    comandos = setup + label
+    comandos = ppla_full_label(
+        ppla_lines,
+        altura_mm=altura_mm,
+        margem_c=calibracao.get('margem_c', 0),
+        offset_r=calibracao.get('offset_r', 0),
+    )
 
     # Debug PPLA
     logger.info(f"\n{'='*60}")
-    logger.info(f"[ROTUTX PPLA] Comandos ({len(comandos)} bytes):")
+    logger.info(f"[ROTUTX PPLA-mm] Comandos ({len(comandos)} bytes):")
     for i, line in enumerate(comandos.split('\r')):
         display = line.replace('\x02', '<STX>').replace('\n', '<LF>')
         logger.info(f"  [{i:02d}] {display}")
@@ -558,7 +714,8 @@ def imprimir_rotutx():
             "linhas_impressas": len(linhas),
             "printer_used": impressora,
             "fonte": font,
-            "req": req_num
+            "req": req_num,
+            "protocolo": "PPLA-mm",
         })
     else:
         return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
@@ -578,19 +735,13 @@ def analisar_prn():
             raw = f.read()
 
         tamanho = len(raw)
-        hex_dump = raw[:2000].hex(' ')
-
-        # Análise de terminadores
         count_crlf = raw.count(b'\r\n')
         count_lf = raw.count(b'\n') - count_crlf
         count_cr = raw.count(b'\r') - count_crlf
-
-        # Encontrar STX (\x02) e ETX/E
         stx_positions = [i for i, b in enumerate(raw) if b == 0x02]
 
-        # Decodificar como texto para análise
         try:
-            texto = raw.decode('cp850', errors='replace')
+            texto = raw.decode('cp1252', errors='replace')
         except Exception:
             texto = raw.decode('latin-1', errors='replace')
 
@@ -614,16 +765,6 @@ def analisar_prn():
             "linhas_texto": linhas_display,
         }
 
-        logger.info(f"\n{'='*60}")
-        logger.info(f"[ANÁLISE PRN] Arquivo: {caminho}")
-        logger.info(f"  Tamanho: {tamanho} bytes")
-        logger.info(f"  CRLF: {count_crlf} | LF: {count_lf} | CR: {count_cr}")
-        logger.info(f"  STX encontrados: {len(stx_positions)} em posições: {stx_positions[:10]}")
-        logger.info(f"  Primeiras linhas:")
-        for l in linhas_display[:30]:
-            logger.info(f"    {l}")
-        logger.info(f"{'='*60}")
-
         return jsonify(resultado)
 
     except Exception as e:
@@ -636,9 +777,7 @@ def analisar_prn():
 # ============================================
 @app.route('/raw', methods=['POST'])
 def raw_print():
-    """Recebe dados RAW em base64 e envia direto para a impressora.
-    Payload: {"impressora": "AMP PEQUENO", "dados_base64": "...", "raw_base64": "..."}
-    Aceita tanto 'dados_base64' quanto 'raw_base64' como chave."""
+    """Recebe dados RAW em base64 e envia direto para a impressora."""
     try:
         data = request.get_json()
         if not data:
@@ -652,11 +791,9 @@ def raw_print():
 
         impressora = find_printer_match(impressora_req) or impressora_req
 
-        # Decodifica base64
         import base64
         raw_bytes = base64.b64decode(raw_b64)
 
-        # DEBUG: Mostra primeiros bytes e detecta formato
         logger.info(f"\n{'='*60}")
         logger.info(f"[RAW] Impressora: {impressora}")
         logger.info(f"[RAW] Tamanho: {len(raw_bytes)} bytes")
@@ -668,7 +805,6 @@ def raw_print():
         except Exception:
             pass
 
-        # Detectar formato
         formato = "DESCONHECIDO"
         if b'\x02L' in raw_bytes or b'\x02l' in raw_bytes:
             formato = "PPLB"
@@ -680,21 +816,15 @@ def raw_print():
             formato = "ESC/POS"
         logger.info(f"[RAW] Formato detectado: {formato}")
 
-        # Verificar e adicionar ^E se faltar (PPLA)
         if formato == "PPLA" and not raw_bytes.strip().endswith(b'^E'):
             raw_bytes = raw_bytes.strip() + b'\r\n^E\r\n'
-            logger.info("[RAW] Adicionei ^E no final (PPLA)")
-
-        # Verificar e adicionar E se faltar (PPLB)
         if formato == "PPLB":
             stripped = raw_bytes.strip()
             if not stripped.endswith(b'E') and not stripped.endswith(b'\rE'):
                 raw_bytes = raw_bytes.strip() + b'\rE\r'
-                logger.info("[RAW] Adicionei E no final (PPLB)")
 
         logger.info(f"{'='*60}")
 
-        # Enviar para impressora
         resultado = enviar_para_impressora(impressora, raw_bytes.decode('latin-1', errors='replace'))
 
         if resultado.get("success"):
@@ -716,13 +846,9 @@ def raw_print():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ============================================
-# ENDPOINT /test_notepad - Salva RAW em arquivo para inspeção
-# ============================================
 @app.route('/test_notepad', methods=['POST'])
 def test_notepad():
-    """Salva conteudo RAW em arquivo para inspecao visual.
-    Payload: {"dados_base64": "...", "raw_base64": "..."}"""
+    """Salva conteudo RAW em arquivo para inspecao visual."""
     try:
         import base64
         import tempfile
@@ -735,25 +861,16 @@ def test_notepad():
             return jsonify({"success": False, "error": "Nenhum dado base64"}), 400
 
         raw_bytes = base64.b64decode(raw_b64)
-
-        # Salva em arquivo temporario
         temp_file = os.path.join(tempfile.gettempdir(), 'rotutx_debug.txt')
         with open(temp_file, 'wb') as f:
             f.write(raw_bytes)
 
-        # Tenta abrir no Notepad (Windows)
         try:
             subprocess.Popen(['notepad.exe', temp_file])
         except Exception:
             pass
 
-        # Analise do conteudo
-        analise = {
-            "tamanho": len(raw_bytes),
-            "arquivo": temp_file,
-        }
-
-        # Detectar formato
+        analise = {"tamanho": len(raw_bytes), "arquivo": temp_file}
         if b'^w' in raw_bytes or b'^W' in raw_bytes:
             analise["formato"] = "PPLA"
         elif b'\x02L' in raw_bytes:
@@ -765,13 +882,11 @@ def test_notepad():
         else:
             analise["formato"] = "DESCONHECIDO"
 
-        # Preview como texto
         try:
             analise["preview_texto"] = raw_bytes[:500].decode('latin-1', errors='ignore')
         except Exception:
             analise["preview_texto"] = "(nao decodificavel)"
 
-        # Verificar terminadores
         analise["tem_E_final"] = raw_bytes.strip().endswith(b'E') or raw_bytes.strip().endswith(b'^E')
         analise["count_CR"] = raw_bytes.count(b'\r')
         analise["count_LF"] = raw_bytes.count(b'\n')
@@ -784,13 +899,9 @@ def test_notepad():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ============================================
-# ENDPOINT /raw_tcp - Bypass do driver, envia via TCP porta 9100
-# ============================================
 @app.route('/raw_tcp', methods=['POST'])
 def raw_tcp():
-    """Envia dados RAW direto para a impressora via TCP porta 9100 (bypass do driver Windows).
-    Payload: {"host": "192.168.1.X", "port": 9100, "dados_base64": "...", "raw_base64": "..."}"""
+    """Envia dados RAW direto para a impressora via TCP porta 9100."""
     try:
         import base64
 
@@ -805,7 +916,6 @@ def raw_tcp():
             return jsonify({"success": False, "error": "Nenhum dado base64"}), 400
 
         raw_bytes = base64.b64decode(raw_b64)
-
         logger.info(f"[TCP] Enviando {len(raw_bytes)} bytes para {host}:{port}")
 
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -815,7 +925,6 @@ def raw_tcp():
         s.close()
 
         logger.info(f"[TCP] Enviado com sucesso para {host}:{port}")
-
         return jsonify({
             "success": True,
             "bytes_enviados": len(raw_bytes),
@@ -828,25 +937,23 @@ def raw_tcp():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ============================================
-# ENDPOINT /diagnostico - Resumo completo do sistema
-# ============================================
 @app.route('/diagnostico', methods=['GET'])
 def diagnostico():
     """Retorna diagnostico completo do agente e impressoras."""
     printers = get_available_printers()
     diag = {
-        "agente_versao": "2.5.0",
+        "agente_versao": "3.0.0",
+        "protocolo": "PPLA-mm (milímetros)",
         "hostname": socket.gethostname(),
         "sistema": platform.system(),
         "pywin32": PYWIN32_OK,
         "impressora_padrao": IMPRESSORA_PADRAO,
         "impressoras_disponiveis": printers,
-        "layouts_suportados": list(GERADORES_PPLB.keys()),
+        "layouts_suportados": list(GERADORES_PPLA.keys()),
         "configs_impressora": {k: v for k, v in PRINTER_CONFIGS.items()},
+        "encoding": "cp1252",
     }
 
-    # Verificar config de cada impressora
     if PYWIN32_OK:
         for p in printers:
             try:
@@ -868,16 +975,17 @@ def diagnostico():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5002))
     logger.info("=" * 50)
-    logger.info("Agente de Impressao PPLB - ProPharmacos V2.5")
+    logger.info("Agente de Impressao PPLA-mm - ProPharmacos V3.0")
     logger.info(f"Hostname: {socket.gethostname()}")
     logger.info(f"Porta: {port}")
+    logger.info(f"Protocolo: PPLA modo milimetros (cp1252)")
     logger.info(f"Impressora padrao: {IMPRESSORA_PADRAO}")
     logger.info(f"pywin32 disponivel: {PYWIN32_OK}")
     logger.info(f"Impressoras: {get_available_printers()}")
-    logger.info(f"Layouts: {list(GERADORES_PPLB.keys())}")
+    logger.info(f"Layouts: {list(GERADORES_PPLA.keys())}")
     logger.info(f"Endpoints: /health /impressoras /imprimir /raw /raw_tcp /test_notepad /diagnostico")
     for k, v in PRINTER_CONFIGS.items():
-        logger.info(f"  {k}: q{v['largura_dots']} Q{v['altura_dots']},{v['gap_dots']} ({v['cols_max']} cols)")
+        logger.info(f"  {k}: {v['largura_mm']}x{v['altura_mm']}mm ({v['cols_max']} cols)")
     logger.info(f"Health: http://localhost:{port}/health")
     logger.info("=" * 50)
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)

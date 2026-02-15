@@ -1,4 +1,4 @@
-import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig, PrintAgentConfig } from "@/types/requisicao";
+import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 
 const STORAGE_KEYS = {
   API_CONFIG: "label-system-api-config",
@@ -37,6 +37,11 @@ const DEFAULT_PRINT_AGENT_CONFIG: PrintAgentConfig = {
   enabled: false,
   agentUrl: "http://192.168.10.105:5001",
   impressora: "argox01",
+  calibracao: {
+    margem_c: 0,
+    offset_r: 0,
+    contraste: 12,
+  },
 };
 
 // Funções de persistência

@@ -1,4 +1,4 @@
-import { PrintAgentConfig, RotuloItem } from "@/types/requisicao";
+import { PrintAgentConfig, PrinterCalibrationConfig, RotuloItem } from "@/types/requisicao";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -95,10 +95,17 @@ export const imprimirViaAgente = async (
   farmacia: { nome: string; farmaceutico: string; crf: string }
 ): Promise<ApiResponse<{ impressos: number; erros?: string[] }>> => {
   try {
+    const calibracao: PrinterCalibrationConfig = config.calibracao || {
+      margem_c: 0,
+      offset_r: 0,
+      contraste: 12,
+    };
+
     const payload = {
       impressora: config.impressora,
       layout_tipo: layoutTipo,
       farmacia,
+      calibracao,
       rotulos: rotulos.map(r => ({
         id: r.id,
         nrRequisicao: r.nrRequisicao,
