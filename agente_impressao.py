@@ -6,7 +6,7 @@ Protocolo PPLA modo milímetros (Argox OS-2140) conforme documentação oficial.
 Melhorias V3.0: modo mm, comandos M/C/R configuráveis, encoding cp1252.
 
 Layouts: AMP_CX, AMP10, A_PAC_PEQ, A_PAC_GRAN, TIRZ
-Porta: 5002
+Porta: 5001
 Instalação: pip install flask flask-cors pywin32
 """
 
@@ -225,7 +225,8 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = dims.get('font', 2)
+    font = cal.get('fonte', dims.get('font', 2))
+    rot = cal.get('rotacao', 1)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -238,20 +239,18 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     contem = (rotulo.get('contem', '') or '')[:30].upper()
     registro = str(rotulo.get('numeroRegistro', '') or '')
     
-    # Coordenadas Y em 0.1mm (origem bottom-left, 25mm label)
-    # L1=topo(22mm), L2=19mm, L3=16mm, L4=13mm, L5=10mm, L6=7mm, L7=4mm, L8=2mm
     y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
-    x_start = 10  # 1mm da borda esquerda
+    x_start = 10
     
     linhas = [
-        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(1, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, linha_meta),
-        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, linha_meta),
+        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}"),
     ]
     
     return ppla_full_label(
@@ -269,7 +268,8 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
         dims = PRINTER_CONFIGS['AMP10']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = dims.get('font', 2)
+    font = cal.get('fonte', dims.get('font', 2))
+    rot = cal.get('rotacao', 1)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -282,19 +282,18 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
     contem = (rotulo.get('contem', '') or '')[:30].upper()
     
-    # Coordenadas Y em 0.1mm (origem bottom-left, 38mm label)
     y_pos = [350, 310, 270, 230, 190, 150, 110, 70]
     x_start = 10
     
     linhas = [
-        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(1, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, linha_meta),
-        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, f"REG: {registro}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, linha_meta),
+        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, f"REG: {registro}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}"),
     ]
     
     return ppla_full_label(
@@ -307,34 +306,26 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
 
 
 def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.PEQ (45x25mm) - modo milímetros conforme documentação.
-    
-    Template de referência (documentação PPLA):
-    Y=0220 (22mm): ©PACIENTE
-    Y=0170 (17mm): ©REQUISICAO  
-    Y=0120 (12mm): ©PRESCRITOR
-    Y=0070 (7mm):  ©CONSELHO
-    Y=0020 (2mm):  ©REGISTRO
-    """
+    """Layout A.PAC.PEQ (45x25mm) - modo milímetros."""
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = dims.get('font', 2)
+    font = cal.get('fonte', dims.get('font', 2))
+    rot = cal.get('rotacao', 1)
     
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        # Usar texto editado pelo usuário, linha por linha
         linhas_texto = texto_livre.split('\n')
         y_positions = [220, 180, 140, 100, 70, 40, 20]
         pplb_lines = []
         for i, y in enumerate(y_positions):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
             if line_text.strip():
-                pplb_lines.append(ppla_text_mm(1, font, 1, 1, y, 10, line_text[:cols]))
+                pplb_lines.append(ppla_text_mm(rot, font, 1, 1, y, 10, line_text[:cols]))
         if not pplb_lines:
             paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:cols].upper()
-            pplb_lines.append(ppla_text_mm(1, font, 1, 1, 220, 10, paciente))
+            pplb_lines.append(ppla_text_mm(rot, font, 1, 1, 220, 10, paciente))
         
         return ppla_full_label(
             pplb_lines,
@@ -344,7 +335,6 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
             contraste=cal.get('contraste', 12),
         )
     
-    # Geração estruturada conforme template da documentação
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
@@ -352,7 +342,6 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     crm = _crm_completo(rotulo)[:15]
     registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
     
-    # Padded alignment (grade fixa 38 colunas)
     w = cols
     req_str = f"REQ:{nr_req}-{nr_item}"[:11]
     line1 = (paciente + ' ' * w)[:w - len(req_str)] + req_str
@@ -361,14 +350,13 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     reg_str = f"REG:{registro}" if registro else ""
     line3 = (' ' * (w - len(reg_str))) + reg_str if reg_str else ""
     
-    # Coordenadas Y conforme documentação: 220, 170, 120 (0.1mm)
     linhas = []
     if line1.strip():
-        linhas.append(ppla_text_mm(1, font, 1, 1, 220, 10, line1[:w]))
+        linhas.append(ppla_text_mm(rot, font, 1, 1, 220, 10, line1[:w]))
     if line2.strip():
-        linhas.append(ppla_text_mm(1, font, 1, 1, 170, 10, line2[:w]))
+        linhas.append(ppla_text_mm(rot, font, 1, 1, 170, 10, line2[:w]))
     if line3.strip():
-        linhas.append(ppla_text_mm(1, font, 1, 1, 120, 10, line3[:w]))
+        linhas.append(ppla_text_mm(rot, font, 1, 1, 120, 10, line3[:w]))
     
     return ppla_full_label(
         linhas,
@@ -385,7 +373,8 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = dims.get('font', 2)
+    font = cal.get('fonte', dims.get('font', 2))
+    rot = cal.get('rotacao', 1)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -393,11 +382,10 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
     
-    # 3 linhas: Y=200 (20mm), Y=130 (13mm), Y=060 (6mm)
     linhas = [
-        ppla_text_mm(1, font, 1, 1, 200, 10, paciente),
-        ppla_text_mm(1, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(1, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}"),
+        ppla_text_mm(rot, font, 1, 1, 200, 10, paciente),
+        ppla_text_mm(rot, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(rot, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}"),
     ]
     
     return ppla_full_label(
@@ -415,7 +403,8 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = dims.get('font', 2)
+    font = cal.get('fonte', dims.get('font', 2))
+    rot = cal.get('rotacao', 1)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -433,14 +422,14 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     x_start = 10
     
     linhas = [
-        ppla_text_mm(1, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(1, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(1, font, 1, 1, y_pos[3], x_start, posologia),
-        ppla_text_mm(1, font, 1, 1, y_pos[4], x_start, linha_meta),
-        ppla_text_mm(1, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(1, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}  REG:{registro}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
+        ppla_text_mm(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
+        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, posologia),
+        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, linha_meta),
+        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
+        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}  REG:{registro}"),
     ]
     
     return ppla_full_label(
@@ -604,7 +593,7 @@ def imprimir():
 
     impressora = find_printer_match(impressora_req) or impressora_req
     logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
-    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)}")
+    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 1)}")
 
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
     dims = get_printer_dims(impressora)

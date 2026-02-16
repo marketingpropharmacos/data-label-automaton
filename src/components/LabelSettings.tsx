@@ -417,7 +417,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
                           margem_c: Number(e.target.value),
                         },
                       })}
@@ -438,7 +438,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
                           offset_r: Number(e.target.value),
                         },
                       })}
@@ -459,13 +459,55 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
                           contraste: Number(e.target.value),
                         },
                       })}
                     />
                     <p className="text-xs text-muted-foreground">
                       10=padrão, 16=máx recomendado, 20=máximo.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fontePPLA">Fonte PPLA (0-9)</Label>
+                    <Input
+                      id="fontePPLA"
+                      type="number"
+                      min={0}
+                      max={9}
+                      placeholder="2"
+                      value={agentConfig.calibracao?.fonte ?? 2}
+                      onChange={(e) => setAgentConfigState({
+                        ...agentConfig,
+                        calibracao: {
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
+                          fonte: Number(e.target.value),
+                        },
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      0=menor (6x10), 2=padrão (10x16), 4=grande (18x28).
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="rotacaoPPLA">Rotação (0-3)</Label>
+                    <Input
+                      id="rotacaoPPLA"
+                      type="number"
+                      min={0}
+                      max={3}
+                      placeholder="1"
+                      value={agentConfig.calibracao?.rotacao ?? 1}
+                      onChange={(e) => setAgentConfigState({
+                        ...agentConfig,
+                        calibracao: {
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
+                          rotacao: Number(e.target.value),
+                        },
+                      })}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      0=horizontal, 1=90°, 2=180°, 3=270°. Etiqueta em branco? Tente 0.
                     </p>
                   </div>
                 </div>
