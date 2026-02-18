@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ArrowLeftRight, ClipboardPaste, Search } from "lucide-react";
+import { ArrowLeftRight, ClipboardPaste, Search, Wrench, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -15,8 +16,11 @@ import {
   parsePPLACommands,
   buildGroupedDiff,
   summarizeDiffs,
+  extractCalibrationFromDiff,
   type DiffResult,
   type DiffSummary,
+  type SuggestedFixes,
+  type CalibrationFix,
 } from "@/utils/pplaParser";
 
 // --- Status colors ---
@@ -50,6 +54,8 @@ interface PPLAComparerProps {
   systemRaw?: string;
   capturedCommands?: string[];
   capturedRaw?: string;
+  currentCalibration?: { margem_c: number; offset_r: number; contraste: number; fonte: number; rotacao: number };
+  onApplyFixes?: (fixes: SuggestedFixes, selected: Record<string, boolean>) => void;
 }
 
 const PPLAComparer = ({
@@ -59,10 +65,14 @@ const PPLAComparer = ({
   systemRaw,
   capturedCommands,
   capturedRaw,
+  currentCalibration,
+  onApplyFixes,
 }: PPLAComparerProps) => {
   const [pastedText, setPastedText] = useState("");
   const [diffResults, setDiffResults] = useState<DiffResult[] | null>(null);
   const [summary, setSummary] = useState<DiffSummary | null>(null);
+  const [suggestedFixes, setSuggestedFixes] = useState<SuggestedFixes | null>(null);
+  const [selectedFixes, setSelectedFixes] = useState<Record<string, boolean>>({});
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && !pastedText && (capturedRaw || capturedCommands)) {
@@ -71,6 +81,8 @@ const PPLAComparer = ({
     if (!isOpen) {
       setDiffResults(null);
       setSummary(null);
+      setSuggestedFixes(null);
+      setSelectedFixes({});
     }
     onOpenChange(isOpen);
   };
@@ -85,7 +97,30 @@ const PPLAComparer = ({
     const diffs = buildGroupedDiff(leftParsed, rightParsed);
     setDiffResults(diffs);
     setSummary(summarizeDiffs(diffs));
+
+    // Extract suggested fixes if calibration is available
+    if (currentCalibration) {
+      const fixes = extractCalibrationFromDiff(diffs, currentCalibration);
+      setSuggestedFixes(fixes);
+      // Pre-select all fixes that have motivo (i.e. differences found)
+      const sel: Record<string, boolean> = {};
+      for (const [key, fix] of Object.entries(fixes)) {
+        if ((fix as CalibrationFix).motivo) sel[key] = true;
+      }
+      setSelectedFixes(sel);
+    }
   };
+
+  const fixLabels: Record<string, string> = {
+    contraste: "Contraste (H)",
+    fonte: "Fonte PPLA",
+    rotacao: "Rotação",
+    margem_c: "Margem Esquerda (C)",
+    offset_r: "Offset Vertical (R)",
+  };
+
+  const hasFixableDiffs = suggestedFixes && Object.values(suggestedFixes).some((f) => f.motivo);
+  const selectedCount = Object.values(selectedFixes).filter(Boolean).length;
 
   let lineCounter = 0;
 
@@ -175,6 +210,58 @@ const PPLAComparer = ({
                 </ul>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Suggested Fixes Panel */}
+        {hasFixableDiffs && onApplyFixes && (
+          <div className="p-3 rounded border border-primary/30 bg-primary/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold flex items-center gap-2">
+                <Wrench className="h-4 w-4" />
+                Correções Sugeridas
+              </h4>
+              <Button
+                size="sm"
+                disabled={selectedCount === 0}
+                onClick={() => {
+                  onApplyFixes(suggestedFixes!, selectedFixes);
+                  onOpenChange(false);
+                }}
+              >
+                <Check className="h-3 w-3 mr-1" />
+                Aplicar {selectedCount > 0 ? `(${selectedCount})` : ""}
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(suggestedFixes!).map(([key, fix]) => {
+                const f = fix as CalibrationFix;
+                if (!f.motivo) return null;
+                return (
+                  <label
+                    key={key}
+                    className="flex items-start gap-2 p-2 rounded bg-background border cursor-pointer hover:bg-accent/30 transition-colors"
+                  >
+                    <Checkbox
+                      checked={!!selectedFixes[key]}
+                      onCheckedChange={(checked) =>
+                        setSelectedFixes((prev) => ({ ...prev, [key]: !!checked }))
+                      }
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 text-xs">
+                      <div className="font-medium">{fixLabels[key] || key}</div>
+                      <div className="text-muted-foreground">{f.motivo}</div>
+                      <div className="mt-0.5">
+                        <span className="text-destructive line-through">{f.atual}</span>
+                        {" → "}
+                        <span className="text-primary font-semibold">{f.sugerido}</span>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         )}
 

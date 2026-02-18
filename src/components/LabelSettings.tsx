@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, Radio, ArrowLeftRight } from "lucide-react";
+import { type SuggestedFixes, type CalibrationFix } from "@/utils/pplaParser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -613,6 +614,21 @@ const LabelSettings = () => {
                 systemRaw={diagnosticResult?.comandos_raw}
                 capturedCommands={captureResult?.comandos}
                 capturedRaw={captureResult?.comandos_raw}
+                currentCalibration={agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 }}
+                onApplyFixes={(fixes: SuggestedFixes, selected: Record<string, boolean>) => {
+                  const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 };
+                  const updated = { ...cal };
+                  if (selected.contraste) updated.contraste = fixes.contraste.sugerido;
+                  if (selected.fonte) updated.fonte = fixes.fonte.sugerido;
+                  if (selected.rotacao) updated.rotacao = fixes.rotacao.sugerido;
+                  if (selected.margem_c) updated.margem_c = fixes.margem_c.sugerido;
+                  if (selected.offset_r) updated.offset_r = fixes.offset_r.sugerido;
+                  setAgentConfigState({ ...agentConfig, calibracao: updated });
+                  toast({
+                    title: "Calibração atualizada!",
+                    description: "Valores ajustados com base no Fórmula Certa. Rode o diagnóstico novamente para confirmar.",
+                  });
+                }}
               />
 
               {agentConfig.enabled && (

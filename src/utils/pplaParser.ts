@@ -367,7 +367,7 @@ export function summarizeDiffs(diffs: DiffResult[]): DiffSummary {
     configDiffs: [],
   };
 
-  diffs.forEach((d, i) => {
+  diffs.forEach((d) => {
     if (d.isSeparator) return;
     summary.total++;
 
@@ -393,4 +393,125 @@ export function summarizeDiffs(diffs: DiffResult[]): DiffSummary {
   });
 
   return summary;
+}
+
+// --- Suggested Fixes ---
+
+export interface CalibrationFix {
+  atual: number;
+  sugerido: number;
+  motivo: string | null;
+}
+
+export interface SuggestedFixes {
+  contraste: CalibrationFix;
+  fonte: CalibrationFix;
+  rotacao: CalibrationFix;
+  margem_c: CalibrationFix;
+  offset_r: CalibrationFix;
+}
+
+interface CurrentCalibration {
+  margem_c: number;
+  offset_r: number;
+  contraste: number;
+  fonte: number;
+  rotacao: number;
+}
+
+export function extractCalibrationFromDiff(
+  diffs: DiffResult[],
+  currentCal: CurrentCalibration
+): SuggestedFixes {
+  // Extract contrast from FC config lines (H command)
+  let fcContraste: number | null = null;
+  for (const d of diffs) {
+    if (d.right?.type === "config" && /^H\d+/i.test(d.right.raw)) {
+      const m = d.right.raw.match(/^H(\d+)/i);
+      if (m) fcContraste = parseInt(m[1]);
+    }
+  }
+
+  // Extract most frequent font and rotation from FC text lines
+  const fcFonts: number[] = [];
+  const fcRotations: number[] = [];
+  const xDiffs: number[] = [];
+  const yDiffs: number[] = [];
+
+  for (const d of diffs) {
+    if (d.right?.type === "text") {
+      if (d.right.font !== undefined) fcFonts.push(d.right.font);
+      if (d.right.rotation !== undefined) fcRotations.push(d.right.rotation);
+    }
+    // Coordinate diffs from paired text lines
+    if (d.left?.type === "text" && d.right?.type === "text") {
+      if (d.left.x !== undefined && d.right.x !== undefined) {
+        xDiffs.push(d.right.x - d.left.x);
+      }
+      if (d.left.y !== undefined && d.right.y !== undefined) {
+        yDiffs.push(d.right.y - d.left.y);
+      }
+    }
+  }
+
+  const mostFrequent = (arr: number[]): number | null => {
+    if (arr.length === 0) return null;
+    const counts = new Map<number, number>();
+    for (const v of arr) counts.set(v, (counts.get(v) || 0) + 1);
+    let best = arr[0], bestCount = 0;
+    for (const [v, c] of counts) {
+      if (c > bestCount) { best = v; bestCount = c; }
+    }
+    return best;
+  };
+
+  const median = (arr: number[]): number => {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  };
+
+  const fcFonte = mostFrequent(fcFonts);
+  const fcRotacao = mostFrequent(fcRotations);
+  const medianX = xDiffs.length > 0 ? median(xDiffs) : 0;
+  const medianY = yDiffs.length > 0 ? median(yDiffs) : 0;
+
+  return {
+    contraste: {
+      atual: currentCal.contraste,
+      sugerido: fcContraste ?? currentCal.contraste,
+      motivo: fcContraste !== null && fcContraste !== currentCal.contraste
+        ? `FC usa H${fcContraste}, sistema usa H${currentCal.contraste}`
+        : null,
+    },
+    fonte: {
+      atual: currentCal.fonte,
+      sugerido: fcFonte ?? currentCal.fonte,
+      motivo: fcFonte !== null && fcFonte !== currentCal.fonte
+        ? `FC usa fonte ${fcFonte}, sistema usa fonte ${currentCal.fonte}`
+        : null,
+    },
+    rotacao: {
+      atual: currentCal.rotacao,
+      sugerido: fcRotacao ?? currentCal.rotacao,
+      motivo: fcRotacao !== null && fcRotacao !== currentCal.rotacao
+        ? `FC usa rotação ${fcRotacao}, sistema usa rotação ${currentCal.rotacao}`
+        : null,
+    },
+    margem_c: {
+      atual: currentCal.margem_c,
+      sugerido: medianX !== 0 ? currentCal.margem_c + medianX : currentCal.margem_c,
+      motivo: medianX !== 0
+        ? `Coords X do FC deslocadas ${medianX > 0 ? '+' : ''}${medianX} unidades`
+        : null,
+    },
+    offset_r: {
+      atual: currentCal.offset_r,
+      sugerido: medianY !== 0 ? currentCal.offset_r + medianY : currentCal.offset_r,
+      motivo: medianY !== 0
+        ? `Coords Y do FC deslocadas ${medianY > 0 ? '+' : ''}${medianY} unidades`
+        : null,
+    },
+  };
 }
