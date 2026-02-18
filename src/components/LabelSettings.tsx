@@ -27,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
+import PPLAComparer from "@/components/PPLAComparer";
 
 const LabelSettings = () => {
   const { toast } = useToast();
@@ -451,13 +452,13 @@ const LabelSettings = () => {
                   <Radio className={`h-4 w-4 mr-2 ${isCapturing ? 'animate-pulse' : ''}`} />
                   Capturar FC (9100)
                 </Button>
-                {diagnosticResult && captureResult && (
+              {diagnosticResult && (
                   <Button 
                     variant="outline" 
                     onClick={() => setIsCompareOpen(true)}
                   >
                     <ArrowLeftRight className="h-4 w-4 mr-2" />
-                    Comparar
+                    Comparar com FC
                   </Button>
                 )}
               </div>
@@ -604,70 +605,15 @@ const LabelSettings = () => {
                 </DialogContent>
               </Dialog>
 
-              {/* Dialog de Comparação lado a lado */}
-              <Dialog open={isCompareOpen} onOpenChange={setIsCompareOpen}>
-                <DialogContent className="max-w-5xl max-h-[85vh]">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <ArrowLeftRight className="h-5 w-5" />
-                      Comparação: Nosso Sistema vs Fórmula Certa
-                    </DialogTitle>
-                    <DialogDescription>
-                      Lado esquerdo: comandos gerados pelo nosso sistema. Lado direito: comandos capturados do Fórmula Certa.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Nosso sistema */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-primary">🟢 Nosso Sistema</h4>
-                        <span className="text-xs text-muted-foreground">{diagnosticResult?.total_bytes || 0} bytes</span>
-                      </div>
-                      <ScrollArea className="h-[400px] rounded border border-border">
-                        <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
-                          {diagnosticResult?.comandos_ppla?.map((line: string, i: number) => (
-                            <div key={i} className="hover:bg-accent/30 px-1">
-                              <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
-                              {line}
-                            </div>
-                          ))}
-                        </pre>
-                      </ScrollArea>
-                    </div>
-
-                    {/* Fórmula Certa */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-semibold text-primary">🔵 Fórmula Certa</h4>
-                        <span className="text-xs text-muted-foreground">{captureResult?.bytes_recebidos || 0} bytes</span>
-                      </div>
-                      <ScrollArea className="h-[400px] rounded border border-border">
-                        <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
-                          {captureResult?.comandos?.map((line: string, i: number) => (
-                            <div key={i} className="hover:bg-accent/30 px-1">
-                              <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
-                              {line}
-                            </div>
-                          ))}
-                        </pre>
-                      </ScrollArea>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div className="p-2 bg-muted rounded">
-                      <span className="font-medium">Formato:</span> PPLA (gerado) | 
-                      <span className="font-medium"> STX:</span> {diagnosticResult?.comandos_ppla?.filter((l: string) => l.includes('<STX>')).length || 0}
-                    </div>
-                    <div className="p-2 bg-muted rounded">
-                      <span className="font-medium">Formato:</span> {captureResult?.formato_detectado || '?'} | 
-                      <span className="font-medium"> STX:</span> {captureResult?.analise?.count_STX || 0} | 
-                      <span className="font-medium"> CR:</span> {captureResult?.analise?.count_CR || 0}
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              {/* Comparador PPLA com textarea para colar comandos FC */}
+              <PPLAComparer
+                open={isCompareOpen}
+                onOpenChange={setIsCompareOpen}
+                systemCommands={diagnosticResult?.comandos_ppla || []}
+                systemRaw={diagnosticResult?.comandos_raw}
+                capturedCommands={captureResult?.comandos}
+                capturedRaw={captureResult?.comandos_raw}
+              />
 
               {agentConfig.enabled && (
                 <div className="p-3 bg-primary/10 border border-primary/20 rounded-md">
