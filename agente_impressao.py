@@ -180,21 +180,16 @@ def ppla_text_dots(rot, font, wmult, hmult, y_dots, x_dots, data):
 
 
 def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C'):
-    """Gera bloco de setup PPLA em modo DOTS (sem comando 'm').
+    """Gera bloco de setup PPLA MÍNIMO em modo DOTS.
     
-    Compatível com Fórmula Certa - usa q para largura em dots.
-    NÃO envia 'm', portanto a impressora interpreta tudo em dots nativamente.
-    O sensor de gap (\x02e) detecta automaticamente o fim da etiqueta.
-    IMPORTANTE: Q dentro do bloco L é QUANTIDADE, não altura!
+    Compatível com Fórmula Certa - APENAS os comandos essenciais:
+    STX L (entrar formatação), D11 (pixel), H (contraste).
+    SEM \x02e, SEM Q, SEM q, SEM P - o mínimo absoluto.
     """
     partes = [
-        f"\x02e",                          # Gap sensor ON
         f"\x02L",                          # Entrar modo formatação
         f"D11",                            # Pixel size
         f"H{contraste:02d}",              # Contraste
-        f"P{velocidade}",                  # Velocidade
-        f"q{largura_dots}",               # Largura em dots
-        "Q0001",                           # Quantidade: 1 etiqueta (NÃO é altura!)
     ]
     return "\r".join(partes) + "\r"
 
