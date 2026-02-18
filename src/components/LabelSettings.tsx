@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy } from "lucide-react";
+import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, Radio, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,7 @@ import {
   setPrintAgentConfig,
 } from "@/config/api";
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
-import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA } from "@/services/printAgentService";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, capturarPorta9100 } from "@/services/printAgentService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
@@ -45,6 +45,10 @@ const LabelSettings = () => {
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
+  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureResult, setCaptureResult] = useState<any>(null);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
   
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
@@ -250,6 +254,28 @@ const LabelSettings = () => {
     }
   };
 
+  const handleCapture = async () => {
+    setIsCapturing(true);
+    setCaptureResult(null);
+    setIsCaptureOpen(true);
+    const result = await capturarPorta9100(agentConfig.agentUrl, 30, 9100);
+    setIsCapturing(false);
+    if (result.success) {
+      setCaptureResult(result.data);
+      toast({
+        title: "Captura concluída!",
+        description: `${result.data?.bytes_recebidos} bytes capturados (${result.data?.formato_detectado})`,
+      });
+    } else {
+      setIsCaptureOpen(false);
+      toast({
+        title: "Falha na captura",
+        description: result.error || "Timeout ou erro na captura.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="servidor" className="w-full">
@@ -417,6 +443,23 @@ const LabelSettings = () => {
                   <FileCode className={`h-4 w-4 mr-2 ${isDiagnosticLoading ? 'animate-pulse' : ''}`} />
                   Diagnóstico PPLA
                 </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleCapture}
+                  disabled={isCapturing || !isAgentOnline}
+                >
+                  <Radio className={`h-4 w-4 mr-2 ${isCapturing ? 'animate-pulse' : ''}`} />
+                  Capturar FC (9100)
+                </Button>
+                {diagnosticResult && captureResult && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsCompareOpen(true)}
+                  >
+                    <ArrowLeftRight className="h-4 w-4 mr-2" />
+                    Comparar
+                  </Button>
+                )}
               </div>
 
               {/* Dialog de Diagnóstico PPLA */}
@@ -486,6 +529,143 @@ const LabelSettings = () => {
                       </div>
                     </div>
                   )}
+                </DialogContent>
+              </Dialog>
+
+              {/* Dialog de Captura porta 9100 */}
+              <Dialog open={isCaptureOpen} onOpenChange={(open) => { if (!isCapturing) setIsCaptureOpen(open); }}>
+                <DialogContent className="max-w-2xl max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Radio className="h-5 w-5" />
+                      Captura Porta 9100 - Fórmula Certa
+                    </DialogTitle>
+                    <DialogDescription>
+                      {isCapturing 
+                        ? "Aguardando conexão... Imprima pelo Fórmula Certa apontando para o IP deste PC."
+                        : "Comandos capturados do Fórmula Certa."
+                      }
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {isCapturing && (
+                    <div className="flex flex-col items-center gap-4 py-8">
+                      <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+                      <p className="text-sm text-muted-foreground">Escutando na porta 9100... (30s timeout)</p>
+                      <p className="text-xs text-muted-foreground">No Fórmula Certa, configure a impressora para o IP deste PC, porta 9100</p>
+                    </div>
+                  )}
+
+                  {captureResult && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Origem:</span> {captureResult.origem}
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Formato:</span> {captureResult.formato_detectado}
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Bytes:</span> {captureResult.bytes_recebidos}
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">STX:</span> {captureResult.analise?.count_STX} | <span className="font-medium">CR:</span> {captureResult.analise?.count_CR}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold">Comandos Capturados:</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(captureResult.comandos_raw || captureResult.comandos?.join('\n') || '');
+                              toast({ title: "Copiado!", description: "Comandos capturados copiados." });
+                            }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copiar
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-[300px] rounded border border-border">
+                          <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
+                            {captureResult.comandos?.map((line: string, i: number) => (
+                              <div key={i} className="hover:bg-accent/30 px-1">
+                                <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
+                                {line}
+                              </div>
+                            ))}
+                          </pre>
+                        </ScrollArea>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              {/* Dialog de Comparação lado a lado */}
+              <Dialog open={isCompareOpen} onOpenChange={setIsCompareOpen}>
+                <DialogContent className="max-w-5xl max-h-[85vh]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <ArrowLeftRight className="h-5 w-5" />
+                      Comparação: Nosso Sistema vs Fórmula Certa
+                    </DialogTitle>
+                    <DialogDescription>
+                      Lado esquerdo: comandos gerados pelo nosso sistema. Lado direito: comandos capturados do Fórmula Certa.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Nosso sistema */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-primary">🟢 Nosso Sistema</h4>
+                        <span className="text-xs text-muted-foreground">{diagnosticResult?.total_bytes || 0} bytes</span>
+                      </div>
+                      <ScrollArea className="h-[400px] rounded border border-border">
+                        <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
+                          {diagnosticResult?.comandos_ppla?.map((line: string, i: number) => (
+                            <div key={i} className="hover:bg-accent/30 px-1">
+                              <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
+                              {line}
+                            </div>
+                          ))}
+                        </pre>
+                      </ScrollArea>
+                    </div>
+
+                    {/* Fórmula Certa */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-semibold text-primary">🔵 Fórmula Certa</h4>
+                        <span className="text-xs text-muted-foreground">{captureResult?.bytes_recebidos || 0} bytes</span>
+                      </div>
+                      <ScrollArea className="h-[400px] rounded border border-border">
+                        <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
+                          {captureResult?.comandos?.map((line: string, i: number) => (
+                            <div key={i} className="hover:bg-accent/30 px-1">
+                              <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
+                              {line}
+                            </div>
+                          ))}
+                        </pre>
+                      </ScrollArea>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div className="p-2 bg-muted rounded">
+                      <span className="font-medium">Formato:</span> PPLA (gerado) | 
+                      <span className="font-medium"> STX:</span> {diagnosticResult?.comandos_ppla?.filter((l: string) => l.includes('<STX>')).length || 0}
+                    </div>
+                    <div className="p-2 bg-muted rounded">
+                      <span className="font-medium">Formato:</span> {captureResult?.formato_detectado || '?'} | 
+                      <span className="font-medium"> STX:</span> {captureResult?.analise?.count_STX || 0} | 
+                      <span className="font-medium"> CR:</span> {captureResult?.analise?.count_CR || 0}
+                    </div>
+                  </div>
                 </DialogContent>
               </Dialog>
 

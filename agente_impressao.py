@@ -994,6 +994,118 @@ def raw_tcp():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route('/capturar', methods=['POST'])
+def capturar_porta_9100():
+    """Abre um servidor TCP temporário na porta 9100 para capturar
+    os comandos enviados pelo Fórmula Certa (ou qualquer outro software).
+    
+    Fluxo:
+    1. Frontend chama POST /capturar com {timeout: 30}
+    2. Agente abre porta 9100 e aguarda UMA conexão
+    3. Quando o FC envia os dados, o agente captura e retorna
+    4. Se timeout expirar, retorna erro
+    """
+    try:
+        import base64
+        data = request.get_json() or {}
+        timeout = min(int(data.get('timeout', 30)), 60)  # max 60s
+        porta = int(data.get('porta', 9100))
+
+        logger.info(f"[CAPTURA] Aguardando conexão na porta {porta} (timeout={timeout}s)...")
+
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.settimeout(timeout)
+
+        try:
+            server.bind(('0.0.0.0', porta))
+            server.listen(1)
+        except OSError as e:
+            server.close()
+            return jsonify({
+                "success": False,
+                "error": f"Não foi possível abrir a porta {porta}: {str(e)}. Verifique se não há outro serviço usando esta porta."
+            }), 400
+
+        try:
+            conn, addr = server.accept()
+            logger.info(f"[CAPTURA] Conexão recebida de {addr}")
+            conn.settimeout(5)
+
+            # Receber todos os dados
+            chunks = []
+            while True:
+                try:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                except socket.timeout:
+                    break
+
+            conn.close()
+            server.close()
+
+            raw_bytes = b''.join(chunks)
+            logger.info(f"[CAPTURA] Recebidos {len(raw_bytes)} bytes de {addr}")
+
+            if len(raw_bytes) == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Conexão recebida mas nenhum dado foi enviado."
+                }), 400
+
+            # Análise dos dados capturados
+            # Formatar comandos legíveis (similar ao diagnóstico)
+            try:
+                texto = raw_bytes.decode('cp1252', errors='replace')
+            except Exception:
+                texto = raw_bytes.decode('latin-1', errors='replace')
+
+            # Substituir controles por representações visuais
+            texto_visual = texto.replace('\x02', '<STX>').replace('\x03', '<ETX>')
+            linhas = texto_visual.split('\r')
+            linhas = [l for l in linhas if l.strip()]
+
+            # Detectar formato
+            formato = "DESCONHECIDO"
+            if b'\x02L' in raw_bytes or b'\x02e' in raw_bytes:
+                formato = "PPLA"
+            elif b'\x02' in raw_bytes and b'E\r' in raw_bytes:
+                formato = "PPLB"
+            elif b'~' in raw_bytes[:10]:
+                formato = "ZPL"
+            elif b'\x1b' in raw_bytes[:20]:
+                formato = "ESC/POS"
+
+            return jsonify({
+                "success": True,
+                "origem": f"{addr[0]}:{addr[1]}",
+                "bytes_recebidos": len(raw_bytes),
+                "formato_detectado": formato,
+                "comandos": linhas,
+                "comandos_raw": texto_visual,
+                "dados_base64": base64.b64encode(raw_bytes).decode('ascii'),
+                "analise": {
+                    "count_CR": raw_bytes.count(b'\r'),
+                    "count_LF": raw_bytes.count(b'\n'),
+                    "count_STX": raw_bytes.count(b'\x02'),
+                    "tem_E_final": raw_bytes.strip().endswith(b'E') or raw_bytes.strip().endswith(b'E\r'),
+                }
+            })
+
+        except socket.timeout:
+            server.close()
+            return jsonify({
+                "success": False,
+                "error": f"Timeout: nenhuma conexão recebida na porta {porta} em {timeout} segundos. Certifique-se de imprimir pelo Fórmula Certa apontando para o IP deste PC."
+            }), 408
+
+    except Exception as e:
+        logger.error(f"[CAPTURA] Erro: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route('/diagnostico', methods=['GET'])
 def diagnostico():
     """Retorna diagnostico completo do agente e impressoras."""
@@ -1040,7 +1152,7 @@ if __name__ == '__main__':
     logger.info(f"pywin32 disponivel: {PYWIN32_OK}")
     logger.info(f"Impressoras: {get_available_printers()}")
     logger.info(f"Layouts: {list(GERADORES_PPLA.keys())}")
-    logger.info(f"Endpoints: /health /impressoras /imprimir /raw /raw_tcp /test_notepad /diagnostico")
+    logger.info(f"Endpoints: /health /impressoras /imprimir /raw /raw_tcp /test_notepad /diagnostico /capturar")
     for k, v in PRINTER_CONFIGS.items():
         logger.info(f"  {k}: {v['largura_mm']}x{v['altura_mm']}mm ({v['cols_max']} cols)")
     logger.info(f"Health: http://localhost:{port}/health")

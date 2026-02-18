@@ -130,7 +130,50 @@ export const diagnosticoPPLA = async (
   }
 };
 
-// Imprimir rótulos via agente HTTP
+// Capturar comandos na porta 9100 (interceptar Fórmula Certa)
+export const capturarPorta9100 = async (
+  url: string,
+  timeout: number = 30,
+  porta: number = 9100
+): Promise<ApiResponse<{
+  origem: string;
+  bytes_recebidos: number;
+  formato_detectado: string;
+  comandos: string[];
+  comandos_raw: string;
+  dados_base64: string;
+  analise: {
+    count_CR: number;
+    count_LF: number;
+    count_STX: number;
+    tem_E_final: boolean;
+  };
+}>> => {
+  try {
+    const response = await fetch(`${url}/capturar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({ timeout, porta }),
+      signal: AbortSignal.timeout((timeout + 5) * 1000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Falha na captura" };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error("[PrintAgent] Erro ao capturar:", error);
+    return { success: false, error: "Timeout ou erro ao aguardar dados na porta 9100" };
+  }
+};
+
+
 export const imprimirViaAgente = async (
   config: PrintAgentConfig,
   rotulos: RotuloItem[],
