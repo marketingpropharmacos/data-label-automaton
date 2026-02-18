@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff } from "lucide-react";
+import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,8 @@ import {
   setPrintAgentConfig,
 } from "@/config/api";
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
-import { verificarAgente, listarImpressoras, testeImpressaoAgente } from "@/services/printAgentService";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA } from "@/services/printAgentService";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
@@ -41,6 +42,9 @@ const LabelSettings = () => {
   const [isPrintingAgentTest, setIsPrintingAgentTest] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<string[]>([]);
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
+  const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
+  const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
   
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
@@ -228,6 +232,24 @@ const LabelSettings = () => {
     }
   };
 
+  const handleDiagnosticPPLA = async () => {
+    setIsDiagnosticLoading(true);
+    setDiagnosticResult(null);
+    const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 };
+    const result = await diagnosticoPPLA(agentConfig.agentUrl, agentConfig.impressora, 'AMP_CX', cal);
+    setIsDiagnosticLoading(false);
+    if (result.success) {
+      setDiagnosticResult(result.data);
+      setIsDiagnosticOpen(true);
+    } else {
+      toast({
+        title: "Erro no diagnóstico",
+        description: result.error || "Não foi possível gerar diagnóstico.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="servidor" className="w-full">
@@ -387,7 +409,85 @@ const LabelSettings = () => {
                   <TestTube className={`h-4 w-4 mr-2 ${isPrintingAgentTest ? 'animate-pulse' : ''}`} />
                   Imprimir Teste
                 </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDiagnosticPPLA}
+                  disabled={isDiagnosticLoading || !isAgentOnline}
+                >
+                  <FileCode className={`h-4 w-4 mr-2 ${isDiagnosticLoading ? 'animate-pulse' : ''}`} />
+                  Diagnóstico PPLA
+                </Button>
               </div>
+
+              {/* Dialog de Diagnóstico PPLA */}
+              <Dialog open={isDiagnosticOpen} onOpenChange={setIsDiagnosticOpen}>
+                <DialogContent className="max-w-2xl max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <FileCode className="h-5 w-5" />
+                      Diagnóstico PPLA - Comandos Gerados
+                    </DialogTitle>
+                    <DialogDescription>
+                      Estes são os comandos exatos enviados para a impressora. Compare com o que o Fórmula Certa gera.
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {diagnosticResult && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Impressora:</span> {diagnosticResult.impressora_resolvida}
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Layout:</span> {diagnosticResult.layout}
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Dimensões:</span> {diagnosticResult.dims?.largura_mm}x{diagnosticResult.dims?.altura_mm}mm
+                        </div>
+                        <div className="p-2 bg-muted rounded">
+                          <span className="font-medium">Bytes:</span> {diagnosticResult.total_bytes}
+                        </div>
+                      </div>
+
+                      <div className="p-2 bg-muted rounded text-xs">
+                        <span className="font-medium">Calibração:</span>{' '}
+                        Fonte={diagnosticResult.calibracao_usada?.fonte}{' '}
+                        Rot={diagnosticResult.calibracao_usada?.rotacao}{' '}
+                        C={diagnosticResult.calibracao_usada?.margem_c}{' '}
+                        R={diagnosticResult.calibracao_usada?.offset_r}{' '}
+                        H={diagnosticResult.calibracao_usada?.contraste}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold">Comandos PPLA:</h4>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              navigator.clipboard.writeText(diagnosticResult.comandos_raw || diagnosticResult.comandos_ppla?.join('\n') || '');
+                              toast({ title: "Copiado!", description: "Comandos copiados para a área de transferência." });
+                            }}
+                          >
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copiar
+                          </Button>
+                        </div>
+                        <ScrollArea className="h-[300px] rounded border border-border">
+                          <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
+                            {diagnosticResult.comandos_ppla?.map((line: string, i: number) => (
+                              <div key={i} className="hover:bg-accent/30 px-1">
+                                <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
+                                {line}
+                              </div>
+                            ))}
+                          </pre>
+                        </ScrollArea>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
 
               {agentConfig.enabled && (
                 <div className="p-3 bg-primary/10 border border-primary/20 rounded-md">

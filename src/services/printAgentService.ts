@@ -87,6 +87,49 @@ export const testeImpressaoAgente = async (url: string): Promise<ApiResponse<{ m
   }
 };
 
+// Diagnóstico PPLA - mostra comandos sem imprimir
+export const diagnosticoPPLA = async (
+  url: string,
+  impressora: string,
+  layoutTipo: string,
+  calibracao: PrinterCalibrationConfig
+): Promise<ApiResponse<{
+  impressora_resolvida: string;
+  layout: string;
+  dims: { largura_mm: number; altura_mm: number; cols_max: number };
+  calibracao_usada: PrinterCalibrationConfig;
+  comandos_ppla: string[];
+  comandos_raw: string;
+  total_bytes: number;
+}>> => {
+  try {
+    const response = await fetch(`${url}/diagnostico-ppla`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({
+        impressora,
+        layout_tipo: layoutTipo,
+        calibracao,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Falha no diagnóstico" };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error("[PrintAgent] Erro no diagnóstico:", error);
+    return { success: false, error: "Não foi possível obter diagnóstico do agente" };
+  }
+};
+
 // Imprimir rótulos via agente HTTP
 export const imprimirViaAgente = async (
   config: PrintAgentConfig,

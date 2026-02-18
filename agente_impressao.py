@@ -710,6 +710,74 @@ def imprimir_rotutx():
         return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
 
 
+@app.route('/diagnostico-ppla', methods=['POST'])
+def diagnostico_ppla():
+    """Gera os comandos PPLA sem imprimir, para diagnóstico visual."""
+    data = request.get_json() or {}
+    impressora_req = data.get('impressora', '') or IMPRESSORA_PADRAO
+    layout_tipo = data.get('layout_tipo', 'AMP_CX')
+    farmacia = data.get('farmacia', {})
+    calibracao = data.get('calibracao', {})
+
+    # Dados de exemplo para diagnóstico
+    rotulo_exemplo = data.get('rotulo', {
+        'nomePaciente': 'PACIENTE TESTE DIAGNOSTICO',
+        'nrRequisicao': '99999',
+        'nrItem': '1',
+        'nomeMedico': 'DR TESTE MEDICO',
+        'prefixoCRM': 'CRM',
+        'numeroCRM': '12345',
+        'ufCRM': 'SP',
+        'formula': 'FORMULA TESTE 10MG',
+        'composicao': 'COMPOSICAO TESTE 10MG',
+        'dataFabricacao': '01/01/2025',
+        'dataValidade': '01/07/2025',
+        'numeroRegistro': '123456',
+        'posologia': 'TOMAR 1X AO DIA',
+        'aplicacao': 'USO ORAL',
+        'contem': '30 CAPSULAS',
+        'lote': 'LT001',
+        'ph': '7.0',
+    })
+
+    impressora = find_printer_match(impressora_req) or impressora_req
+    dims = get_printer_dims(impressora)
+    gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
+
+    try:
+        comandos = gerador(rotulo_exemplo, farmacia, dims, calibracao)
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Erro ao gerar: {str(e)}"}), 500
+
+    # Formatar para exibição legível
+    linhas_display = []
+    for line in comandos.split('\r'):
+        display = line.replace('\x02', '<STX>').replace('\x03', '<ETX>')
+        if display.strip():
+            linhas_display.append(display)
+
+    return jsonify({
+        "success": True,
+        "impressora_resolvida": impressora,
+        "layout": layout_tipo,
+        "dims": {
+            "largura_mm": dims['largura_mm'],
+            "altura_mm": dims['altura_mm'],
+            "cols_max": dims['cols_max'],
+        },
+        "calibracao_usada": {
+            "margem_c": calibracao.get('margem_c', 0),
+            "offset_r": calibracao.get('offset_r', 0),
+            "contraste": calibracao.get('contraste', 12),
+            "fonte": calibracao.get('fonte', 2),
+            "rotacao": calibracao.get('rotacao', 1),
+        },
+        "comandos_ppla": linhas_display,
+        "comandos_raw": comandos,
+        "total_bytes": len(comandos.encode('cp1252', errors='replace')),
+    })
+
+
 @app.route('/analisar-prn', methods=['POST'])
 def analisar_prn():
     """Recebe caminho de um arquivo .PRN capturado e analisa os bytes."""
