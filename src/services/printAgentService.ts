@@ -234,6 +234,35 @@ export const testeProgressivoAgente = async (
   return { success: true, data: { resultados } };
 };
 
+// Teste em modo DOTS (sem comando 'm') - compatível com Fórmula Certa
+export const testeDotsAgente = async (
+  url: string,
+  impressora: string
+): Promise<ApiResponse<{ message: string; modo: string }>> => {
+  try {
+    const response = await fetch(`${url}/teste-dots`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({ impressora }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Falha no teste dots" };
+    }
+
+    const data = await response.json();
+    return { success: data.success, data };
+  } catch (error) {
+    console.error("[PrintAgent] Erro no teste dots:", error);
+    return { success: false, error: "Não foi possível enviar teste dots para o agente" };
+  }
+};
+
 
 export const imprimirViaAgente = async (
   config: PrintAgentConfig,

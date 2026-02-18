@@ -43,6 +43,7 @@ const DEFAULT_PRINT_AGENT_CONFIG: PrintAgentConfig = {
     contraste: 14,
     fonte: 2,
     rotacao: 1,
+    modo: 'dots',
   },
 };
 

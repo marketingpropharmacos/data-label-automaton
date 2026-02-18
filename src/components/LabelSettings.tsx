@@ -23,7 +23,7 @@ import {
   setPrintAgentConfig,
 } from "@/config/api";
 import { verificarConexao, verificarImpressora, imprimirTeste } from "@/services/requisicaoService";
-import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, capturarPorta9100, testeProgressivoAgente } from "@/services/printAgentService";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, capturarPorta9100, testeProgressivoAgente, testeDotsAgente } from "@/services/printAgentService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
@@ -45,6 +45,7 @@ const LabelSettings = () => {
   const [agentPrinters, setAgentPrinters] = useState<string[]>([]);
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
   const [isProgressiveTest, setIsProgressiveTest] = useState(false);
+  const [isDotsTest, setIsDotsTest] = useState(false);
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
@@ -295,6 +296,24 @@ const LabelSettings = () => {
     }
   };
 
+  const handleDotsTest = async () => {
+    setIsDotsTest(true);
+    const result = await testeDotsAgente(agentConfig.agentUrl, agentConfig.impressora);
+    setIsDotsTest(false);
+    if (result.success) {
+      toast({
+        title: "Teste Dots enviado! ✓",
+        description: "Se esta etiqueta sair com texto, ative o modo 'dots' na calibração. Se sair em branco, o problema é outro.",
+      });
+    } else {
+      toast({
+        title: "Falha no teste dots",
+        description: result.error || "Não foi possível enviar teste dots.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="servidor" className="w-full">
@@ -477,6 +496,15 @@ const LabelSettings = () => {
                 >
                   <TestTube className={`h-4 w-4 mr-2 ${isProgressiveTest ? 'animate-pulse' : ''}`} />
                   {isProgressiveTest ? 'Imprimindo 3 testes...' : 'Teste Progressivo'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDotsTest}
+                  disabled={isDotsTest || !isAgentOnline}
+                  className="border-green-500 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950"
+                >
+                  <TestTube className={`h-4 w-4 mr-2 ${isDotsTest ? 'animate-pulse' : ''}`} />
+                  {isDotsTest ? 'Testando dots...' : '🔧 Teste Dots (FC)'}
                 </Button>
               {diagnosticResult && (
                   <Button 

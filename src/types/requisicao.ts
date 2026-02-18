@@ -134,6 +134,7 @@ export interface PrinterCalibrationConfig {
   contraste: number;  // Hxx - contraste (10-20)
   fonte: number;      // Font number (0-9, default 2)
   rotacao: number;    // Rotation (0=horizontal, 1=90°, 2=180°, 3=270°)
+  modo?: 'mm' | 'dots';  // Modo de coordenadas: 'mm' (milímetros) ou 'dots' (compatível com Fórmula Certa)
 }
 
 export interface PrintAgentConfig {

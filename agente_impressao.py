@@ -170,6 +170,47 @@ def ppla_full_label(linhas_texto, altura_mm=25, margem_c=0, offset_r=0, contrast
 
 
 # ============================================
+# PPLA MODO DOTS - Compatível com Fórmula Certa
+# Sem comando 'm', coordenadas em dots (203 DPI = 8 dots/mm)
+# ============================================
+def ppla_text_dots(rot, font, wmult, hmult, y_dots, x_dots, data):
+    """Gera uma linha de texto PPLA em modo dots.
+    Coordenadas em dots (4 dígitos). Ex: 0160 = 160 dots = ~20mm do bottom."""
+    return f"1{rot}{font}{wmult}{hmult}{y_dots:04d}{x_dots:04d}{data}"
+
+
+def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C'):
+    """Gera bloco de setup PPLA em modo DOTS (sem comando 'm').
+    
+    Compatível com Fórmula Certa - usa q/Q para definir dimensões em dots.
+    NÃO envia 'm', portanto a impressora interpreta tudo em dots nativamente.
+    """
+    partes = [
+        f"\x02e",                          # Gap sensor ON
+        f"\x02L",                          # Entrar modo formatação
+        f"D11",                            # Pixel size
+        f"H{contraste:02d}",              # Contraste
+        f"P{velocidade}",                  # Velocidade
+        f"q{largura_dots}",               # Largura em dots
+        f"Q{altura_dots},{gap_dots}",     # Altura + gap em dots
+    ]
+    return "\r".join(partes) + "\r"
+
+
+def ppla_full_label_dots(linhas_texto, largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C'):
+    """Monta etiqueta PPLA completa em modo DOTS: setup + conteúdo + E."""
+    setup = ppla_setup_dots(largura_dots, altura_dots, gap_dots, contraste, velocidade)
+    content = "\r".join(linhas_texto)
+    return setup + content + "\r" + "E\r"
+
+
+def mm_to_dots(value_01mm):
+    """Converte coordenada de 0.1mm para dots (203 DPI).
+    203 DPI = 8 dots/mm, então 0.1mm = 0.8 dots."""
+    return int(value_01mm * 0.8)
+
+
+# ============================================
 # COMPATIBILIDADE: Manter funções PPLB antigas para fallback
 # ============================================
 def pplb_text(rot, font, wmult, hmult, y, x, data):
@@ -216,14 +257,47 @@ def _linha_meta(rotulo):
 
 
 # ============================================
-# GERADORES PPLA MODO MILÍMETROS POR LAYOUT
+# HELPER: Gerar texto e label no modo correto (mm ou dots)
+# ============================================
+def _ppla_text(rot, font, wmult, hmult, y_01mm, x_01mm, data, modo='mm'):
+    """Gera linha de texto PPLA no modo correto.
+    Em modo 'mm': coordenadas em 0.1mm.
+    Em modo 'dots': converte 0.1mm para dots automaticamente."""
+    if modo == 'dots':
+        return ppla_text_dots(rot, font, wmult, hmult, mm_to_dots(y_01mm), mm_to_dots(x_01mm), data)
+    return ppla_text_mm(rot, font, wmult, hmult, y_01mm, x_01mm, data)
+
+
+def _build_label(linhas, dims, cal, modo='mm'):
+    """Monta etiqueta completa no modo correto (mm ou dots)."""
+    contraste = cal.get('contraste', 14)
+    if modo == 'dots':
+        return ppla_full_label_dots(
+            linhas,
+            largura_dots=dims.get('largura_dots', 360),
+            altura_dots=dims.get('altura_dots', 200),
+            gap_dots=dims.get('gap_dots', 24),
+            contraste=contraste,
+        )
+    return ppla_full_label(
+        linhas,
+        altura_mm=dims.get('altura_mm', 25),
+        margem_c=cal.get('margem_c', 0),
+        offset_r=cal.get('offset_r', 0),
+        contraste=contraste,
+    )
+
+
+# ============================================
+# GERADORES PPLA POR LAYOUT (suportam mm e dots)
 # ============================================
 
 def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout AMP_CX (109x25mm) - 8 linhas em modo milímetros."""
+    """Layout AMP_CX (109x25mm) - 8 linhas."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
+    modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 1)
@@ -243,30 +317,25 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     x_start = 10
     
     linhas = [
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, linha_meta),
-        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}"),
+        _ppla_text(rot, font, 1, 1, y_pos[0], x_start, paciente, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[2], x_start, composicao, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[3], x_start, linha_meta, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}", modo),
     ]
     
-    return ppla_full_label(
-        linhas,
-        altura_mm=dims.get('altura_mm', 25),
-        margem_c=cal.get('margem_c', 0),
-        offset_r=cal.get('offset_r', 0),
-        contraste=cal.get('contraste', 12),
-    )
+    return _build_label(linhas, dims, cal, modo)
 
 
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout AMP10 (89x38mm) - 8 linhas em modo milímetros."""
+    """Layout AMP10 (89x38mm) - 8 linhas."""
     if not dims:
         dims = PRINTER_CONFIGS['AMP10']
     cal = calibracao or {}
+    modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 1)
@@ -286,30 +355,25 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     x_start = 10
     
     linhas = [
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, linha_meta),
-        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, f"REG: {registro}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}"),
+        _ppla_text(rot, font, 1, 1, y_pos[0], x_start, paciente, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[2], x_start, composicao, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[3], x_start, linha_meta, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[4], x_start, f"REG: {registro}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}", modo),
     ]
     
-    return ppla_full_label(
-        linhas,
-        altura_mm=dims.get('altura_mm', 38),
-        margem_c=cal.get('margem_c', 0),
-        offset_r=cal.get('offset_r', 0),
-        contraste=cal.get('contraste', 12),
-    )
+    return _build_label(linhas, dims, cal, modo)
 
 
 def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.PEQ (45x25mm) - modo milímetros."""
+    """Layout A.PAC.PEQ (45x25mm)."""
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
     cal = calibracao or {}
+    modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 1)
@@ -322,18 +386,12 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
         for i, y in enumerate(y_positions):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
             if line_text.strip():
-                pplb_lines.append(ppla_text_mm(rot, font, 1, 1, y, 10, line_text[:cols]))
+                pplb_lines.append(_ppla_text(rot, font, 1, 1, y, 10, line_text[:cols], modo))
         if not pplb_lines:
             paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:cols].upper()
-            pplb_lines.append(ppla_text_mm(rot, font, 1, 1, 220, 10, paciente))
+            pplb_lines.append(_ppla_text(rot, font, 1, 1, 220, 10, paciente, modo))
         
-        return ppla_full_label(
-            pplb_lines,
-            altura_mm=dims.get('altura_mm', 25),
-            margem_c=cal.get('margem_c', 0),
-            offset_r=cal.get('offset_r', 0),
-            contraste=cal.get('contraste', 12),
-        )
+        return _build_label(pplb_lines, dims, cal, modo)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -352,26 +410,21 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     
     linhas = []
     if line1.strip():
-        linhas.append(ppla_text_mm(rot, font, 1, 1, 220, 10, line1[:w]))
+        linhas.append(_ppla_text(rot, font, 1, 1, 220, 10, line1[:w], modo))
     if line2.strip():
-        linhas.append(ppla_text_mm(rot, font, 1, 1, 170, 10, line2[:w]))
+        linhas.append(_ppla_text(rot, font, 1, 1, 170, 10, line2[:w], modo))
     if line3.strip():
-        linhas.append(ppla_text_mm(rot, font, 1, 1, 120, 10, line3[:w]))
+        linhas.append(_ppla_text(rot, font, 1, 1, 120, 10, line3[:w], modo))
     
-    return ppla_full_label(
-        linhas,
-        altura_mm=dims.get('altura_mm', 25),
-        margem_c=cal.get('margem_c', 0),
-        offset_r=cal.get('offset_r', 0),
-        contraste=cal.get('contraste', 12),
-    )
+    return _build_label(linhas, dims, cal, modo)
 
 
 def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.GRAN (76x25mm) - 3 campos em modo milímetros."""
+    """Layout A.PAC.GRAN (76x25mm) - 3 campos."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
+    modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 1)
@@ -383,25 +436,20 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     crm = _crm_completo(rotulo)
     
     linhas = [
-        ppla_text_mm(rot, font, 1, 1, 200, 10, paciente),
-        ppla_text_mm(rot, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(rot, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}"),
+        _ppla_text(rot, font, 1, 1, 200, 10, paciente, modo),
+        _ppla_text(rot, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}", modo),
+        _ppla_text(rot, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}", modo),
     ]
     
-    return ppla_full_label(
-        linhas,
-        altura_mm=dims.get('altura_mm', 25),
-        margem_c=cal.get('margem_c', 0),
-        offset_r=cal.get('offset_r', 0),
-        contraste=cal.get('contraste', 12),
-    )
+    return _build_label(linhas, dims, cal, modo)
 
 
 def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout TIRZ/Tirzepatida (109x25mm) - 8 linhas em modo milímetros."""
+    """Layout TIRZ/Tirzepatida (109x25mm) - 8 linhas."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
+    modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 1)
@@ -422,26 +470,20 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     x_start = 10
     
     linhas = [
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], x_start, paciente),
-        ppla_text_mm(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[2], x_start, composicao),
-        ppla_text_mm(rot, font, 1, 1, y_pos[3], x_start, posologia),
-        ppla_text_mm(rot, font, 1, 1, y_pos[4], x_start, linha_meta),
-        ppla_text_mm(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}"),
-        ppla_text_mm(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}  REG:{registro}"),
+        _ppla_text(rot, font, 1, 1, y_pos[0], x_start, paciente, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[2], x_start, composicao, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[3], x_start, posologia, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[4], x_start, linha_meta, modo),
+        _ppla_text(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}", modo),
+        _ppla_text(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}  REG:{registro}", modo),
     ]
     
-    return ppla_full_label(
-        linhas,
-        altura_mm=dims.get('altura_mm', 25),
-        margem_c=cal.get('margem_c', 0),
-        offset_r=cal.get('offset_r', 0),
-        contraste=cal.get('contraste', 12),
-    )
+    return _build_label(linhas, dims, cal, modo)
 
 
-# Mapa de geradores (V3 - modo milímetros)
+# Mapa de geradores
 GERADORES_PPLA = {
     'AMP_CX': gerar_ppla_ampcx,
     'AMP10': gerar_ppla_amp10,
@@ -573,6 +615,44 @@ def teste_impressao():
         return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
 
 
+@app.route('/teste-dots', methods=['POST'])
+def teste_dots():
+    """Imprime etiqueta de teste em modo DOTS (sem comando 'm').
+    Compatível com Fórmula Certa - se esta etiqueta sair com texto,
+    confirma que o problema era o modo milímetros."""
+    impressora_req = (request.json or {}).get('impressora', IMPRESSORA_PADRAO)
+    impressora = find_printer_match(impressora_req) or impressora_req
+    dims = get_printer_dims(impressora)
+
+    logger.info(f"[TESTE-DOTS] Impressora: {impressora} ({dims['largura_mm']}x{dims['altura_mm']}mm)")
+
+    # Usar coordenadas em DOTS diretamente (sem 'm')
+    # Para 45x25mm a 203 DPI: largura=360, altura=200
+    largura_dots = dims['largura_dots']
+    altura_dots = dims['altura_dots']
+    gap_dots = dims['gap_dots']
+
+    linhas = [
+        ppla_text_dots(1, 2, 1, 1, 160, 8, "*** TESTE DOTS ***"),
+        ppla_text_dots(1, 2, 1, 1, 120, 8, "MODO DOTS OK"),
+        ppla_text_dots(1, 2, 1, 1, 80, 8, f"Imp: {impressora[:25]}"),
+        ppla_text_dots(1, 2, 1, 1, 40, 8, f"{dims['largura_mm']}x{dims['altura_mm']}mm ({largura_dots}x{altura_dots}dots)"),
+    ]
+
+    comandos = ppla_full_label_dots(linhas, largura_dots, altura_dots, gap_dots, contraste=14)
+
+    logger.info(f"[TESTE-DOTS] Comandos ({len(comandos)} bytes):")
+    for i, line in enumerate(comandos.split('\r')):
+        display = line.replace('\x02', '<STX>')
+        logger.info(f"  [{i:02d}] {display}")
+
+    resultado = enviar_para_impressora(impressora, comandos)
+    if resultado.get("success"):
+        return jsonify({"success": True, "message": "Teste DOTS enviado!", "modo": "dots"})
+    else:
+        return jsonify({"success": False, "error": resultado.get("error", "Falha")}), 500
+
+
 @app.route('/imprimir', methods=['POST'])
 def imprimir():
     """Recebe JSON com rótulos e imprime via PPLA modo milímetros."""
@@ -593,7 +673,7 @@ def imprimir():
 
     impressora = find_printer_match(impressora_req) or impressora_req
     logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
-    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 1)}")
+    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 1)} Modo={calibracao.get('modo', 'mm')}")
 
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
     dims = get_printer_dims(impressora)
