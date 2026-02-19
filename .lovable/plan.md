@@ -1,62 +1,84 @@
 
 
-## Corrigir Impressao FC Direto: ROTUTX nao e PPLA Raw
+## Corrigir 38 Etiquetas em Branco e Layout Errado no FC Direto
 
-### Causa Raiz
+### Causa Raiz (2 bugs)
 
-O ROTUTX armazenado no banco (tabela FC12300) **nao contem comandos PPLA prontos** para a impressora. Ele contem o **formato interno do Formula Certa** (linhas de texto com metadados de posicao). O formato detectado pelo servidor e "DESCONHECIDO" justamente por isso.
+**Bug 1: Servidor nao repassa calibracao ao agente**
 
-O endpoint atual (`/api/imprimir_fc`) pega esses bytes e envia diretamente para a impressora como RAW. A impressora recebe texto que nao sao comandos PPLA validos, pisca (sinal recebido), mas nao imprime nada porque nao consegue interpretar.
+O `servidor.py` no endpoint `/api/imprimir-fc-v2` (linha 4788) monta o payload para o agente assim:
 
-### Solucao
+```text
+payload = { impressora, linhas, req }  -- SEM calibracao!
+```
 
-Ja existe um endpoint V2 no servidor (`/api/imprimir-fc-v2`) que faz o trabalho correto:
-1. Le o ROTUTX do banco
-2. Faz parse do formato interno do Formula Certa (extrai as linhas de texto)
-3. Envia as linhas para o agente no endpoint `/imprimir-rotutx`
-4. O agente converte as linhas de texto em comandos PPLA validos e imprime
+O frontend envia a calibracao (fonte, rotacao, contraste, modo), mas o servidor ignora e nao repassa. O agente usa defaults.
 
-A mudanca e simples: fazer o frontend chamar `/api/imprimir-fc-v2` em vez de `/api/imprimir_fc`.
+**Bug 2: Setup dots sem comando de quantidade Q0001**
 
-Alem disso, o endpoint `/imprimir-rotutx` do agente atualmente usa modo `mm` (que ja causou problemas antes). Vamos atualizar para usar o modo `dots` quando configurado na calibracao.
+A funcao `ppla_setup_dots` no `agente_impressao.py` (linha 182) envia apenas:
+- STX L (modo formatacao)
+- D11 (pixel size)
+- H14 (contraste)
+
+Sem o comando `Q0001`, a impressora usa o valor que estiver na memoria interna -- que pode ser 38, 50 ou qualquer numero. Isso causa as 38 etiquetas em branco.
 
 ### Mudancas
 
-**1. `src/services/printAgentService.ts`**
+**1. `servidor.py` - Repassar calibracao para o agente**
 
-Na funcao `imprimirViaRotutx`, trocar a URL de `/api/imprimir_fc` para `/api/imprimir-fc-v2`. Tambem passar a calibracao no payload para que o agente possa usar modo dots.
+No endpoint `/api/imprimir-fc-v2`, adicionar o campo `calibracao` ao payload enviado ao agente. O frontend ja envia esse dado no body.
 
-**2. `src/pages/Index.tsx`**
-
-Passar a calibracao do agente no payload da chamada `imprimirViaRotutx` para que o agente use o modo correto (dots).
-
-**3. `agente_impressao.py`**
-
-Atualizar o endpoint `/imprimir-rotutx` para:
-- Aceitar parametro `calibracao` com campo `modo`
-- Usar `_ppla_text` e `_build_label` em vez de `ppla_text_mm` e `ppla_full_label` (para suportar modo dots)
-
-### Fluxo Corrigido
-
-```text
-Frontend chama servidor: POST /api/imprimir-fc-v2
-        |
-        v
-Servidor le ROTUTX (formato interno FC)
-        |
-        v
-Servidor faz parse -> extrai linhas de texto
-        |
-        v
-Servidor envia linhas para agente: POST /imprimir-rotutx
-        |
-        v
-Agente converte linhas em comandos PPLA (modo dots)
-        |
-        v
-Agente envia PPLA para impressora
-        |
-        v
-Etiqueta imprime com layout correto
+Antes:
+```python
+payload_agente = {
+    "impressora": impressora,
+    "linhas": [l['text'] for l in linhas_parsed],
+    "req": str(nr_requisicao)
+}
 ```
+
+Depois:
+```python
+payload_agente = {
+    "impressora": impressora,
+    "linhas": [l['text'] for l in linhas_parsed],
+    "req": str(nr_requisicao),
+    "calibracao": data.get("calibracao", {})
+}
+```
+
+**2. `agente_impressao.py` - Adicionar Q0001 ao setup dots**
+
+Na funcao `ppla_setup_dots`, adicionar o comando `Q0001` para forcar 1 copia por label. Este era o comando que foi removido antes para tentar resolver outro problema, mas sem ele a impressora imprime quantidades aleatorias.
+
+Antes:
+```python
+partes = [
+    f"\x02L",
+    f"D11",
+    f"H{contraste:02d}",
+]
+```
+
+Depois:
+```python
+partes = [
+    f"\x02L",
+    f"D11",
+    f"H{contraste:02d}",
+    f"Q0001",
+]
+```
+
+**3. `agente_impressao.py` - Reduzir fonte padrao para menor**
+
+O usuario pediu fonte menor. Alterar o default de `font=2` para `font=0` (a menor disponivel, 6x10 dots) no endpoint `/imprimir-rotutx`, para que o texto caiba melhor na etiqueta pequena.
+
+### Resultado Esperado
+
+- Apenas 1 etiqueta sai por impressao (Q0001 garante isso)
+- A calibracao do frontend (fonte, rotacao, contraste) chega ao agente
+- Fonte menor = texto cabe inteiro na etiqueta
+- Layout consistente com o que o Formula Certa gera
 
