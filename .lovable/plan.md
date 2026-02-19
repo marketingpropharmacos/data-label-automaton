@@ -1,75 +1,62 @@
 
 
-## Solucao Garantida: Usar o ROTUTX do Formula Certa Direto
+## Corrigir Impressao FC Direto: ROTUTX nao e PPLA Raw
 
-### Por que nada funcionou ate agora
+### Causa Raiz
 
-Todas as tentativas anteriores tentaram **recriar** os comandos PPLA do zero -- ajustando coordenadas, modo dots vs mm, fontes, rotacao, etc. Isso e inerentemente fragil porque qualquer pequena diferenca nos comandos pode causar etiquetas em branco ou multiplas impressoes.
+O ROTUTX armazenado no banco (tabela FC12300) **nao contem comandos PPLA prontos** para a impressora. Ele contem o **formato interno do Formula Certa** (linhas de texto com metadados de posicao). O formato detectado pelo servidor e "DESCONHECIDO" justamente por isso.
 
-### A solucao com 100% de certeza
+O endpoint atual (`/api/imprimir_fc`) pega esses bytes e envia diretamente para a impressora como RAW. A impressora recebe texto que nao sao comandos PPLA validos, pisca (sinal recebido), mas nao imprime nada porque nao consegue interpretar.
 
-O Formula Certa ja gera os comandos PPLA perfeitos e **salva eles no banco de dados** (tabela FC12300, campo ROTUTX). O servidor central (servidor.py) ja tem um endpoint `/api/imprimir_fc` que:
+### Solucao
 
-1. Le o ROTUTX do banco (os bytes exatos que o Formula Certa gerou)
-2. Envia esses bytes RAW para o agente local
-3. O agente manda direto para a impressora
+Ja existe um endpoint V2 no servidor (`/api/imprimir-fc-v2`) que faz o trabalho correto:
+1. Le o ROTUTX do banco
+2. Faz parse do formato interno do Formula Certa (extrai as linhas de texto)
+3. Envia as linhas para o agente no endpoint `/imprimir-rotutx`
+4. O agente converte as linhas de texto em comandos PPLA validos e imprime
 
-Ou seja: nao precisa gerar layout nenhum. E so pegar o que o Formula Certa ja fez e mandar pra impressora. **Se funciona no Formula Certa, vai funcionar aqui porque sao os mesmos bytes.**
+A mudanca e simples: fazer o frontend chamar `/api/imprimir-fc-v2` em vez de `/api/imprimir_fc`.
 
-### O que muda no frontend
+Alem disso, o endpoint `/imprimir-rotutx` do agente atualmente usa modo `mm` (que ja causou problemas antes). Vamos atualizar para usar o modo `dots` quando configurado na calibracao.
 
-**Arquivo: `src/services/printAgentService.ts`**
+### Mudancas
 
-Adicionar uma nova funcao `imprimirViaRotutx()` que chama o endpoint `/api/imprimir_fc` do servidor central (nao do agente). Parametros: numero da requisicao, filial, serie, item e nome da impressora.
+**1. `src/services/printAgentService.ts`**
 
-**Arquivo: `src/pages/Index.tsx`**
+Na funcao `imprimirViaRotutx`, trocar a URL de `/api/imprimir_fc` para `/api/imprimir-fc-v2`. Tambem passar a calibracao no payload para que o agente possa usar modo dots.
 
-Alterar o fluxo de impressao para:
-1. Primeiro tenta imprimir via ROTUTX (usando `/api/imprimir_fc`)
-2. Se o ROTUTX nao existir no banco (retorno 404), cai no modo atual (gerar PPLA via agente) como fallback
+**2. `src/pages/Index.tsx`**
 
-Adicionar um botao ou toggle "Modo FC (direto)" para o usuario poder escolher:
-- **Modo FC**: usa os bytes do Formula Certa direto (garantido funcionar)
-- **Modo Agente**: gera PPLA pelo agente (modo atual, para quando nao houver ROTUTX)
+Passar a calibracao do agente no payload da chamada `imprimirViaRotutx` para que o agente use o modo correto (dots).
 
-**Arquivo: `src/config/api.ts`**
+**3. `agente_impressao.py`**
 
-Adicionar configuracao `modoImpressao: 'rotutx' | 'agente'` com padrao `'rotutx'`.
+Atualizar o endpoint `/imprimir-rotutx` para:
+- Aceitar parametro `calibracao` com campo `modo`
+- Usar `_ppla_text` e `_build_label` em vez de `ppla_text_mm` e `ppla_full_label` (para suportar modo dots)
 
-### Fluxo tecnico
+### Fluxo Corrigido
 
 ```text
-Usuario clica "Imprimir"
+Frontend chama servidor: POST /api/imprimir-fc-v2
         |
         v
-Frontend chama servidor: POST /api/imprimir_fc
-  { req: 6806, filial: 1, item: 1, impressora: "AMP PEQUENO" }
+Servidor le ROTUTX (formato interno FC)
         |
         v
-Servidor le FC12300.ROTUTX (bytes do Formula Certa)
+Servidor faz parse -> extrai linhas de texto
         |
         v
-Servidor envia bytes em base64 para agente: POST /raw
+Servidor envia linhas para agente: POST /imprimir-rotutx
         |
         v
-Agente decodifica e manda RAW para impressora Argox
+Agente converte linhas em comandos PPLA (modo dots)
         |
         v
-Etiqueta sai IDENTICA ao Formula Certa
+Agente envia PPLA para impressora
+        |
+        v
+Etiqueta imprime com layout correto
 ```
-
-### Por que isso tem 100% de certeza
-
-- Os bytes ROTUTX sao exatamente o que o Formula Certa envia para a impressora
-- O agente ja tem o endpoint `/raw` que recebe base64 e manda direto, sem modificar nada
-- O servidor ja tem o endpoint `/api/imprimir_fc` pronto e funcionando
-- Nao ha geracao de layout, coordenadas, fontes ou qualquer logica PPLA envolvida -- sao os mesmos bytes que ja funcionam
-
-### Resumo das mudancas
-
-1. **`src/services/printAgentService.ts`**: Nova funcao `imprimirViaRotutx(serverUrl, req, filial, serie, item, impressora)`
-2. **`src/pages/Index.tsx`**: Botao de impressao usa `imprimirViaRotutx` como metodo principal, com fallback para o agente
-3. **`src/config/api.ts`**: Novo campo `modoImpressao` na configuracao
-
-Nenhuma mudanca no agente_impressao.py ou servidor.py -- tudo ja esta pronto no backend.
 
