@@ -1,11 +1,14 @@
 import { ApiConfig, PharmacyConfig, LabelConfig, PrinterConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 
+export type ModoImpressao = 'rotutx' | 'agente';
+
 const STORAGE_KEYS = {
   API_CONFIG: "label-system-api-config",
   PHARMACY_CONFIG: "label-system-pharmacy-config",
   LABEL_CONFIG: "label-system-label-config",
   PRINTER_CONFIG: "label-system-printer-config",
   PRINT_AGENT_CONFIG: "label-system-print-agent-config",
+  MODO_IMPRESSAO: "label-system-modo-impressao",
 };
 
 // Configurações padrão
@@ -125,4 +128,17 @@ export const getPrintAgentConfig = (): PrintAgentConfig => {
 
 export const setPrintAgentConfig = (config: PrintAgentConfig): void => {
   localStorage.setItem(STORAGE_KEYS.PRINT_AGENT_CONFIG, JSON.stringify(config));
+};
+
+export const getModoImpressao = (): ModoImpressao => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.MODO_IMPRESSAO);
+    return (stored === 'agente' ? 'agente' : 'rotutx') as ModoImpressao;
+  } catch {
+    return 'rotutx';
+  }
+};
+
+export const setModoImpressao = (modo: ModoImpressao): void => {
+  localStorage.setItem(STORAGE_KEYS.MODO_IMPRESSAO, modo);
 };
