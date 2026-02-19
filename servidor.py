@@ -4717,7 +4717,12 @@ def imprimir_fc_raw():
 #   NNNN = número da linha, PPPP = param, WWWW = largura, XXXX/YYYY = posição
 
 def parse_rotutx(data: bytes) -> list:
-    """Faz parse do BLOB ROTUTX do Fórmula Certa em linhas de texto."""
+    """Faz parse do BLOB ROTUTX do Fórmula Certa em linhas de texto.
+    
+    Tenta primeiro o formato estruturado (NNNN PPPP WWWW XXXX YYYY texto).
+    Se não bater, usa a linha inteira como texto (fallback permissivo).
+    Filtra apenas linhas puramente numéricas ou vazias.
+    """
     try:
         text = data.decode('latin-1')
     except Exception:
@@ -4725,23 +4730,46 @@ def parse_rotutx(data: bytes) -> list:
 
     results = []
     raw_lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    seq = 0
+    structured_count = 0
+    fallback_count = 0
 
     for raw_line in raw_lines:
         raw_line = raw_line.strip()
-        if len(raw_line) < 25:
-            continue
-        parts = raw_line.split(None, 5)
-        if len(parts) < 6:
-            continue
-        try:
-            line_num = int(parts[0])
-            width = int(parts[2])
-            text_content = parts[5].strip()
-            if text_content:
-                results.append({'line_num': line_num, 'width': width, 'text': text_content})
-        except (ValueError, IndexError):
+        if len(raw_line) < 3:
             continue
 
+        # Tentar parse estruturado: NNNN PPPP WWWW XXXX YYYY texto
+        parts = raw_line.split(None, 5)
+        if len(parts) >= 6:
+            try:
+                line_num = int(parts[0])
+                width = int(parts[2])
+                text_content = parts[5].strip()
+                if text_content:
+                    results.append({
+                        'line_num': line_num,
+                        'width': width,
+                        'text': text_content
+                    })
+                    structured_count += 1
+                    continue
+            except (ValueError, IndexError):
+                pass
+
+        # Fallback: usar linha inteira como texto
+        # Ignorar linhas que são só números/espaços/pontos (metadados puros)
+        cleaned = raw_line.strip()
+        if cleaned and not cleaned.replace(' ', '').replace('.', '').replace(',', '').isdigit():
+            seq += 1
+            results.append({
+                'line_num': seq * 100,
+                'width': len(cleaned),
+                'text': cleaned
+            })
+            fallback_count += 1
+
+    print(f"[PARSE_ROTUTX] {len(results)} linhas extraídas (estruturado={structured_count}, fallback={fallback_count})")
     results.sort(key=lambda x: x['line_num'])
     return results
 
