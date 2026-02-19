@@ -264,6 +264,50 @@ export const testeDotsAgente = async (
 };
 
 
+// Imprimir via ROTUTX (bytes do Fórmula Certa direto do banco)
+export const imprimirViaRotutx = async (
+  serverUrl: string,
+  nrRequisicao: string,
+  filial: string,
+  serie: string,
+  item: string,
+  impressora: string,
+  agentUrl: string
+): Promise<ApiResponse<{ message: string }>> => {
+  try {
+    const response = await fetch(`${serverUrl}/api/imprimir_fc`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({
+        req: parseInt(nrRequisicao),
+        filial: parseInt(filial),
+        serie,
+        item: parseInt(item),
+        impressora,
+        agente_url: agentUrl,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (response.status === 404) {
+        return { success: false, error: "ROTUTX_NOT_FOUND" };
+      }
+      return { success: false, error: errorData.error || "Falha na impressão via ROTUTX" };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error("[PrintAgent] Erro ao imprimir via ROTUTX:", error);
+    return { success: false, error: "Não foi possível imprimir via ROTUTX" };
+  }
+};
+
 export const imprimirViaAgente = async (
   config: PrintAgentConfig,
   rotulos: RotuloItem[],

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Printer, Settings, LogOut, ListOrdered } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import SearchRequisition from "@/components/SearchRequisition";
 import LabelTextEditor from "@/components/LabelTextEditor";
 import LayoutSelector from "@/components/LayoutSelector";
@@ -9,10 +10,10 @@ import LayoutEditor from "@/components/LayoutEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPharmacyConfig, getLabelConfig, getPrinterConfig, getPrintAgentConfig } from "@/config/api";
+import { getPharmacyConfig, getLabelConfig, getPrinterConfig, getPrintAgentConfig, getApiConfig, getModoImpressao, setModoImpressao, ModoImpressao } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao, imprimirRotulos } from "@/services/requisicaoService";
-import { imprimirViaAgente } from "@/services/printAgentService";
+import { imprimirViaAgente, imprimirViaRotutx } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 import { listarImpressoras } from "@/services/printAgentService";
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
@@ -31,8 +32,21 @@ const Index = () => {
   const [editorOpen, setEditorOpen] = useState(false);
   const [selectedPrinter, setSelectedPrinter] = useState<string>("");
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [modoImpressao, setModoImpressaoState] = useState<ModoImpressao>(getModoImpressao());
   const { toast } = useToast();
   const { isAdmin, signOut, user } = useAuth();
+
+  const handleModoChange = (checked: boolean) => {
+    const modo: ModoImpressao = checked ? 'rotutx' : 'agente';
+    setModoImpressaoState(modo);
+    setModoImpressao(modo);
+    toast({
+      title: modo === 'rotutx' ? "Modo FC (direto)" : "Modo Agente",
+      description: modo === 'rotutx'
+        ? "Usando bytes do Fórmula Certa — layout garantido."
+        : "Gerando PPLA pelo agente local.",
+    });
+  };
 
   // Carregar impressoras do agente
   useEffect(() => {
@@ -107,24 +121,18 @@ const Index = () => {
 
   const handlePrint = async (quantity: number = 1) => {
     if (rotulos.length === 0) return;
-
     setIsPrinting(true);
-    
     const rotuloAtual = rotulos[currentIndex];
     const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual }));
-    
     await executePrint(rotulosSelecionados);
   };
 
   const handlePrintAll = async (quantity: number = 1) => {
     if (rotulos.length === 0) return;
-
     setIsPrinting(true);
-    
     const rotulosSelecionados = rotulos.flatMap(r => 
       Array.from({ length: quantity }, () => ({ ...r }))
     );
-    
     await executePrint(rotulosSelecionados);
   };
 
@@ -136,9 +144,52 @@ const Index = () => {
     };
 
     const agentConfig = getPrintAgentConfig();
+    const apiConfig = getApiConfig();
     let result;
-    
-    if (agentConfig.enabled) {
+
+    // Modo ROTUTX: usar bytes do Fórmula Certa direto
+    if (modoImpressao === 'rotutx' && agentConfig.enabled) {
+      const impressora = selectedPrinter || agentConfig.impressora;
+      
+      // Imprimir cada rótulo via ROTUTX
+      let sucessos = 0;
+      let erros: string[] = [];
+      
+      for (const rotulo of rotulosSelecionados) {
+        const rotutxResult = await imprimirViaRotutx(
+          apiConfig.serverUrl,
+          rotulo.nrRequisicao,
+          apiConfig.codigoFilial,
+          "1", // série padrão
+          rotulo.nrItem,
+          impressora,
+          agentConfig.agentUrl
+        );
+        
+        if (rotutxResult.success) {
+          sucessos++;
+        } else if (rotutxResult.error === "ROTUTX_NOT_FOUND") {
+          // Fallback para agente se ROTUTX não existe
+          toast({
+            title: "ROTUTX não encontrado",
+            description: `Item ${rotulo.nrItem}: usando modo agente como fallback.`,
+          });
+          const configComImpressora = { ...agentConfig, impressora };
+          const fallback = await imprimirViaAgente(configComImpressora, [rotulo], layoutType, farmaciaData);
+          if (fallback.success) sucessos++;
+          else erros.push(`Item ${rotulo.nrItem}: ${fallback.error}`);
+        } else {
+          erros.push(`Item ${rotulo.nrItem}: ${rotutxResult.error}`);
+        }
+      }
+
+      result = {
+        success: erros.length === 0,
+        error: erros.length > 0 ? erros.join("; ") : undefined,
+        data: { impressos: sucessos },
+      };
+    } else if (agentConfig.enabled) {
+      // Modo Agente (original)
       const configComImpressora = { ...agentConfig, impressora: selectedPrinter || agentConfig.impressora };
       result = await imprimirViaAgente(configComImpressora, rotulosSelecionados, layoutType, farmaciaData);
     } else {
@@ -177,6 +228,21 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Toggle Modo FC / Agente */}
+              {getPrintAgentConfig().enabled && (
+                <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-full">
+                  <span className={`text-xs font-medium ${modoImpressao === 'agente' ? 'text-foreground' : 'text-muted-foreground'}`}>
+                    Agente
+                  </span>
+                  <Switch
+                    checked={modoImpressao === 'rotutx'}
+                    onCheckedChange={handleModoChange}
+                  />
+                  <span className={`text-xs font-medium ${modoImpressao === 'rotutx' ? 'text-primary' : 'text-muted-foreground'}`}>
+                    FC Direto
+                  </span>
+                </div>
+              )}
               <span className="text-sm text-muted-foreground hidden md:inline">{user?.email}</span>
               <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" asChild>
                 <Link to="/fila"><ListOrdered className="h-5 w-5 text-primary" /></Link>
@@ -221,11 +287,11 @@ const Index = () => {
               if (ac.enabled && ac.calibracao) {
                 return (
                   <div className="flex items-center gap-3 text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-full">
+                    <span className={`font-medium ${modoImpressao === 'rotutx' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {modoImpressao === 'rotutx' ? '⚡ FC Direto' : '🔧 Agente'}
+                    </span>
+                    <span className="text-border">|</span>
                     <span title="Contraste">H{ac.calibracao.contraste}</span>
-                    <span className="text-border">|</span>
-                    <span title="Fonte">F{ac.calibracao.fonte}</span>
-                    <span className="text-border">|</span>
-                    <span title="Rotação">R{ac.calibracao.rotacao}</span>
                     <span className="text-border">|</span>
                     <span title="Impressora">{selectedPrinter || ac.impressora}</span>
                   </div>
