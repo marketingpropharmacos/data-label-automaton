@@ -190,6 +190,7 @@ def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14
         f"\x02L",                          # Entrar modo formatação
         f"D11",                            # Pixel size
         f"H{contraste:02d}",              # Contraste
+        f"Q0001",                          # Forçar 1 cópia (evita 38 etiquetas em branco)
     ]
     return "\r".join(partes) + "\r"
 
@@ -749,7 +750,7 @@ def imprimir_rotutx():
     else:
         espacamento = min(area_util // num_linhas, 50)  # máximo 5mm entre linhas
 
-    font = calibracao.get('fonte', dims.get('font', 2))
+    font = calibracao.get('fonte', dims.get('font', 0))  # Font 0 = menor (6x10 dots)
     rot = calibracao.get('rotacao', 1)
     contraste = calibracao.get('contraste', 14)
     

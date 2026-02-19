@@ -4788,7 +4788,8 @@ def imprimir_fc_v2():
         payload_agente = {
             "impressora": impressora,
             "linhas": [l['text'] for l in linhas_parsed],
-            "req": str(nr_requisicao)
+            "req": str(nr_requisicao),
+            "calibracao": data.get("calibracao", {})
         }
 
         url = f"{AGENTE_URL}/imprimir-rotutx"
