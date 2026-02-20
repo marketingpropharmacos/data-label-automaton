@@ -374,6 +374,7 @@ const Index = () => {
             searchedRequisition={searchedRequisition}
             onPrint={handlePrint}
             onPrintAll={handlePrintAll}
+            onPrintFcRaw={getPrintAgentConfig().enabled ? handlePrintFcRaw : undefined}
             isPrinting={isPrinting}
             availablePrinters={availablePrinters}
             selectedPrinter={selectedPrinter}

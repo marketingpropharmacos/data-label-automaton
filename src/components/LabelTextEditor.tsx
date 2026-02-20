@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RotuloItem, PharmacyConfig, LayoutConfig, LayoutType } from "@/types/requisicao";
@@ -59,6 +59,7 @@ interface LabelTextEditorProps {
   // Print
   onPrint: (quantity: number) => void;
   onPrintAll: (quantity: number) => void;
+  onPrintFcRaw?: () => void;
   isPrinting: boolean;
   availablePrinters: string[];
   selectedPrinter: string;
@@ -256,10 +257,10 @@ const getStoredFontSize = (layoutTipo?: string) => {
 };
 
 const LabelTextEditor = ({
-  rotulos, currentIndex, onIndexChange, onTextChange,
-  layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
-  onPrint, onPrintAll, isPrinting, availablePrinters, selectedPrinter, onPrinterChange,
-}: LabelTextEditorProps) => {
+   rotulos, currentIndex, onIndexChange, onTextChange,
+   layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
+   onPrint, onPrintAll, onPrintFcRaw, isPrinting, availablePrinters, selectedPrinter, onPrinterChange,
+ }: LabelTextEditorProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
   const [editorFontSize, setEditorFontSize] = useState(() => getStoredFontSize(layoutType));
@@ -435,6 +436,12 @@ const LabelTextEditor = ({
             <Button size="sm" variant="outline" onClick={() => onPrintAll(printQuantity)} disabled={isPrinting}>
               <Printer className={`h-4 w-4 mr-1 ${isPrinting ? 'animate-pulse' : ''}`} />
               Todas ({rotulos.length * printQuantity})
+            </Button>
+          )}
+          {onPrintFcRaw && (
+            <Button size="sm" variant="default" onClick={onPrintFcRaw} disabled={isPrinting} className="gap-1.5 bg-amber-600 hover:bg-amber-700">
+              <Zap className="h-4 w-4" />
+              FC RAW
             </Button>
           )}
         </div>
