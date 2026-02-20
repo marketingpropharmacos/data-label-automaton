@@ -5309,6 +5309,7 @@ def rotutx_raw_bridge():
     item = data.get("item") or data.get("nrItem")
 
     try:
+        # Tenta buscar com item especifico
         rotutx_bytes = buscar_rotutx_fc12300(
             int(nr_requisicao),
             filial=filial,
@@ -5316,14 +5317,33 @@ def rotutx_raw_bridge():
             item=(int(item) if item is not None else None)
         )
 
+        # Fallback: busca sem filtro de item/serie (pega qualquer ROTUTX da requisicao)
+        if not rotutx_bytes and (item is not None or serie is not None):
+            print(f"[ROTUTX-RAW] Fallback: buscando sem item/serie para REQ={nr_requisicao}")
+            rotutx_bytes = buscar_rotutx_fc12300(int(nr_requisicao), filial=filial)
+
         if not rotutx_bytes:
+            # Debug: verificar se existem registros na FC12300 para essa requisicao
+            conn_debug = get_db_connection()
+            cur_debug = conn_debug.cursor()
+            try:
+                cur_debug.execute("SELECT COUNT(*) FROM FC12300 WHERE NRRQU = ?", (int(nr_requisicao),))
+                count = cur_debug.fetchone()[0]
+                print(f"[ROTUTX-RAW] FC12300 tem {count} registros para REQ={nr_requisicao}")
+            except:
+                count = -1
+            finally:
+                cur_debug.close()
+                conn_debug.close()
+
             return jsonify({
                 "success": False,
-                "error": "ROTUTX não encontrado na FC12300",
+                "error": f"ROTUTX nao encontrado na FC12300 (REQ={nr_requisicao}, filial={filial}, item={item}, serie={serie}, total_registros={count}). O rotulo precisa ter sido gerado pelo Formula Certa primeiro.",
                 "req": int(nr_requisicao),
                 "filial": filial,
                 "serie": serie,
-                "item": item
+                "item": item,
+                "registros_fc12300": count
             }), 404
 
         # Detecta tipo de modelo
