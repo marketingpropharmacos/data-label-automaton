@@ -239,7 +239,7 @@ export const imprimirViaRotutxRaw = async (
         "Content-Type": "application/json",
         "ngrok-skip-browser-warning": "true",
       },
-      body: JSON.stringify({ req: parseInt(nrRequisicao), serie, filial: filial ? parseInt(filial) : 1 }),
+      body: JSON.stringify({ req: parseInt(nrRequisicao), filial: filial ? parseInt(filial) : 1, item: serie }),
       signal: AbortSignal.timeout(15000),
     });
 
