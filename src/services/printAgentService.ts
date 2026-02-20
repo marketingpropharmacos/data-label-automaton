@@ -222,7 +222,73 @@ export const testeDotsAgente = async (
 };
 
 
-// Imprimir via ROTUTX (bytes do Fórmula Certa direto do banco)
+// Imprimir via ROTUTX RAW (bytes exatos do Fórmula Certa direto do banco → agente /raw)
+export const imprimirViaRotutxRaw = async (
+  serverUrl: string,
+  nrRequisicao: string,
+  serie: string,
+  impressora: string,
+  agentUrl: string,
+): Promise<ApiResponse<{ message: string; tamanho_bytes?: number }>> => {
+  try {
+    // Passo 1: Buscar ROTUTX raw do banco via servidor
+    const response = await fetch(`${serverUrl}/api/rotutx-raw`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({ req: parseInt(nrRequisicao), serie }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: errorData.error || "Falha ao buscar ROTUTX" };
+    }
+
+    const rotutxData = await response.json();
+    if (!rotutxData.success || !rotutxData.dados_base64) {
+      return { success: false, error: "ROTUTX não encontrado ou vazio" };
+    }
+
+    console.log(`[RAW] ROTUTX obtido: ${rotutxData.tamanho_bytes} bytes, modelo: ${rotutxData.tipo_modelo}`);
+    console.log(`[RAW] Preview: ${rotutxData.preview?.substring(0, 100)}`);
+
+    // Passo 2: Enviar bytes RAW direto para o agente via /raw
+    const agentResponse = await fetch(`${agentUrl}/raw`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: JSON.stringify({
+        impressora,
+        dados_base64: rotutxData.dados_base64,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!agentResponse.ok) {
+      const errorData = await agentResponse.json().catch(() => ({}));
+      return { success: false, error: `Agente: ${errorData.error || 'Falha ao enviar RAW'}` };
+    }
+
+    const agentResult = await agentResponse.json();
+    return {
+      success: agentResult.success,
+      data: {
+        message: `ROTUTX RAW enviado! ${rotutxData.tamanho_bytes} bytes → impressora`,
+        tamanho_bytes: rotutxData.tamanho_bytes,
+      },
+    };
+  } catch (error) {
+    console.error("[PrintAgent] Erro ao imprimir via ROTUTX RAW:", error);
+    return { success: false, error: "Não foi possível imprimir via ROTUTX RAW" };
+  }
+};
+
+// Imprimir via ROTUTX (método antigo - servidor envia para agente)
 export const imprimirViaRotutx = async (
   serverUrl: string,
   nrRequisicao: string,

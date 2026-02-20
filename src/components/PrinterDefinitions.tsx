@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
-import { Save, RotateCcw } from "lucide-react";
+import { Save, RotateCcw, LayoutGrid } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import FCGridEditor from "@/components/FCGridEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +39,7 @@ const PrinterDefinitions = () => {
   const [selectedLayout, setSelectedLayout] = useState<LayoutType>('A_PAC_PEQ');
   const [definitions, setDefinitions] = useState(getDefinitions());
   const [def, setDef] = useState<PrinterDefinition>(definitions[selectedLayout]);
+  const [isLayoutEditorOpen, setIsLayoutEditorOpen] = useState(false);
 
   useEffect(() => {
     setDef(definitions[selectedLayout]);
@@ -387,11 +390,34 @@ const PrinterDefinitions = () => {
                   <Save className="h-3.5 w-3.5 mr-1" />
                   Salvar
                 </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsLayoutEditorOpen(true)}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5 mr-1" />
+                  Lay-Out
+                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog do Editor de Lay-Out estilo FC */}
+      <Dialog open={isLayoutEditorOpen} onOpenChange={setIsLayoutEditorOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Configuração de Rótulos — Lay-Out ({layoutNames[selectedLayout]})
+            </DialogTitle>
+          </DialogHeader>
+          <FCGridEditor
+            layoutType={selectedLayout}
+            onSave={() => setIsLayoutEditorOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

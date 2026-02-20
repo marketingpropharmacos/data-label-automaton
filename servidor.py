@@ -2,6 +2,14 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import fdb
 import platform
+import base64
+
+try:
+    import requests as http_requests
+    HTTP_REQUESTS_OK = True
+except ImportError:
+    HTTP_REQUESTS_OK = False
+    print("AVISO: 'requests' não instalado. pip install requests")
 
 # Importa win32print apenas no Windows
 if platform.system() == 'Windows':
@@ -2704,6 +2712,148 @@ def imprimir_rotulos():
         return jsonify({"success": True, "impressos": impressos, "erros": erros})
     else:
         return jsonify({"success": False, "error": "Nenhum rótulo impresso", "erros": erros}), 500
+
+
+
+# ============================================
+# ENDPOINT: Buscar ROTUTX raw do Fórmula Certa e enviar via /raw para o agente
+# ============================================
+@app.route('/api/rotutx-raw', methods=['POST'])
+def rotutx_raw():
+    """Busca os bytes RAW do ROTUTX (FC12300) e retorna em base64.
+    Este é o dado EXATO que o Fórmula Certa envia para a impressora."""
+    
+    
+    data = request.get_json() or {}
+    nr_req = data.get('req')
+    serie = data.get('serie', '01')
+    
+    if not nr_req:
+        return jsonify({"success": False, "error": "Parâmetro 'req' obrigatório"}), 400
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Buscar ROTUTX raw (BLOB) da FC12300
+        cursor.execute("""
+            SELECT ROTUTX, TPMODELO, SERIER
+            FROM FC12300
+            WHERE NRRQU = ? AND SERIER = ?
+        """, (int(nr_req), serie))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return jsonify({"success": False, "error": f"ROTUTX não encontrado para REQ {nr_req} SERIE {serie}"}), 404
+        
+        rotutx_blob = row[0]
+        tp_modelo = row[1]
+        serie_r = row[2]
+        
+        if not rotutx_blob:
+            return jsonify({"success": False, "error": "ROTUTX está vazio (NULL)"}), 404
+        
+        # Converter BLOB para bytes
+        if hasattr(rotutx_blob, 'read'):
+            raw_bytes = rotutx_blob.read()
+        elif isinstance(rotutx_blob, bytes):
+            raw_bytes = rotutx_blob
+        else:
+            raw_bytes = bytes(rotutx_blob)
+        
+        # Encode em base64
+        b64 = base64.b64encode(raw_bytes).decode('ascii')
+        
+        # Preview para debug
+        try:
+            preview = raw_bytes[:300].decode('latin-1', errors='ignore')
+        except:
+            preview = repr(raw_bytes[:100])
+        
+        return jsonify({
+            "success": True,
+            "dados_base64": b64,
+            "tamanho_bytes": len(raw_bytes),
+            "tipo_modelo": tp_modelo,
+            "serie": serie_r,
+            "preview": preview,
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/imprimir-fc-raw', methods=['POST'])
+def imprimir_fc_raw():
+    """Busca ROTUTX do banco e envia direto para o agente via /raw.
+    Esta é a abordagem mais confiável: usa os MESMOS bytes que o Fórmula Certa gera."""
+    
+    
+    data = request.get_json() or {}
+    nr_req = data.get('req')
+    serie = data.get('serie', '01')
+    agente_url = data.get('agente_url', 'http://localhost:5001')
+    impressora = data.get('impressora', 'AMP PEQUENO')
+    
+    if not nr_req:
+        return jsonify({"success": False, "error": "Parâmetro 'req' obrigatório"}), 400
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT ROTUTX
+            FROM FC12300
+            WHERE NRRQU = ? AND SERIER = ?
+        """, (int(nr_req), serie))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row or not row[0]:
+            return jsonify({"success": False, "error": f"ROTUTX não encontrado para REQ {nr_req}"}), 404
+        
+        rotutx_blob = row[0]
+        if hasattr(rotutx_blob, 'read'):
+            raw_bytes = rotutx_blob.read()
+        elif isinstance(rotutx_blob, bytes):
+            raw_bytes = rotutx_blob
+        else:
+            raw_bytes = bytes(rotutx_blob)
+        
+        b64 = base64.b64encode(raw_bytes).decode('ascii')
+        
+        # Enviar para o agente via /raw
+        try:
+            resp = http_requests.post(
+                f"{agente_url}/raw",
+                json={
+                    "impressora": impressora,
+                    "dados_base64": b64,
+                },
+                timeout=15
+            )
+            agent_result = resp.json()
+        except Exception as agent_err:
+            return jsonify({
+                "success": False,
+                "error": f"Erro ao enviar para agente: {str(agent_err)}",
+                "dados_base64": b64,
+                "tamanho": len(raw_bytes),
+            }), 500
+        
+        return jsonify({
+            "success": agent_result.get("success", False),
+            "message": "ROTUTX enviado via /raw para o agente",
+            "tamanho_bytes": len(raw_bytes),
+            "agent_response": agent_result,
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == '__main__':
