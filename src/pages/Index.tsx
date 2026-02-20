@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Printer, Settings, LogOut, ListOrdered } from "lucide-react";
+import { Printer, Settings, LogOut, ListOrdered, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getPharmacyConfig, getPrintAgentConfig, getApiConfig, getModoImpressao, setModoImpressao, ModoImpressao } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao } from "@/services/requisicaoService";
-import { imprimirViaAgente, imprimirViaRotutx } from "@/services/printAgentService";
+import { imprimirViaAgente, imprimirViaRotutx, imprimirViaRotutxRaw } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 import { listarImpressoras } from "@/services/printAgentService";
 import { getDefinition } from "@/types/printerDefinition";
@@ -223,6 +223,39 @@ const Index = () => {
     }
   };
 
+  const handlePrintFcRaw = async () => {
+    if (rotulos.length === 0 || !searchedRequisition) {
+      toast({ title: "Sem requisição", description: "Busque uma requisição primeiro.", variant: "destructive" });
+      return;
+    }
+    setIsPrinting(true);
+    const apiConfig = getApiConfig();
+    const agentConfig = getPrintAgentConfig();
+    const impressora = selectedPrinter || agentConfig.impressora;
+
+    const result = await imprimirViaRotutxRaw(
+      apiConfig.serverUrl,
+      searchedRequisition,
+      "1", // série padrão
+      impressora,
+      agentConfig.agentUrl
+    );
+
+    setIsPrinting(false);
+    if (result.success) {
+      toast({
+        title: "FC RAW enviado!",
+        description: result.data?.message || "Bytes do ROTUTX enviados direto para a impressora.",
+      });
+    } else {
+      toast({
+        title: "Erro FC RAW",
+        description: result.error || "Falha ao enviar ROTUTX RAW.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -251,6 +284,20 @@ const Index = () => {
                     FC Direto
                   </span>
                 </div>
+              )}
+              {/* Botão FC RAW */}
+              {getPrintAgentConfig().enabled && rotulos.length > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handlePrintFcRaw}
+                  disabled={isPrinting}
+                  className="gap-1.5"
+                  title="Envia os bytes exatos do ROTUTX (Fórmula Certa) direto para a impressora"
+                >
+                  <Zap className="h-4 w-4" />
+                  FC RAW
+                </Button>
               )}
               <span className="text-sm text-muted-foreground hidden md:inline">{user?.email}</span>
               <Button variant="outline" size="icon" className="border-primary/20 hover:bg-accent" asChild>
