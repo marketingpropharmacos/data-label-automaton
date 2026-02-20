@@ -29,6 +29,7 @@ import { ApiConfig, PharmacyConfig, LabelConfig, LayoutType, LayoutConfig, Print
 import { getLayouts, fieldLabels } from "@/config/layouts";
 import LayoutEditor from "@/components/LayoutEditor";
 import PPLAComparer from "@/components/PPLAComparer";
+import PrinterDefinitions from "@/components/PrinterDefinitions";
 
 const LabelSettings = () => {
   const { toast } = useToast();
@@ -316,8 +317,9 @@ const LabelSettings = () => {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="servidor" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+      <Tabs defaultValue="definicoes" className="w-full">
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="definicoes">Definições</TabsTrigger>
           <TabsTrigger value="servidor">Servidor</TabsTrigger>
           <TabsTrigger value="agente">Agente HTTP</TabsTrigger>
           <TabsTrigger value="impressora">Impressora</TabsTrigger>
@@ -325,6 +327,10 @@ const LabelSettings = () => {
           <TabsTrigger value="rotulo">Rótulo</TabsTrigger>
           <TabsTrigger value="layouts">Layouts</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="definicoes">
+          <PrinterDefinitions />
+        </TabsContent>
 
         <TabsContent value="servidor">
           <Card>
