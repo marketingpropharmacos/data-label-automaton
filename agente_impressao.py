@@ -211,21 +211,6 @@ def mm_to_dots(value_01mm):
 # ============================================
 # COMPATIBILIDADE: Manter funções PPLB antigas para fallback
 # ============================================
-def pplb_text(rot, font, wmult, hmult, y, x, data):
-    """Gera uma linha de texto PPLA (4 dígitos para Y e X)."""
-    return f"1{rot}{font}{wmult}{hmult}{y:04d}{x:04d}{data}"
-
-def pplb_setup(largura_dots=360, altura_dots=200, gap_dots=24):
-    """Setup PPLB em dots (legado)."""
-    partes = [f"q{largura_dots}", f"Q{altura_dots},{gap_dots}", "D11"]
-    return "\r".join(partes) + "\r"
-
-def pplb_label(linhas):
-    """Bloco de etiqueta PPLB (legado)."""
-    partes = ["\x02L", "H10"]
-    partes.extend(linhas)
-    partes.append("E")
-    return "\r".join(partes) + "\r"
 
 
 # ============================================
@@ -490,8 +475,6 @@ GERADORES_PPLA = {
     'TIRZ': gerar_ppla_tirz,
 }
 
-# Alias para compatibilidade
-GERADORES_PPLB = GERADORES_PPLA
 
 
 # ============================================
@@ -862,55 +845,8 @@ def diagnostico_ppla():
     })
 
 
-@app.route('/analisar-prn', methods=['POST'])
-def analisar_prn():
-    """Recebe caminho de um arquivo .PRN capturado e analisa os bytes."""
-    data = request.get_json() or {}
-    caminho = data.get('caminho', '')
 
-    if not caminho or not os.path.exists(caminho):
-        return jsonify({"success": False, "error": f"Arquivo não encontrado: {caminho}"}), 400
 
-    try:
-        with open(caminho, 'rb') as f:
-            raw = f.read()
-
-        tamanho = len(raw)
-        count_crlf = raw.count(b'\r\n')
-        count_lf = raw.count(b'\n') - count_crlf
-        count_cr = raw.count(b'\r') - count_crlf
-        stx_positions = [i for i, b in enumerate(raw) if b == 0x02]
-
-        try:
-            texto = raw.decode('cp1252', errors='replace')
-        except Exception:
-            texto = raw.decode('latin-1', errors='replace')
-
-        linhas = texto.replace('\r\n', '\n').replace('\r', '\n').split('\n')
-        linhas_display = []
-        for i, linha in enumerate(linhas[:100]):
-            display = linha.replace('\x02', '<STX>').replace('\x03', '<ETX>')
-            linhas_display.append(f"[{i:03d}] {display}")
-
-        resultado = {
-            "success": True,
-            "tamanho_bytes": tamanho,
-            "terminadores": {
-                "CRLF (\\r\\n)": count_crlf,
-                "LF (\\n)": count_lf,
-                "CR (\\r)": count_cr,
-            },
-            "stx_positions": stx_positions[:20],
-            "total_stx": len(stx_positions),
-            "hex_primeiros_500bytes": raw[:500].hex(' '),
-            "linhas_texto": linhas_display,
-        }
-
-        return jsonify(resultado)
-
-    except Exception as e:
-        logger.error(f"Erro ao analisar PRN: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 # ============================================
@@ -987,256 +923,17 @@ def raw_print():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route('/test_notepad', methods=['POST'])
-def test_notepad():
-    """Salva conteudo RAW em arquivo para inspecao visual."""
-    try:
-        import base64
-        import tempfile
-        import subprocess
-
-        data = request.get_json() or {}
-        raw_b64 = data.get('dados_base64') or data.get('raw_base64') or ''
-
-        if not raw_b64:
-            return jsonify({"success": False, "error": "Nenhum dado base64"}), 400
-
-        raw_bytes = base64.b64decode(raw_b64)
-        temp_file = os.path.join(tempfile.gettempdir(), 'rotutx_debug.txt')
-        with open(temp_file, 'wb') as f:
-            f.write(raw_bytes)
-
-        try:
-            subprocess.Popen(['notepad.exe', temp_file])
-        except Exception:
-            pass
-
-        analise = {"tamanho": len(raw_bytes), "arquivo": temp_file}
-        if b'^w' in raw_bytes or b'^W' in raw_bytes:
-            analise["formato"] = "PPLA"
-        elif b'\x02L' in raw_bytes:
-            analise["formato"] = "PPLB"
-        elif b'~' in raw_bytes[:10]:
-            analise["formato"] = "ZPL"
-        elif b'\x1b' in raw_bytes[:20]:
-            analise["formato"] = "ESC/POS"
-        else:
-            analise["formato"] = "DESCONHECIDO"
-
-        try:
-            analise["preview_texto"] = raw_bytes[:500].decode('latin-1', errors='ignore')
-        except Exception:
-            analise["preview_texto"] = "(nao decodificavel)"
-
-        analise["tem_E_final"] = raw_bytes.strip().endswith(b'E') or raw_bytes.strip().endswith(b'^E')
-        analise["count_CR"] = raw_bytes.count(b'\r')
-        analise["count_LF"] = raw_bytes.count(b'\n')
-        analise["count_CRLF"] = raw_bytes.count(b'\r\n')
-        analise["count_STX"] = raw_bytes.count(b'\x02')
-
-        return jsonify({"success": True, "analise": analise})
-
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/raw_tcp', methods=['POST'])
-def raw_tcp():
-    """Envia dados RAW direto para a impressora via TCP porta 9100."""
-    try:
-        import base64
-
-        data = request.get_json() or {}
-        host = data.get('host', '')
-        port = int(data.get('port', 9100))
-        raw_b64 = data.get('dados_base64') or data.get('raw_base64') or ''
-
-        if not host:
-            return jsonify({"success": False, "error": "Informe 'host' (IP da impressora)"}), 400
-        if not raw_b64:
-            return jsonify({"success": False, "error": "Nenhum dado base64"}), 400
-
-        raw_bytes = base64.b64decode(raw_b64)
-        logger.info(f"[TCP] Enviando {len(raw_bytes)} bytes para {host}:{port}")
-
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(10)
-        s.connect((host, port))
-        s.sendall(raw_bytes)
-        s.close()
-
-        logger.info(f"[TCP] Enviado com sucesso para {host}:{port}")
-        return jsonify({
-            "success": True,
-            "bytes_enviados": len(raw_bytes),
-            "host": host,
-            "port": port,
-        })
-
-    except Exception as e:
-        logger.error(f"[TCP] Erro: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/capturar', methods=['POST'])
-def capturar_porta_9100():
-    """Abre um servidor TCP temporário na porta 9100 para capturar
-    os comandos enviados pelo Fórmula Certa (ou qualquer outro software).
-    
-    Fluxo:
-    1. Frontend chama POST /capturar com {timeout: 30}
-    2. Agente abre porta 9100 e aguarda UMA conexão
-    3. Quando o FC envia os dados, o agente captura e retorna
-    4. Se timeout expirar, retorna erro
-    """
-    try:
-        import base64
-        data = request.get_json() or {}
-        timeout = min(int(data.get('timeout', 30)), 60)  # max 60s
-        porta = int(data.get('porta', 9100))
-
-        logger.info(f"[CAPTURA] Aguardando conexão na porta {porta} (timeout={timeout}s)...")
-
-        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.settimeout(timeout)
-
-        try:
-            server.bind(('0.0.0.0', porta))
-            server.listen(1)
-        except OSError as e:
-            server.close()
-            return jsonify({
-                "success": False,
-                "error": f"Não foi possível abrir a porta {porta}: {str(e)}. Verifique se não há outro serviço usando esta porta."
-            }), 400
-
-        try:
-            conn, addr = server.accept()
-            logger.info(f"[CAPTURA] Conexão recebida de {addr}")
-            conn.settimeout(5)
-
-            # Receber todos os dados
-            chunks = []
-            while True:
-                try:
-                    chunk = conn.recv(4096)
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                except socket.timeout:
-                    break
-
-            conn.close()
-            server.close()
-
-            raw_bytes = b''.join(chunks)
-            logger.info(f"[CAPTURA] Recebidos {len(raw_bytes)} bytes de {addr}")
-
-            if len(raw_bytes) == 0:
-                return jsonify({
-                    "success": False,
-                    "error": "Conexão recebida mas nenhum dado foi enviado."
-                }), 400
-
-            # Análise dos dados capturados
-            # Formatar comandos legíveis (similar ao diagnóstico)
-            try:
-                texto = raw_bytes.decode('cp1252', errors='replace')
-            except Exception:
-                texto = raw_bytes.decode('latin-1', errors='replace')
-
-            # Substituir controles por representações visuais
-            texto_visual = texto.replace('\x02', '<STX>').replace('\x03', '<ETX>')
-            linhas = texto_visual.split('\r')
-            linhas = [l for l in linhas if l.strip()]
-
-            # Detectar formato
-            formato = "DESCONHECIDO"
-            if b'\x02L' in raw_bytes or b'\x02e' in raw_bytes:
-                formato = "PPLA"
-            elif b'\x02' in raw_bytes and b'E\r' in raw_bytes:
-                formato = "PPLB"
-            elif b'~' in raw_bytes[:10]:
-                formato = "ZPL"
-            elif b'\x1b' in raw_bytes[:20]:
-                formato = "ESC/POS"
-
-            return jsonify({
-                "success": True,
-                "origem": f"{addr[0]}:{addr[1]}",
-                "bytes_recebidos": len(raw_bytes),
-                "formato_detectado": formato,
-                "comandos": linhas,
-                "comandos_raw": texto_visual,
-                "dados_base64": base64.b64encode(raw_bytes).decode('ascii'),
-                "analise": {
-                    "count_CR": raw_bytes.count(b'\r'),
-                    "count_LF": raw_bytes.count(b'\n'),
-                    "count_STX": raw_bytes.count(b'\x02'),
-                    "tem_E_final": raw_bytes.strip().endswith(b'E') or raw_bytes.strip().endswith(b'E\r'),
-                }
-            })
-
-        except socket.timeout:
-            server.close()
-            return jsonify({
-                "success": False,
-                "error": f"Timeout: nenhuma conexão recebida na porta {porta} em {timeout} segundos. Certifique-se de imprimir pelo Fórmula Certa apontando para o IP deste PC."
-            }), 408
-
-    except Exception as e:
-        logger.error(f"[CAPTURA] Erro: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/diagnostico', methods=['GET'])
-def diagnostico():
-    """Retorna diagnostico completo do agente e impressoras."""
-    printers = get_available_printers()
-    diag = {
-        "agente_versao": "3.0.0",
-        "protocolo": "PPLA-mm (milímetros)",
-        "hostname": socket.gethostname(),
-        "sistema": platform.system(),
-        "pywin32": PYWIN32_OK,
-        "impressora_padrao": IMPRESSORA_PADRAO,
-        "impressoras_disponiveis": printers,
-        "layouts_suportados": list(GERADORES_PPLA.keys()),
-        "configs_impressora": {k: v for k, v in PRINTER_CONFIGS.items()},
-        "encoding": "cp1252",
-    }
-
-    if PYWIN32_OK:
-        for p in printers:
-            try:
-                hPrinter = win32print.OpenPrinter(p)
-                info = win32print.GetPrinter(hPrinter, 2)
-                win32print.ClosePrinter(hPrinter)
-                diag[f"printer_{p}"] = {
-                    "driver": info.get("pDriverName", "?"),
-                    "port": info.get("pPortName", "?"),
-                    "datatype": info.get("pDatatype", "?"),
-                    "status": info.get("Status", 0),
-                }
-            except Exception as e:
-                diag[f"printer_{p}"] = {"error": str(e)}
-
-    return jsonify(diag)
-
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5002))
     logger.info("=" * 50)
-    logger.info("Agente de Impressao PPLA-mm - ProPharmacos V3.0")
+    logger.info("Agente de Impressao PPLA - ProPharmacos V3.1")
     logger.info(f"Hostname: {socket.gethostname()}")
     logger.info(f"Porta: {port}")
-    logger.info(f"Protocolo: PPLA modo milimetros (cp1252)")
     logger.info(f"Impressora padrao: {IMPRESSORA_PADRAO}")
     logger.info(f"pywin32 disponivel: {PYWIN32_OK}")
     logger.info(f"Impressoras: {get_available_printers()}")
     logger.info(f"Layouts: {list(GERADORES_PPLA.keys())}")
-    logger.info(f"Endpoints: /health /impressoras /imprimir /raw /raw_tcp /test_notepad /diagnostico /capturar")
+    logger.info(f"Endpoints: /health /impressoras /imprimir /imprimir-rotutx /raw /teste /teste-dots /diagnostico-ppla")
     for k, v in PRINTER_CONFIGS.items():
         logger.info(f"  {k}: {v['largura_mm']}x{v['altura_mm']}mm ({v['cols_max']} cols)")
     logger.info(f"Health: http://localhost:{port}/health")

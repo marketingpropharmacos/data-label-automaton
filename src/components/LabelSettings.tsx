@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, Radio, ArrowLeftRight } from "lucide-react";
+import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, ArrowLeftRight } from "lucide-react";
 import { type SuggestedFixes, type CalibrationFix } from "@/utils/pplaParser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import {
   setPrintAgentConfig,
 } from "@/config/api";
 import { verificarConexao } from "@/services/requisicaoService";
-import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, capturarPorta9100, testeProgressivoAgente, testeDotsAgente } from "@/services/printAgentService";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, testeProgressivoAgente, testeDotsAgente } from "@/services/printAgentService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LayoutType, LayoutConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
@@ -44,9 +44,6 @@ const LabelSettings = () => {
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
-  const [isCaptureOpen, setIsCaptureOpen] = useState(false);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [captureResult, setCaptureResult] = useState<any>(null);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
@@ -197,27 +194,6 @@ const LabelSettings = () => {
     }
   };
 
-  const handleCapture = async () => {
-    setIsCapturing(true);
-    setCaptureResult(null);
-    setIsCaptureOpen(true);
-    const result = await capturarPorta9100(agentConfig.agentUrl, 30, 9100);
-    setIsCapturing(false);
-    if (result.success) {
-      setCaptureResult(result.data);
-      toast({
-        title: "Captura concluída!",
-        description: `${result.data?.bytes_recebidos} bytes capturados (${result.data?.formato_detectado})`,
-      });
-    } else {
-      setIsCaptureOpen(false);
-      toast({
-        title: "Falha na captura",
-        description: result.error || "Timeout ou erro na captura.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleProgressiveTest = async () => {
     setIsProgressiveTest(true);
@@ -424,14 +400,6 @@ const LabelSettings = () => {
                   Diagnóstico PPLA
                 </Button>
                 <Button 
-                  variant="outline" 
-                  onClick={handleCapture}
-                  disabled={isCapturing || !isAgentOnline}
-                >
-                  <Radio className={`h-4 w-4 mr-2 ${isCapturing ? 'animate-pulse' : ''}`} />
-                  Capturar FC (9100)
-                </Button>
-                <Button 
                   variant="secondary" 
                   onClick={handleProgressiveTest}
                   disabled={isProgressiveTest || !isAgentOnline}
@@ -443,7 +411,7 @@ const LabelSettings = () => {
                   variant="outline" 
                   onClick={handleDotsTest}
                   disabled={isDotsTest || !isAgentOnline}
-                  className="border-green-500 text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950"
+                  className="border-primary/50 text-primary hover:bg-accent"
                 >
                   <TestTube className={`h-4 w-4 mr-2 ${isDotsTest ? 'animate-pulse' : ''}`} />
                   {isDotsTest ? 'Testando dots...' : '🔧 Teste Dots (FC)'}
@@ -529,77 +497,6 @@ const LabelSettings = () => {
                 </DialogContent>
               </Dialog>
 
-              {/* Dialog de Captura porta 9100 */}
-              <Dialog open={isCaptureOpen} onOpenChange={(open) => { if (!isCapturing) setIsCaptureOpen(open); }}>
-                <DialogContent className="max-w-2xl max-h-[80vh]">
-                  <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                      <Radio className="h-5 w-5" />
-                      Captura Porta 9100 - Fórmula Certa
-                    </DialogTitle>
-                    <DialogDescription>
-                      {isCapturing 
-                        ? "Aguardando conexão... Imprima pelo Fórmula Certa apontando para o IP deste PC."
-                        : "Comandos capturados do Fórmula Certa."
-                      }
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  {isCapturing && (
-                    <div className="flex flex-col items-center gap-4 py-8">
-                      <div className="h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-                      <p className="text-sm text-muted-foreground">Escutando na porta 9100... (30s timeout)</p>
-                      <p className="text-xs text-muted-foreground">No Fórmula Certa, configure a impressora para o IP deste PC, porta 9100</p>
-                    </div>
-                  )}
-
-                  {captureResult && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="p-2 bg-muted rounded">
-                          <span className="font-medium">Origem:</span> {captureResult.origem}
-                        </div>
-                        <div className="p-2 bg-muted rounded">
-                          <span className="font-medium">Formato:</span> {captureResult.formato_detectado}
-                        </div>
-                        <div className="p-2 bg-muted rounded">
-                          <span className="font-medium">Bytes:</span> {captureResult.bytes_recebidos}
-                        </div>
-                        <div className="p-2 bg-muted rounded">
-                          <span className="font-medium">STX:</span> {captureResult.analise?.count_STX} | <span className="font-medium">CR:</span> {captureResult.analise?.count_CR}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-semibold">Comandos Capturados:</h4>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              navigator.clipboard.writeText(captureResult.comandos_raw || captureResult.comandos?.join('\n') || '');
-                              toast({ title: "Copiado!", description: "Comandos capturados copiados." });
-                            }}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copiar
-                          </Button>
-                        </div>
-                        <ScrollArea className="h-[300px] rounded border border-border">
-                          <pre className="p-3 text-xs font-mono bg-muted/50 whitespace-pre-wrap break-all">
-                            {captureResult.comandos?.map((line: string, i: number) => (
-                              <div key={i} className="hover:bg-accent/30 px-1">
-                                <span className="text-muted-foreground mr-2">[{String(i).padStart(2, '0')}]</span>
-                                {line}
-                              </div>
-                            ))}
-                          </pre>
-                        </ScrollArea>
-                      </div>
-                    </div>
-                  )}
-                </DialogContent>
-              </Dialog>
 
               {/* Comparador PPLA com textarea para colar comandos FC */}
               <PPLAComparer
@@ -607,8 +504,8 @@ const LabelSettings = () => {
                 onOpenChange={setIsCompareOpen}
                 systemCommands={diagnosticResult?.comandos_ppla || []}
                 systemRaw={diagnosticResult?.comandos_raw}
-                capturedCommands={captureResult?.comandos}
-                capturedRaw={captureResult?.comandos_raw}
+                capturedCommands={undefined}
+                capturedRaw={undefined}
                 currentCalibration={agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 }}
                 onApplyFixes={(fixes: SuggestedFixes, selected: Record<string, boolean>) => {
                   const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 };
