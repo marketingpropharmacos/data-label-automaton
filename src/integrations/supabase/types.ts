@@ -665,6 +665,36 @@ export type Database = {
         }
         Relationships: []
       }
+      planejamento_dre: {
+        Row: {
+          ano: number
+          categoria: string
+          created_at: string | null
+          id: number
+          loja_id: number
+          mes: number
+          valor: number
+        }
+        Insert: {
+          ano?: number
+          categoria: string
+          created_at?: string | null
+          id?: never
+          loja_id: number
+          mes: number
+          valor?: number
+        }
+        Update: {
+          ano?: number
+          categoria?: string
+          created_at?: string | null
+          id?: never
+          loja_id?: number
+          mes?: number
+          valor?: number
+        }
+        Relationships: []
+      }
       raw_alpha_cmv_diario: {
         Row: {
           competencia: string
