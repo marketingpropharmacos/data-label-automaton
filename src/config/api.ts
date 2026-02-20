@@ -108,10 +108,7 @@ export const setPrinterConfig = (config: PrinterConfig): void => {
   localStorage.setItem(STORAGE_KEYS.PRINTER_CONFIG, JSON.stringify(config));
 };
 
-export const getPrinterPath = (): string => {
-  const config = getPrinterConfig();
-  return `\\\\${config.nomePC}\\${config.nomeCompartilhamento}`;
-};
+// getPrinterPath removido - não era utilizado
 
 export const getPrintAgentConfig = (): PrintAgentConfig => {
   try {
