@@ -5286,6 +5286,80 @@ def impressoras_config():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# =====================================================
+# ENDPOINT /api/rotutx-raw - Bridge para o botão FC RAW do frontend
+# Retorna ROTUTX como base64 para o frontend enviar ao agente
+# =====================================================
+@app.route('/api/rotutx-raw', methods=['POST'])
+def rotutx_raw_bridge():
+    """
+    Busca o BLOB ROTUTX da FC12300 e retorna como base64.
+    O frontend envia diretamente para o agente /raw.
+    Payload: {"req": 90198, "serie": 0, "filial": 1, "item": 1}
+    """
+    data = request.get_json(force=True) or {}
+
+    nr_requisicao = data.get("req") or data.get("nrRequisicao") or data.get("nr_requisicao")
+    if nr_requisicao is None:
+        return jsonify({"success": False, "error": "Informe 'req' (número da requisição)"}), 400
+
+    filial_in = data.get("filial", 1)
+    filial = mapear_filial(int(filial_in))
+    serie = data.get("serie") or data.get("serier")
+    item = data.get("item") or data.get("nrItem")
+
+    try:
+        rotutx_bytes = buscar_rotutx_fc12300(
+            int(nr_requisicao),
+            filial=filial,
+            serie=(int(serie) if serie is not None else None),
+            item=(int(item) if item is not None else None)
+        )
+
+        if not rotutx_bytes:
+            return jsonify({
+                "success": False,
+                "error": "ROTUTX não encontrado na FC12300",
+                "req": int(nr_requisicao),
+                "filial": filial,
+                "serie": serie,
+                "item": item
+            }), 404
+
+        # Detecta tipo de modelo
+        tipo_modelo = "DESCONHECIDO"
+        if b'\x02L' in rotutx_bytes or b'\x02l' in rotutx_bytes:
+            tipo_modelo = "PPLB"
+        elif b'^w' in rotutx_bytes or b'^W' in rotutx_bytes:
+            tipo_modelo = "PPLA"
+
+        dados_b64 = base64.b64encode(rotutx_bytes).decode("ascii")
+
+        # Preview texto
+        try:
+            preview = rotutx_bytes[:500].decode('latin-1', errors='ignore')
+        except Exception:
+            preview = ""
+
+        print(f"[ROTUTX-RAW] REQ={nr_requisicao} -> {len(rotutx_bytes)} bytes, modelo={tipo_modelo}")
+
+        return jsonify({
+            "success": True,
+            "dados_base64": dados_b64,
+            "tamanho_bytes": len(rotutx_bytes),
+            "tipo_modelo": tipo_modelo,
+            "preview": preview[:200]
+        })
+
+    except Exception as e:
+        print(f"[ROTUTX-RAW ERRO] {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "trace": traceback.format_exc()[:2000]
+        }), 500
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Servidor iniciando na porta 5000...")
@@ -5293,6 +5367,7 @@ if __name__ == '__main__':
     print("Teste: http://localhost:5000/api/health")
     print("Fila impressao: http://localhost:5000/api/fila-impressao?filial=279")
     print("Impressoras config: http://localhost:5000/api/impressoras-config")
+    print("ROTUTX RAW: POST http://localhost:5000/api/rotutx-raw")
     print("Debug rotulos: http://localhost:5000/api/debug/fc12300/<nr_requisicao>")
     print("Debug fila: http://localhost:5000/api/debug/fc12b00")
     print("Debug impressoras DB: http://localhost:5000/api/debug/fc90100")
