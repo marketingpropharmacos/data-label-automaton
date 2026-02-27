@@ -146,14 +146,16 @@ const Index = () => {
     const agentConfig = getPrintAgentConfig();
     const apiConfig = getApiConfig();
     
-    // Mesclar fonte e rotação da Definição do layout ativo
-    const layoutDef = getDefinition(layoutType);
-    const calibracaoComDefinicao = {
-      ...(agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 14, fonte: 2, rotacao: 0 }),
-      fonte: layoutDef.fonte,
-      rotacao: layoutDef.rotacaoFonte,
+    // Usar calibração do agente sem sobrescrever fonte/rotação por definição de layout
+    const calibracaoPadrao = agentConfig.calibracao || {
+      margem_c: 0,
+      offset_r: 0,
+      contraste: 14,
+      fonte: 2,
+      rotacao: 0,
+      modo: 'dots',
     };
-    const agentConfigComDef = { ...agentConfig, calibracao: calibracaoComDefinicao };
+    const agentConfigComDef = { ...agentConfig, calibracao: calibracaoPadrao };
     
     let result;
 
