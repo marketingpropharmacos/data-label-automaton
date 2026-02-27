@@ -506,7 +506,7 @@ const LabelSettings = () => {
                             for (let i = 0; i < Math.min(lines.length, 8); i++) {
                               const y = String(yCoords[i]).padStart(4, '0');
                               const x = String(xStart).padStart(4, '0');
-                              pplaLines.push(`11111${y}${x}${lines[i].trim()}`);
+                              pplaLines.push(`10211${y}${x}${lines[i].trim()}`);
                             }
                             pplaLines.push('Q0001E');
                             setPplaDiretoTexto(pplaLines.join('\n'));
