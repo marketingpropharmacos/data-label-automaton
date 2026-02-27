@@ -45,6 +45,9 @@ const LabelSettings = () => {
   const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [isPplaDiretoOpen, setIsPplaDiretoOpen] = useState(false);
+  const [isPplaDiretoSending, setIsPplaDiretoSending] = useState(false);
+  const [pplaDiretoTexto, setPplaDiretoTexto] = useState("");
   
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
