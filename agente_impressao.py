@@ -654,7 +654,7 @@ def imprimir():
 
     impressora = find_printer_match(impressora_req) or impressora_req
     logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
-    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 1)} Modo={calibracao.get('modo', 'mm')}")
+    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 0)} Modo={calibracao.get('modo', 'mm')}")
 
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
     dims = get_printer_dims(impressora)
