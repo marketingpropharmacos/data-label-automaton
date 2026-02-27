@@ -629,7 +629,7 @@ const LabelSettings = () => {
                 capturedRaw={undefined}
                 currentCalibration={agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 }}
                 onApplyFixes={(fixes: SuggestedFixes, selected: Record<string, boolean>) => {
-                  const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 };
+                  const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 };
                   const updated = { ...cal };
                   if (selected.contraste) updated.contraste = fixes.contraste.sugerido;
                   if (selected.fonte) updated.fonte = fixes.fonte.sugerido;
