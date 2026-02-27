@@ -435,7 +435,7 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     modo = cal.get('modo', 'mm')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
-    rot = cal.get('rotacao', 1)
+    rot = cal.get('rotacao', 0)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
