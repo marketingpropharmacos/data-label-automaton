@@ -740,7 +740,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 1 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
                           fonte: Number(e.target.value),
                         },
                       })}
