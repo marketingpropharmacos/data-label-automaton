@@ -971,8 +971,8 @@ def teste_ppla_direto():
                 if linha == 'L':
                     ppla_bin += b"\x02L\r"
                 elif linha.startswith('f') and linha[1:].isdigit():
-                    # f289 = form feed command, ignorar (já tratado pelo STX L)
-                    continue
+                    # f289 = form length command - ESSENCIAL para definir tamanho da etiqueta
+                    ppla_bin += b"\x02" + linha.encode('cp1252', errors='replace') + b"\r"
                 elif linha == 'e':
                     # Gap sensor ON
                     ppla_bin += b"\x02e\r"
