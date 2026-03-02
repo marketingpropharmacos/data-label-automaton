@@ -422,34 +422,105 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
 
 
 def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.GRAN (76x25mm) - 8 linhas."""
+    """Layout A.PAC.GRAN (76x25mm) - Coordenadas exatas do Fórmula Certa.
+    
+    Referência FC:
+    f289 / L / e / PA / D11 / H14
+    Font=1, Rotation=1, form_length=289
+    Y positions (dots): 78, 67, 56, 45, 34, 23, 12, 1
+    Multi-coluna em Y=78(nome+REQ), Y=67(DR+CRM), Y=23(pH+L+F+V), Y=12(uso+aplic), Y=1(contem+reg)
+    """
     if not dims:
-        dims = PRINTER_CONFIGS['GRAND']
+        dims = PRINTER_CONFIGS.get('A_PAC_GRAN', PRINTER_CONFIGS['GRAND'])
     cal = calibracao or {}
     modo = cal.get('modo', 'dots')
-    cols = dims['cols_max']
-    font = cal.get('fonte', dims.get('font', 2))
-    rot = cal.get('rotacao', 0)
-    
+    cols = 57  # A.PAC.GRAN = 76mm, ~57 colunas
+    # FC usa Font=1, Rotation=1 para A.PAC.GRAN
+    font = cal.get('fonte', 1)
+    rot = cal.get('rotacao', 1)
+
     # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
-        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
-    
-    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
+        y_pos = [78, 67, 56, 45, 34, 23, 12, 1]
+        # Em modo textoLivre, usar dots direto (sem conversão mm)
+        linhas_texto = texto_livre.split('\n')
+        pplb_lines = []
+        for i, y in enumerate(y_pos):
+            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+            if line_text.strip():
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, 21, line_text[:cols]))
+        if not pplb_lines:
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, 78, 4, 'SEM DADOS'))
+        return ppla_full_label_dots(pplb_lines, contraste=cal.get('contraste', 14), form_length=289)
+
+    # === Geração estruturada com coordenadas exatas do FC ===
+    paciente = (rotulo.get('nomePaciente', '') or '').upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
+    composicao_full = (rotulo.get('composicao', '') or rotulo.get('formula', '') or '').upper()
+    ph = rotulo.get('ph', '')
+    lote = rotulo.get('lote', '')
+    fab = rotulo.get('dataFabricacao', '')
+    val = rotulo.get('dataValidade', '')
+    uso = (rotulo.get('tipoUso', '') or rotulo.get('posologia', '') or '').upper()
+    aplicacao = (rotulo.get('aplicacao', '') or '').upper()
+    contem = (rotulo.get('contem', '') or '').upper()
+    registro = str(rotulo.get('numeroRegistro', '') or '')
+
+    # Quebrar composição em até 3 linhas (~36 chars por linha)
+    comp_max = 36
+    comp_lines = []
+    remaining = composicao_full
+    while remaining and len(comp_lines) < 3:
+        comp_lines.append(remaining[:comp_max])
+        remaining = remaining[comp_max:]
+
+    linhas = []
     
-    linhas = [
-        _ppla_text(rot, font, 1, 1, 200, 10, paciente, modo),
-        _ppla_text(rot, font, 1, 1, 130, 10, f"REQ:{nr_req}-{nr_item}", modo),
-        _ppla_text(rot, font, 1, 1, 60,  10, f"DR.{nome_medico[:40]} {crm}", modo),
-    ]
+    # Linha Y=78: Nome paciente (X=4) + REQ (X=141)
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 4, paciente[:40]))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 141, f"REQ:{nr_req:>06s}-{nr_item}"))
     
-    return _build_label(linhas, dims, cal, modo)
+    # Linha Y=67: DR(A) (X=21) + CRM/COREN (X=159)
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 67, 21, f"DR(A){nome_medico[:30]}"))
+    if crm:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, 159, crm))
+    
+    # Linhas Y=56,45,34: Composição (X=21)
+    comp_y = [56, 45, 34]
+    for i, cy in enumerate(comp_y):
+        if i < len(comp_lines) and comp_lines[i].strip():
+            linhas.append(ppla_text_dots(rot, font, 1, 1, cy, 21, comp_lines[i]))
+    
+    # Linha Y=23: pH (X=21) + Lote (X=55) + Fab (X=98) + Val (X=137)
+    if ph:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 23, 21, f"pH:{ph}"))
+    if lote:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 23, 55, f"L:{lote}"))
+    if fab:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 23, 98, f"F:{fab}"))
+    if val:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 23, 137, f"V:{val}"))
+    
+    # Linha Y=12: Uso (X=21) + Aplicação (X=137)
+    if uso:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 12, 21, uso[:30]))
+    if aplicacao:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 12, 137, f"APLICACAO:{aplicacao}"))
+    
+    # Linha Y=1: Contém (X=21) + Registro (X=137)
+    if contem:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 1, 21, f"CONTEM:{contem}"))
+    if registro:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 1, 137, f"REG:{registro}"))
+
+    if not linhas:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 4, 'SEM DADOS'))
+
+    return ppla_full_label_dots(linhas, contraste=cal.get('contraste', 14), form_length=289)
 
 
 def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
