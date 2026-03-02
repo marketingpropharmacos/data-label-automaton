@@ -326,6 +326,12 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
     
+    # Se textoLivre foi editado na UI, usar diretamente
+    texto_livre = rotulo.get('textoLivre', '')
+    if texto_livre:
+        y_pos = [350, 310, 270, 230, 190, 150, 110, 70, 40, 20]
+        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
+    
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
@@ -364,20 +370,11 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
     
+    # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        linhas_texto = texto_livre.split('\n')
-        y_positions = [220, 180, 140, 100, 70, 40, 20]
-        pplb_lines = []
-        for i, y in enumerate(y_positions):
-            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
-            if line_text.strip():
-                pplb_lines.append(_ppla_text(rot, font, 1, 1, y, 10, line_text[:cols], modo))
-        if not pplb_lines:
-            paciente = (rotulo.get('nomePaciente', '') or 'SEM DADOS')[:cols].upper()
-            pplb_lines.append(_ppla_text(rot, font, 1, 1, 220, 10, paciente, modo))
-        
-        return _build_label(pplb_lines, dims, cal, modo)
+        y_pos = [220, 180, 140, 100, 70, 40, 20]
+        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -406,7 +403,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
 
 
 def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.GRAN (76x25mm) - 3 campos."""
+    """Layout A.PAC.GRAN (76x25mm) - 8 linhas."""
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
@@ -414,6 +411,12 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
+    
+    # Se textoLivre foi editado na UI, usar diretamente
+    texto_livre = rotulo.get('textoLivre', '')
+    if texto_livre:
+        y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
+        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
@@ -439,6 +442,12 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
+    
+    # Se textoLivre foi editado na UI, usar diretamente
+    texto_livre = rotulo.get('textoLivre', '')
+    if texto_livre:
+        y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
+        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
