@@ -118,8 +118,9 @@ def find_printer_match(requested: str) -> Optional[str]:
 # ============================================
 def ppla_text_mm(rot, font, wmult, hmult, y_01mm, x_01mm, data):
     """Gera uma linha de texto PPLA em modo milímetros.
-    Coordenadas em 0.1mm (4 dígitos). Ex: 0220 = 22.0mm do bottom."""
-    return f"1{rot}{font}{wmult}{hmult}{y_01mm:04d}{x_01mm:04d}{data}"
+    Coordenadas em 0.1mm (4 dígitos). Ex: 0220 = 22.0mm do bottom.
+    SEM '1' literal no prefixo - o primeiro dígito JÁ é a rotação."""
+    return f"{rot}{font}{wmult}{hmult}{y_01mm:04d}{x_01mm:04d}{data}"
 
 
 def ppla_setup_mm(altura_mm=25, margem_c=0, offset_r=0, contraste=12, velocidade='C'):
@@ -174,23 +175,25 @@ def ppla_full_label(linhas_texto, altura_mm=25, margem_c=0, offset_r=0, contrast
 # Sem comando 'm', coordenadas em dots (203 DPI = 8 dots/mm)
 # ============================================
 def ppla_text_dots(rot, font, wmult, hmult, y_dots, x_dots, data):
-    """Gera uma linha de texto PPLA em modo dots.
-    Coordenadas em dots (4 dígitos). Ex: 0160 = 160 dots = ~20mm do bottom."""
-    return f"1{rot}{font}{wmult}{hmult}{y_dots:04d}{x_dots:04d}{data}"
+    """Gera uma linha de texto PPLA em modo dots (formato FC).
+    Formato: R(1)F(1)H(1)V(1)Y(7 dígitos)X(4 dígitos)DATA
+    SEM '1' literal no prefixo - o primeiro dígito JÁ é a rotação."""
+    return f"{rot}{font}{wmult}{hmult}{y_dots:07d}{x_dots:04d}{data}"
 
 
-def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C'):
-    """Gera bloco de setup PPLA MÍNIMO em modo DOTS.
+def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C', form_length=289):
+    """Gera bloco de setup PPLA MÍNIMO compatível com Fórmula Certa.
     
-    Compatível com Fórmula Certa - APENAS os comandos essenciais:
-    STX L (entrar formatação), D11 (pixel), H (contraste).
-    SEM \x02e, SEM Q, SEM q, SEM P - o mínimo absoluto.
+    Formato FC exato: f289 / L / e / PA / D11 / H14
+    Sem STX, sem m, sem M, sem C, sem R - apenas o essencial do FC.
     """
     partes = [
-        f"\x02L",                          # Entrar modo formatação
-        f"D11",                            # Pixel size
+        f"f{form_length}",                 # Form length (FC usa f289 para 25mm)
+        "L",                               # Entrar modo formatação
+        "e",                               # Gap sensor
+        "PA",                              # Position Absolute
+        "D11",                             # Pixel size
         f"H{contraste:02d}",              # Contraste
-        f"Q0001",                          # Forçar 1 cópia (evita 38 etiquetas em branco)
     ]
     return "\r".join(partes) + "\r"
 
