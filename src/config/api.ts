@@ -115,7 +115,14 @@ export const getPrintAgentConfig = (): PrintAgentConfig => {
     const stored = localStorage.getItem(STORAGE_KEYS.PRINT_AGENT_CONFIG);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...DEFAULT_PRINT_AGENT_CONFIG, ...parsed };
+      return {
+        ...DEFAULT_PRINT_AGENT_CONFIG,
+        ...parsed,
+        calibracao: {
+          ...DEFAULT_PRINT_AGENT_CONFIG.calibracao,
+          ...(parsed.calibracao || {}),
+        },
+      };
     }
     return DEFAULT_PRINT_AGENT_CONFIG;
   } catch {
@@ -124,7 +131,15 @@ export const getPrintAgentConfig = (): PrintAgentConfig => {
 };
 
 export const setPrintAgentConfig = (config: PrintAgentConfig): void => {
-  localStorage.setItem(STORAGE_KEYS.PRINT_AGENT_CONFIG, JSON.stringify(config));
+  const normalized: PrintAgentConfig = {
+    ...DEFAULT_PRINT_AGENT_CONFIG,
+    ...config,
+    calibracao: {
+      ...DEFAULT_PRINT_AGENT_CONFIG.calibracao,
+      ...(config.calibracao || {}),
+    },
+  };
+  localStorage.setItem(STORAGE_KEYS.PRINT_AGENT_CONFIG, JSON.stringify(normalized));
 };
 
 export const getModoImpressao = (): ModoImpressao => {

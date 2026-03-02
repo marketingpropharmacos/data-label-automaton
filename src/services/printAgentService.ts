@@ -378,6 +378,7 @@ export const imprimirViaAgente = async (
       contraste: 12,
       fonte: 2,
       rotacao: 0,
+      modo: 'dots',
     };
 
     const payload = {

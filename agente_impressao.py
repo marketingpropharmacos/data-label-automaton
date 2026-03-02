@@ -296,7 +296,7 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
-    modo = cal.get('modo', 'mm')
+    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
@@ -340,7 +340,7 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     if not dims:
         dims = PRINTER_CONFIGS['AMP10']
     cal = calibracao or {}
-    modo = cal.get('modo', 'mm')
+    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
@@ -384,7 +384,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
     cal = calibracao or {}
-    modo = cal.get('modo', 'mm')
+    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
@@ -426,7 +426,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
-    modo = cal.get('modo', 'mm')
+    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
@@ -457,7 +457,7 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     if not dims:
         dims = PRINTER_CONFIGS['GRAND']
     cal = calibracao or {}
-    modo = cal.get('modo', 'mm')
+    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
     font = cal.get('fonte', dims.get('font', 2))
     rot = cal.get('rotacao', 0)
@@ -685,7 +685,7 @@ def imprimir():
 
     impressora = find_printer_match(impressora_req) or impressora_req
     logger.info(f"Impressora solicitada: '{impressora_req}' -> resolvida: '{impressora}'")
-    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 0)} Modo={calibracao.get('modo', 'mm')}")
+    logger.info(f"Calibração: C={calibracao.get('margem_c', 0)} R={calibracao.get('offset_r', 0)} Font={calibracao.get('fonte', 2)} Rot={calibracao.get('rotacao', 0)} Modo={calibracao.get('modo', 'dots')}")
 
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
     dims = get_printer_dims(impressora)
