@@ -947,6 +947,111 @@ export type Database = {
         }
         Relationships: []
       }
+      rv_config_colaboradores: {
+        Row: {
+          ativo: boolean
+          cnpj_empresa: string | null
+          colaborador_id: number
+          created_at: string
+          empresa_registro: string | null
+          laboratorio_id: number | null
+          loja_origem_id: number
+          meta_lab_tipo: string | null
+          nome: string
+          rv_percentual_custom: number | null
+          setor_lab: string | null
+          tipo: Database["public"]["Enums"]["rv_colaborador_tipo"]
+        }
+        Insert: {
+          ativo?: boolean
+          cnpj_empresa?: string | null
+          colaborador_id: number
+          created_at?: string
+          empresa_registro?: string | null
+          laboratorio_id?: number | null
+          loja_origem_id: number
+          meta_lab_tipo?: string | null
+          nome: string
+          rv_percentual_custom?: number | null
+          setor_lab?: string | null
+          tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
+        }
+        Update: {
+          ativo?: boolean
+          cnpj_empresa?: string | null
+          colaborador_id?: number
+          created_at?: string
+          empresa_registro?: string | null
+          laboratorio_id?: number | null
+          loja_origem_id?: number
+          meta_lab_tipo?: string | null
+          nome?: string
+          rv_percentual_custom?: number | null
+          setor_lab?: string | null
+          tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
+        }
+        Relationships: []
+      }
+      rv_lancamentos_manuais: {
+        Row: {
+          colaborador_id: number
+          competencia: string
+          componente: Database["public"]["Enums"]["rv_componente_manual"]
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: number
+          loja_id: number
+          quantidade: number | null
+          valor: number
+        }
+        Insert: {
+          colaborador_id: number
+          competencia: string
+          componente: Database["public"]["Enums"]["rv_componente_manual"]
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: never
+          loja_id: number
+          quantidade?: number | null
+          valor?: number
+        }
+        Update: {
+          colaborador_id?: number
+          competencia?: string
+          componente?: Database["public"]["Enums"]["rv_componente_manual"]
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: never
+          loja_id?: number
+          quantidade?: number | null
+          valor?: number
+        }
+        Relationships: []
+      }
+      rv_pec_metas: {
+        Row: {
+          ano: number
+          created_at: string
+          meta_percentual: number
+          trimestre: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          meta_percentual?: number
+          trimestre: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          meta_percentual?: number
+          trimestre?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -1286,6 +1391,21 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "operador"
+      rv_colaborador_tipo:
+        | "vendas"
+        | "laboratorio"
+        | "orcamentista"
+        | "representante"
+        | "lider"
+      rv_componente_manual:
+        | "orcamentista"
+        | "revitalize"
+        | "lab_producao"
+        | "deducao_quebra_caixa"
+        | "deducao_receita_344"
+        | "deducao_glosa"
+        | "deducao_inventario"
+        | "bonus_nao_faltou_remove"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1414,6 +1534,23 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "operador"],
+      rv_colaborador_tipo: [
+        "vendas",
+        "laboratorio",
+        "orcamentista",
+        "representante",
+        "lider",
+      ],
+      rv_componente_manual: [
+        "orcamentista",
+        "revitalize",
+        "lab_producao",
+        "deducao_quebra_caixa",
+        "deducao_receita_344",
+        "deducao_glosa",
+        "deducao_inventario",
+        "bonus_nao_faltou_remove",
+      ],
     },
   },
 } as const
