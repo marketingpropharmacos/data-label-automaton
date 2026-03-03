@@ -450,7 +450,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_pos = [98, 84, 70, 57, 43, 29, 15, 2]
+        y_pos = [109, 95, 81, 68, 54, 40, 26, 13]
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
         for i, y in enumerate(y_pos):
@@ -488,42 +488,42 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     
     # X em 0.1mm: 5→4dots, 27→21, 69→55, 123→98, 172→137, 177→141, 199→159
     
-    # Y=98(→78dots): Paciente + REQ
-    linhas.append(_ppla_text(rot, font, 1, 1, 98, 5, paciente[:40], modo))
-    linhas.append(_ppla_text(rot, font, 1, 1, 98, 177, f"REQ:{nr_req:>06s}-{nr_item}", modo))
+    # Y=109(→87dots): Paciente + REQ
+    linhas.append(_ppla_text(rot, font, 1, 1, 109, 5, paciente[:40], modo))
+    linhas.append(_ppla_text(rot, font, 1, 1, 109, 177, f"REQ:{nr_req:>06s}-{nr_item}", modo))
     
-    # Y=84(→67dots): DR(A) + CRM
-    linhas.append(_ppla_text(rot, font, 1, 1, 84, 27, f"DR(A){nome_medico[:30]}", modo))
+    # Y=95(→78dots): DR(A) + CRM
+    linhas.append(_ppla_text(rot, font, 1, 1, 95, 27, f"DR(A){nome_medico[:30]}", modo))
     if crm:
-        linhas.append(_ppla_text(rot, font, 1, 1, 84, 199, crm, modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 95, 199, crm, modo))
     
-    # Y=70,57,43(→56,45,34dots): Composição
-    comp_y = [70, 57, 43]
+    # Y=81,68,54(→65,54,43dots): Composição
+    comp_y = [81, 68, 54]
     for i, cy in enumerate(comp_y):
         if i < len(comp_lines) and comp_lines[i].strip():
             linhas.append(_ppla_text(rot, font, 1, 1, cy, 27, comp_lines[i], modo))
     
-    # Y=29(→23dots): pH + Lote + Fab + Val
+    # Y=40(→32dots): pH + Lote + Fab + Val
     if ph:
-        linhas.append(_ppla_text(rot, font, 1, 1, 29, 27, f"pH:{ph}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 40, 27, f"pH:{ph}", modo))
     if lote:
-        linhas.append(_ppla_text(rot, font, 1, 1, 29, 69, f"L:{lote}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 40, 69, f"L:{lote}", modo))
     if fab:
-        linhas.append(_ppla_text(rot, font, 1, 1, 29, 123, f"F:{fab}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 40, 123, f"F:{fab}", modo))
     if val:
-        linhas.append(_ppla_text(rot, font, 1, 1, 29, 172, f"V:{val}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 40, 172, f"V:{val}", modo))
     
-    # Y=15(→12dots): Uso + Aplicação
+    # Y=26(→21dots): Uso + Aplicação
     if uso:
-        linhas.append(_ppla_text(rot, font, 1, 1, 15, 27, uso[:30], modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 26, 27, uso[:30], modo))
     if aplicacao:
-        linhas.append(_ppla_text(rot, font, 1, 1, 15, 172, f"APLICACAO:{aplicacao}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 26, 172, f"APLICACAO:{aplicacao}", modo))
     
-    # Y=2(→1dots): Contém + Registro
+    # Y=13(→10dots): Contém + Registro
     if contem:
-        linhas.append(_ppla_text(rot, font, 1, 1, 2, 27, f"CONTEM:{contem}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 13, 27, f"CONTEM:{contem}", modo))
     if registro:
-        linhas.append(_ppla_text(rot, font, 1, 1, 2, 172, f"REG:{registro}", modo))
+        linhas.append(_ppla_text(rot, font, 1, 1, 13, 172, f"REG:{registro}", modo))
 
     if not linhas:
         linhas.append(_ppla_text(rot, font, 1, 1, 98, 5, 'SEM DADOS', modo))
