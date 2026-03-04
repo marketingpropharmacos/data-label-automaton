@@ -399,8 +399,8 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     font = 1
     rot = 1
     
-    # Coordenadas Y JÁ EM DOTS (validadas com FC)
-    y_pos = [231, 191, 151, 111, 81, 51, 31]
+    # Coordenadas Y DIRETAS em dots (restauradas para o layout PPLA de referência - 8 linhas)
+    y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
     x_start = 10  # dots
     
     # Se textoLivre foi editado na UI, usar diretamente
