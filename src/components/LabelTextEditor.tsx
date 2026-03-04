@@ -140,10 +140,48 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   return lines.slice(0, maxLines).join('\n');
 }
 
+// ---- A_PAC_GRAN specific generator (fixed grid, same header as PEQ) ----
+function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const maxCols = layoutConfig.colunasMax || 57;
+  const maxLines = layoutConfig.linhasMax || 8;
+
+  // Line 1: PACIENTE + REQ:RRRRRRR-N
+  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, 35);
+  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 10);
+  const req = `REQ:${reqNum}`;
+  const line1 = padLine(paciente, req, maxCols);
+
+  // Line 2: DR(A)MEDICO + CONSELHO-UF-NUMERO
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, 25) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoStr = tipo.conselho
+    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`.substring(0, 20)
+    : "";
+  const line2 = padLine(drName, conselhoStr, maxCols);
+
+  // Line 3: REG:XXXXX right-aligned
+  const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
+  const reg = regNum ? `REG:${regNum}` : "";
+  const line3 = padLine("", reg, maxCols);
+
+  // Lines 4-8: empty (available for manual editing)
+  const lines = [line1, line2, line3];
+  while (lines.length < maxLines) {
+    lines.push("");
+  }
+
+  return lines.slice(0, maxLines).join('\n');
+}
+
 function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  // Route to specific generator for A_PAC_PEQ
+  // Route to specific generators for fixed-grid layouts
   if (layoutConfig.tipo === 'A_PAC_PEQ') {
     return generateTextPacPeq(rotulo, layoutConfig);
+  }
+  if (layoutConfig.tipo === 'A_PAC_GRAN') {
+    return generateTextPacGran(rotulo, layoutConfig);
   }
 
   const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
