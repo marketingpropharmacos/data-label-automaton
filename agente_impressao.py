@@ -440,40 +440,39 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     return _build_label(linhas, dims, cal, modo)
 
 def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.GRAN (76x25mm) - Coordenadas exatas do Fórmula Certa.
+    """Layout A.PAC.GRAN (76x25mm) - Coordenadas em 0.1mm, convertidas para dots via ppla_text_dots.
     
-    Referência FC:
-    f289 / L / e / PA / D11 / H14
-    Font=1, Rotation=1 (FIXOS - ignorar calibração global)
-    Usa _ppla_text/_build_label (igual A.PAC.PEQ) para respeitar modo mm/dots.
-    Coordenadas em 0.1mm que produzem dots FC: 98→78, 84→67, 70→56, 57→45, 43→34, 29→23, 15→12, 2→1
+    Font=1, Rotation=1 (FIXOS - paridade FC)
+    Y em 0.1mm: 109, 95, 81, 68, 54, 40, 26, 13 → dots: 87, 76, 64, 54, 43, 32, 20, 10
+    X em 0.1mm: 5→4, 27→21, 69→55, 123→98, 172→137, 177→141, 199→159
     """
     if not dims:
         dims = PRINTER_CONFIGS.get('A_PAC_GRAN', PRINTER_CONFIGS['GRAND'])
     cal = calibracao or {}
-    # Paridade FC para A.PAC.GRAN: manter sempre em dots (independe da calibração de modo)
     modo = 'dots'
     cols = dims['cols_max']
-    
-    # FORÇAR Font=1 e Rot=1 do FC (ignorar calibração global)
     font = 1
     rot = 1
+
+    # Coordenadas Y DIRETAS em dots (pré-calculadas de 0.1mm * 0.8)
+    y_dots = [87, 76, 64, 54, 43, 32, 20, 10]
+    # Coordenadas X DIRETAS em dots
+    x_dots_map = {'left': 4, 'field': 21, 'col2': 55, 'col3': 98, 'col4': 137, 'req': 141, 'right': 159}
 
     # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_pos = [109, 95, 81, 68, 54, 40, 26, 13]
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
-        for i, y in enumerate(y_pos):
+        for i, y in enumerate(y_dots):
             line_text = linhas_texto[i] if i < len(linhas_texto) else ''
             if line_text.strip():
-                pplb_lines.append(_ppla_text(rot, font, 1, 1, y, 27, line_text[:cols], modo))
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['field'], line_text[:cols]))
         if not pplb_lines:
-            pplb_lines.append(_ppla_text(rot, font, 1, 1, 98, 5, 'SEM DADOS', modo))
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
         return _build_label(pplb_lines, dims, cal, modo)
 
-    # === Geração estruturada (coordenadas em 0.1mm) ===
+    # === Geração estruturada ===
     paciente = (rotulo.get('nomePaciente', '') or '').upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
@@ -498,50 +497,47 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
 
     linhas = []
     
-    # X em 0.1mm: 5→4dots, 27→21, 69→55, 123→98, 172→137, 177→141, 199→159
+    # Y[0]=87: Paciente + REQ
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], paciente[:40]))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['req'], f"REQ:{nr_req:>06s}-{nr_item}"))
     
-    # Y=109(→87dots): Paciente + REQ
-    linhas.append(_ppla_text(rot, font, 1, 1, 109, 5, paciente[:40], modo))
-    linhas.append(_ppla_text(rot, font, 1, 1, 109, 177, f"REQ:{nr_req:>06s}-{nr_item}", modo))
-    
-    # Y=95(→78dots): DR(A) + CRM
-    linhas.append(_ppla_text(rot, font, 1, 1, 95, 27, f"DR(A){nome_medico[:30]}", modo))
+    # Y[1]=76: DR(A) + CRM
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[1], x_dots_map['field'], f"DR(A){nome_medico[:30]}"))
     if crm:
-        linhas.append(_ppla_text(rot, font, 1, 1, 95, 199, crm, modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[1], x_dots_map['right'], crm))
     
-    # Y=81,68,54(→65,54,43dots): Composição
-    comp_y = [81, 68, 54]
+    # Y[2,3,4]: Composição
+    comp_y = [y_dots[2], y_dots[3], y_dots[4]]
     for i, cy in enumerate(comp_y):
         if i < len(comp_lines) and comp_lines[i].strip():
-            linhas.append(_ppla_text(rot, font, 1, 1, cy, 27, comp_lines[i], modo))
+            linhas.append(ppla_text_dots(rot, font, 1, 1, cy, x_dots_map['field'], comp_lines[i]))
     
-    # Y=40(→32dots): pH + Lote + Fab + Val
+    # Y[5]=32: pH + Lote + Fab + Val
     if ph:
-        linhas.append(_ppla_text(rot, font, 1, 1, 40, 27, f"pH:{ph}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['field'], f"pH:{ph}"))
     if lote:
-        linhas.append(_ppla_text(rot, font, 1, 1, 40, 69, f"L:{lote}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['col2'], f"L:{lote}"))
     if fab:
-        linhas.append(_ppla_text(rot, font, 1, 1, 40, 123, f"F:{fab}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['col3'], f"F:{fab}"))
     if val:
-        linhas.append(_ppla_text(rot, font, 1, 1, 40, 172, f"V:{val}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['col4'], f"V:{val}"))
     
-    # Y=26(→21dots): Uso + Aplicação
+    # Y[6]=20: Uso + Aplicação
     if uso:
-        linhas.append(_ppla_text(rot, font, 1, 1, 26, 27, uso[:30], modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['field'], uso[:30]))
     if aplicacao:
-        linhas.append(_ppla_text(rot, font, 1, 1, 26, 172, f"APLICACAO:{aplicacao}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['col4'], f"APLICACAO:{aplicacao}"))
     
-    # Y=13(→10dots): Contém + Registro
+    # Y[7]=10: Contém + Registro
     if contem:
-        linhas.append(_ppla_text(rot, font, 1, 1, 13, 27, f"CONTEM:{contem}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[7], x_dots_map['field'], f"CONTEM:{contem}"))
     if registro:
-        linhas.append(_ppla_text(rot, font, 1, 1, 13, 172, f"REG:{registro}", modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[7], x_dots_map['col4'], f"REG:{registro}"))
 
     if not linhas:
-        linhas.append(_ppla_text(rot, font, 1, 1, 98, 5, 'SEM DADOS', modo))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
 
     return _build_label(linhas, dims, cal, modo)
-
 
 def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     """Layout TIRZ/Tirzepatida (109x25mm) - 8 linhas."""
