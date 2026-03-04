@@ -330,15 +330,18 @@ const LabelTextEditor = ({
   // Initialize textoLivre on load or layout change
   useEffect(() => {
     if (rotulo) {
-      let generated = generateText(rotulo, layoutConfig);
+      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+
+      let generated = generateText(rotulo, layoutConfig, layoutType);
       if (maxCols && maxLines) {
-        generated = layoutConfig.tipo === 'A_PAC_PEQ'
+        generated = isFixedGrid
           ? truncateText(generated, maxCols, maxLines)
           : wrapText(generated, maxCols, maxLines);
       }
       onTextChange(rotulo.id, generated);
     }
-  }, [rotulo?.id, layoutConfig.tipo]);
+  }, [rotulo?.id, layoutType]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
