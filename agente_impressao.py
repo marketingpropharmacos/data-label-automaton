@@ -419,15 +419,16 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     registro = str(rotulo.get('numeroRegistro', '') or '')
     
     linhas = []
-    # Linha 1: Paciente (Y=78, X=21) + REQ (Y=78, X=116) — coordenadas idênticas à referência FC
+    # Linha 1: Paciente (Y=78, X=8) + REQ (Y=78, X=116)
+    # Ajuste: coluna esquerda levemente à esquerda para evitar sobreposição visual com REQ
     if paciente:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 21, paciente))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 8, paciente))
     req_str = f"REQ:{nr_req}-{nr_item}"
     linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 116, req_str))
     
-    # Linha 2: DR(A) (Y=67, X=21) + Conselho (Y=67, X=133) — coordenadas idênticas à referência FC
+    # Linha 2: DR(A) (Y=67, X=8) + Conselho (Y=67, X=133)
     if nome_medico:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, 21, f"DR(A){nome_medico}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, 8, f"DR(A){nome_medico}"))
     if crm:
         linhas.append(ppla_text_dots(rot, font, 1, 1, 67, 133, crm))
     
