@@ -128,7 +128,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
 
   // Line 3: REG:GGGGGGGG (8 chars) right-aligned
   const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = regNum ? `REG:${regNum}` : "";
+  const reg = `REG:${regNum}`;
   const line3 = padLine("", reg, maxCols);
 
   // Lines 4-8: empty (available for manual editing)
@@ -163,7 +163,7 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
 
   // Line 3: REG:XXXXX right-aligned
   const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = regNum ? `REG:${regNum}` : "";
+  const reg = `REG:${regNum}`;
   const line3 = padLine("", reg, maxCols);
 
   // Lines 4-8: empty (available for manual editing)
@@ -175,12 +175,29 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   return lines.slice(0, maxLines).join('\n');
 }
 
-function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType): LayoutType {
+  if (layoutType) return layoutType;
+
+  const rawTipo = (layoutConfig.tipo || "").toString().trim().toUpperCase().replace(/\./g, "_");
+  if (rawTipo === 'A_PAC_PEQ' || rawTipo === 'A_PAC_GRAN' || rawTipo === 'AMP_CX' || rawTipo === 'AMP10' || rawTipo === 'TIRZ') {
+    return rawTipo as LayoutType;
+  }
+
+  // Fallback por limites físicos do layout (evita quebrar quando tipo vem legado)
+  if (layoutConfig.colunasMax === 38 && layoutConfig.linhasMax === 8) return 'A_PAC_PEQ';
+  if (layoutConfig.colunasMax === 57 && layoutConfig.linhasMax === 8) return 'A_PAC_GRAN';
+
+  return layoutConfig.tipo;
+}
+
+function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType?: LayoutType): string {
+  const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+
   // Route to specific generators for fixed-grid layouts
-  if (layoutConfig.tipo === 'A_PAC_PEQ') {
+  if (resolvedLayoutTipo === 'A_PAC_PEQ') {
     return generateTextPacPeq(rotulo, layoutConfig);
   }
-  if (layoutConfig.tipo === 'A_PAC_GRAN') {
+  if (resolvedLayoutTipo === 'A_PAC_GRAN') {
     return generateTextPacGran(rotulo, layoutConfig);
   }
 
@@ -308,20 +325,23 @@ const LabelTextEditor = ({
   const maxCols = layoutConfig.colunasMax;
   const maxLines = layoutConfig.linhasMax;
 
-  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig);
+  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType);
 
   // Initialize textoLivre on load or layout change
   useEffect(() => {
     if (rotulo) {
-      let generated = generateText(rotulo, layoutConfig);
+      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+
+      let generated = generateText(rotulo, layoutConfig, layoutType);
       if (maxCols && maxLines) {
-        generated = layoutConfig.tipo === 'A_PAC_PEQ'
+        generated = isFixedGrid
           ? truncateText(generated, maxCols, maxLines)
           : wrapText(generated, maxCols, maxLines);
       }
       onTextChange(rotulo.id, generated);
     }
-  }, [rotulo?.id, layoutConfig.tipo]);
+  }, [rotulo?.id, layoutType]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
@@ -351,7 +371,9 @@ const LabelTextEditor = ({
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let newText = e.target.value;
     if (maxCols && maxLines) {
-      newText = layoutConfig.tipo === 'A_PAC_PEQ'
+      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      newText = isFixedGrid
         ? truncateText(newText, maxCols, maxLines)
         : wrapText(newText, maxCols, maxLines);
     }

@@ -32,7 +32,7 @@ const mapearRotulo = (data: any): RotuloItem => ({
   formula: data.formula || "",
   dataFabricacao: data.dataFabricacao || "",
   dataValidade: data.dataValidade || "",
-  numeroRegistro: data.numeroRegistro || "",
+  numeroRegistro: data.numeroRegistro || data.nrRegistro || data.registro || data.NRREG || data.reg || "",
   posologia: data.posologia || "",
   tipoUso: data.tipoUso || "",
   volume: data.volume || "",
