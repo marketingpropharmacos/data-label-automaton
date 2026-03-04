@@ -163,7 +163,7 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
 
   // Line 3: REG:XXXXX right-aligned
   const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = regNum ? `REG:${regNum}` : "";
+  const reg = `REG:${regNum}`;
   const line3 = padLine("", reg, maxCols);
 
   // Lines 4-8: empty (available for manual editing)
