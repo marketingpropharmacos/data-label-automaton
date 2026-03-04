@@ -1253,42 +1253,51 @@ export type Database = {
       rv_config_colaboradores: {
         Row: {
           ativo: boolean
+          cargo: string | null
           cnpj_empresa: string | null
           colaborador_id: number
           created_at: string
+          data_registro: string | null
           empresa_registro: string | null
           laboratorio_id: number | null
           loja_origem_id: number
           meta_lab_tipo: string | null
           nome: string
+          nome_completo: string | null
           rv_percentual_custom: number | null
           setor_lab: string | null
           tipo: Database["public"]["Enums"]["rv_colaborador_tipo"]
         }
         Insert: {
           ativo?: boolean
+          cargo?: string | null
           cnpj_empresa?: string | null
           colaborador_id: number
           created_at?: string
+          data_registro?: string | null
           empresa_registro?: string | null
           laboratorio_id?: number | null
           loja_origem_id: number
           meta_lab_tipo?: string | null
           nome: string
+          nome_completo?: string | null
           rv_percentual_custom?: number | null
           setor_lab?: string | null
           tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
         }
         Update: {
           ativo?: boolean
+          cargo?: string | null
           cnpj_empresa?: string | null
           colaborador_id?: number
           created_at?: string
+          data_registro?: string | null
           empresa_registro?: string | null
           laboratorio_id?: number | null
           loja_origem_id?: number
           meta_lab_tipo?: string | null
           nome?: string
+          nome_completo?: string | null
           rv_percentual_custom?: number | null
           setor_lab?: string | null
           tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
@@ -1700,6 +1709,9 @@ export type Database = {
         | "orcamentista"
         | "representante"
         | "lider"
+        | "apoio"
+        | "central"
+        | "supervisao"
       rv_componente_manual:
         | "orcamentista"
         | "revitalize"
@@ -1844,6 +1856,9 @@ export const Constants = {
         "orcamentista",
         "representante",
         "lider",
+        "apoio",
+        "central",
+        "supervisao",
       ],
       rv_componente_manual: [
         "orcamentista",
