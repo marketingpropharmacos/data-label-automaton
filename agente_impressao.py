@@ -676,7 +676,7 @@ def enviar_para_impressora(nome_impressora, comandos, aplicar_startup_guard=True
         try:
             _enviar_com_datatype(nome_impressora, dados, datatype)
             PRINTER_DATATYPE_CACHE[key] = datatype
-            _registrar_atividade(nome_impressora)
+            logger.info(f"[PRINT-OK] datatype='{datatype}' impressora='{nome_impressora}'")
             logger.info(f"Envio concluído com datatype '{datatype}' para '{nome_impressora}'")
             return {"success": True, "datatype": datatype}
         except Exception as e:
