@@ -454,8 +454,8 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     font = 1
     rot = 1
 
-    # Coordenadas Y DIRETAS em dots (pré-calculadas de 0.1mm * 0.8)
-    y_dots = [87, 76, 64, 54, 43, 32, 20, 10]
+    # Coordenadas Y DIRETAS em dots (referência FC capturada)
+    y_dots = [78, 67, 56, 45, 34, 23, 12, 1]
     # Coordenadas X DIRETAS em dots
     x_dots_map = {'left': 4, 'field': 21, 'col2': 55, 'col3': 98, 'col4': 137, 'req': 141, 'right': 159}
 
