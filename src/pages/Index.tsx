@@ -82,6 +82,11 @@ const Index = () => {
     setLayoutType(newType);
     setSelectedLayout(newType);
     setLayoutConfig(getLayout(newType));
+    // Auto-selecionar impressora associada ao layout
+    const mappedPrinter = getLayoutPrinter(newType);
+    if (mappedPrinter && availablePrinters.includes(mappedPrinter)) {
+      setSelectedPrinter(mappedPrinter);
+    }
   };
 
   const handleLayoutEditorSave = (newLayout: LayoutConfig) => {
