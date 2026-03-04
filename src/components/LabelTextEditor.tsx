@@ -371,7 +371,9 @@ const LabelTextEditor = ({
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     let newText = e.target.value;
     if (maxCols && maxLines) {
-      newText = layoutConfig.tipo === 'A_PAC_PEQ'
+      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      newText = isFixedGrid
         ? truncateText(newText, maxCols, maxLines)
         : wrapText(newText, maxCols, maxLines);
     }
