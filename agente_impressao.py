@@ -598,9 +598,6 @@ def _printer_key(nome_impressora: str) -> str:
 
 
 PRINTER_DATATYPE_CACHE: Dict[str, str] = {}
-PRINTER_LAST_ACTIVITY: Dict[str, float] = {}
-STARTUP_GUARD_IDLE_SECONDS = 4 * 60 * 60  # 4h sem uso => reaplica preâmbulo
-STARTUP_GUARD_PREAMBLE = "\x02L\r\x02e\r\x02PA\r\x02D11\r\x02H20\r"
 
 
 def _detectar_raw_type(nome_impressora):
@@ -643,17 +640,6 @@ def _candidatos_datatype(nome_impressora: str) -> List[str]:
     return ordem
 
 
-def _precisa_startup_guard(nome_impressora: str) -> bool:
-    """Aplica preâmbulo de estabilização no primeiro envio ou após longo período ocioso."""
-    key = _printer_key(nome_impressora)
-    last_ts = PRINTER_LAST_ACTIVITY.get(key)
-    if last_ts is None:
-        return True
-    return (time.time() - last_ts) > STARTUP_GUARD_IDLE_SECONDS
-
-
-def _registrar_atividade(nome_impressora: str) -> None:
-    PRINTER_LAST_ACTIVITY[_printer_key(nome_impressora)] = time.time()
 
 
 def _enviar_com_datatype(nome_impressora: str, dados: bytes, datatype: str) -> None:
@@ -671,7 +657,7 @@ def _enviar_com_datatype(nome_impressora: str, dados: bytes, datatype: str) -> N
 
 
 def enviar_para_impressora(nome_impressora, comandos, aplicar_startup_guard=True):
-    """Envia comandos para a impressora com estratégia robusta de datatype + guard de startup."""
+    """Envia comandos para a impressora com estratégia robusta de datatype."""
     if not PYWIN32_OK:
         preview = comandos[:500] if isinstance(comandos, str) else str(comandos[:120])
         logger.info(f"[SIMULAÇÃO] Enviando para {nome_impressora}:\n{preview}")
@@ -679,16 +665,8 @@ def enviar_para_impressora(nome_impressora, comandos, aplicar_startup_guard=True
 
     key = _printer_key(nome_impressora)
 
-    payload = comandos
-    if aplicar_startup_guard and _precisa_startup_guard(nome_impressora):
-        logger.info(f"[PRINT-GUARD] Aplicando preâmbulo de estabilização em '{nome_impressora}'")
-        if isinstance(payload, bytes):
-            payload = STARTUP_GUARD_PREAMBLE.encode('cp1252', errors='replace') + payload
-        else:
-            payload = STARTUP_GUARD_PREAMBLE + payload
-
     # String -> cp1252 (PPLA). Bytes -> passthrough (RAW exato).
-    dados = payload if isinstance(payload, bytes) else payload.encode('cp1252', errors='replace')
+    dados = comandos if isinstance(comandos, bytes) else comandos.encode('cp1252', errors='replace')
 
     candidatos = _candidatos_datatype(nome_impressora)
     logger.info(f"Datatypes candidatos para '{nome_impressora}': {candidatos}")
