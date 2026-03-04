@@ -154,3 +154,31 @@ export const getModoImpressao = (): ModoImpressao => {
 export const setModoImpressao = (modo: ModoImpressao): void => {
   localStorage.setItem(STORAGE_KEYS.MODO_IMPRESSAO, modo);
 };
+
+// Mapeamento layout → impressora padrão (configurável por estação)
+const LAYOUT_PRINTER_MAP_KEY = 'label-system-layout-printer-map';
+
+export type LayoutPrinterMap = Record<string, string>;
+
+export const getLayoutPrinterMap = (): LayoutPrinterMap => {
+  try {
+    const stored = localStorage.getItem(LAYOUT_PRINTER_MAP_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
+export const setLayoutPrinterMap = (map: LayoutPrinterMap): void => {
+  localStorage.setItem(LAYOUT_PRINTER_MAP_KEY, JSON.stringify(map));
+};
+
+export const setLayoutPrinter = (layout: string, printer: string): void => {
+  const map = getLayoutPrinterMap();
+  map[layout] = printer;
+  setLayoutPrinterMap(map);
+};
+
+export const getLayoutPrinter = (layout: string): string | undefined => {
+  return getLayoutPrinterMap()[layout];
+};
