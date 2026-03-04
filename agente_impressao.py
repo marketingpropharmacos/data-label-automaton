@@ -228,10 +228,12 @@ def mm_to_dots(value_01mm):
 # HELPERS de dados
 # ============================================
 def _crm_completo(rotulo):
+    """Formato FC: CONSELHO-UF-NUMERO (ex: COREN-SP-826211, CRM-MG-12345)."""
     prefixo = rotulo.get('prefixoCRM', '')
     numero = rotulo.get('numeroCRM', '')
     uf = rotulo.get('ufCRM', '')
-    return f"{prefixo}{numero}/{uf}".strip('/')
+    parts = [p for p in [prefixo, uf, numero] if p]
+    return '-'.join(parts) if parts else ''
 
 def _composicao(rotulo, max_len=50):
     comp = rotulo.get('composicao', '') or rotulo.get('formula', '')
