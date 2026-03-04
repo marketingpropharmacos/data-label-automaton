@@ -415,7 +415,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     crm_prefixo = rotulo.get('prefixoCRM', '') or ''
     crm_numero = rotulo.get('numeroCRM', '') or ''
     crm_uf = rotulo.get('ufCRM', '') or ''
-    crm = f"{crm_prefixo}{crm_uf}{crm_numero}" if crm_numero else ''
+    crm = f"{crm_prefixo}-{crm_uf}-{crm_numero}" if crm_numero else ''
     registro = str(rotulo.get('numeroRegistro', '') or '')
     
     linhas = []
