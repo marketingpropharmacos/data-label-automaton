@@ -349,6 +349,46 @@ const LabelSettings = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* ─── Seletor de Estação ─── */}
+              <div className="p-4 bg-muted rounded-lg space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Monitor className="h-4 w-4 text-primary" />
+                  <Label className="text-base font-semibold">Estação Ativa</Label>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {stations.map((station) => (
+                    <Button
+                      key={station.id}
+                      variant={activeStationId === station.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setActiveStationIdState(station.id);
+                        setActiveStationId(station.id);
+                        // Carregar config da estação selecionada
+                        setAgentConfigState({
+                          ...agentConfig,
+                          agentUrl: station.agentUrl,
+                          impressora: station.impressora,
+                          calibracao: station.calibracao || agentConfig.calibracao,
+                        });
+                        setIsAgentOnline(null);
+                        setAgentPrinters([]);
+                        toast({
+                          title: `Estação: ${station.nome}`,
+                          description: station.agentUrl || '(URL não configurada)',
+                        });
+                      }}
+                    >
+                      <Monitor className="h-3 w-3 mr-1" />
+                      {station.nome}
+                    </Button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Cada estação (PC) tem sua própria URL ngrok e impressora. Selecione a estação ativa para configurar.
+                </p>
+              </div>
+
               <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
                 <div className="space-y-0.5">
                   <Label htmlFor="agentEnabled" className="text-base font-medium">Usar Agente HTTP</Label>
@@ -364,15 +404,21 @@ const LabelSettings = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="agentUrl">URL do Agente</Label>
+                <Label htmlFor="agentUrl">URL do Agente ({stations.find(s => s.id === activeStationId)?.nome || 'Estação'})</Label>
                 <Input
                   id="agentUrl"
-                  placeholder="http://192.168.10.105:5001"
+                  placeholder="https://xxx.ngrok-free.dev"
                   value={agentConfig.agentUrl}
-                  onChange={(e) => setAgentConfigState({ ...agentConfig, agentUrl: e.target.value })}
+                  onChange={(e) => {
+                    setAgentConfigState({ ...agentConfig, agentUrl: e.target.value });
+                    // Também salvar na estação
+                    const updated = stations.map(s => s.id === activeStationId ? { ...s, agentUrl: e.target.value } : s);
+                    setStationsState(updated);
+                    setPrintStations(updated);
+                  }}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Endereço do agente Flask rodando no PC da impressora (porta 5001)
+                  URL HTTPS do ngrok da estação selecionada
                 </p>
               </div>
 
@@ -380,7 +426,12 @@ const LabelSettings = () => {
                 <Label htmlFor="agentPrinter">Impressora</Label>
                 <Select
                   value={agentConfig.impressora}
-                  onValueChange={(value) => setAgentConfigState({ ...agentConfig, impressora: value })}
+                  onValueChange={(value) => {
+                    setAgentConfigState({ ...agentConfig, impressora: value });
+                    const updated = stations.map(s => s.id === activeStationId ? { ...s, impressora: value } : s);
+                    setStationsState(updated);
+                    setPrintStations(updated);
+                  }}
                 >
                   <SelectTrigger id="agentPrinter">
                     <SelectValue placeholder="Selecione a impressora" />
@@ -405,7 +456,14 @@ const LabelSettings = () => {
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                <Button onClick={handleSaveAgent}>
+                <Button onClick={() => {
+                  setPrintAgentConfig(agentConfig);
+                  // Salvar estação também
+                  const updated = stations.map(s => s.id === activeStationId ? { ...s, agentUrl: agentConfig.agentUrl, impressora: agentConfig.impressora, calibracao: agentConfig.calibracao } : s);
+                  setStationsState(updated);
+                  setPrintStations(updated);
+                  toast({ title: "Configurações salvas", description: `Estação ${stations.find(s => s.id === activeStationId)?.nome} atualizada.` });
+                }}>
                   <Save className="h-4 w-4 mr-2" />
                   Salvar
                 </Button>
