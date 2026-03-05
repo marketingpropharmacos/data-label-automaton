@@ -78,6 +78,12 @@ PRINTER_CONFIGS = {
         'y_positions_mm': [98, 84, 70, 57, 43, 29, 15, 2],
         'font': 1,
     },
+    'AMP_CX': {
+        'largura_mm': 109, 'altura_mm': 25,
+        'largura_dots': 873, 'altura_dots': 200, 'gap_dots': 24,
+        'cols_max': 73,
+        'font': 9,
+    },
 }
 
 def get_printer_dims(nome_impressora):
@@ -301,48 +307,106 @@ def _gerar_from_texto_livre(texto_livre, y_positions, x_start, rot, font, cols, 
     return _build_label(pplb_lines, dims, cal, modo)
 
 
-def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout AMP_CX (109x25mm) - 8 linhas."""
-    if not dims:
-        dims = PRINTER_CONFIGS['GRAND']
-    cal = calibracao or {}
-    modo = cal.get('modo', 'dots')
-    cols = dims['cols_max']
-    font = cal.get('fonte', dims.get('font', 2))
-    rot = cal.get('rotacao', 0)
+def _build_label_ampcx(linhas, dims, cal):
+    """Build AMP_CX label with FC-exact setup: f250, PB, H14."""
+    contraste = cal.get('contraste', 14)
+    setup_parts = [
+        "\x02f250",
+        "\x02L",
+        "\x02e",
+        "PB",
+        "D11",
+        f"H{contraste:02d}",
+    ]
+    setup = "\r".join(setup_parts) + "\r"
+    content = "\r".join(linhas)
+    return setup + content + "\r" + "Q0001E\r"
 
-    # Se textoLivre foi editado na UI, usar diretamente
+
+def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
+    """Layout AMP_CX (109x25mm) - Coordenadas FC exatas.
+    
+    Font=9, Rotation=1 (FIXOS - paridade FC)
+    Setup: f250, PB, D11, H14
+    Y levels: 10082, 10073, 10064, 10055, 10046, 10037, 10028
+    X positions: 24(left), 142(REQ), 171(APLICACAO), 176(REG)
+    """
+    if not dims:
+        dims = PRINTER_CONFIGS.get('AMP_CX', PRINTER_CONFIGS['GRAND'])
+    cal = calibracao or {}
+    modo = 'dots'
+    cols = dims['cols_max']
+    font = 9
+    rot = 1
+
+    # Coordenadas Y DIRETAS do FC capturado
+    y_dots = [10082, 10073, 10064, 10055, 10046, 10037, 10028]
+    # Coordenadas X DIRETAS do FC capturado
+    x_dots_map = {'left': 24, 'req': 142, 'aplicacao': 171, 'reg': 176}
+
+    # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
-        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
+        linhas_texto = texto_livre.split('\n')
+        pplb_lines = []
+        for i, y in enumerate(y_dots):
+            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+            if line_text.strip():
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['left'], line_text[:cols]))
+        if not pplb_lines:
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
+        return _build_label_ampcx(pplb_lines, dims, cal)
 
-    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
+    # === Geração estruturada (paridade FC) ===
+    paciente = (rotulo.get('nomePaciente', '') or '').upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
     crm = _crm_completo(rotulo)
-    composicao = _composicao(rotulo, cols)
-    linha_meta = _linha_meta(rotulo)
-    aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
-    contem = (rotulo.get('contem', '') or '')[:30].upper()
+    composicao_full = (rotulo.get('composicao', '') or rotulo.get('formula', '') or '').upper()
+    uso = (rotulo.get('tipoUso', '') or rotulo.get('posologia', '') or '').upper()
+    aplicacao = (rotulo.get('aplicacao', '') or '').upper()
+    contem = (rotulo.get('contem', '') or '').upper()
     registro = str(rotulo.get('numeroRegistro', '') or '')
-    
-    y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
-    x_start = 10
-    
-    linhas = [
-        _ppla_text(rot, font, 1, 1, y_pos[0], x_start, paciente, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[0], 300, f"REQ:{nr_req}-{nr_item}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[2], x_start, composicao, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[3], x_start, linha_meta, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[4], x_start, f"APLICACAO: {aplicacao}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[5], x_start, f"CONTEM: {contem}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[6], x_start, f"Reg: {registro}", modo),
-    ]
-    
-    return _build_label(linhas, dims, cal, modo)
+
+    # Split composição into up to 3 lines
+    comp_max = 60
+    comp_lines = []
+    remaining = composicao_full
+    while remaining and len(comp_lines) < 3:
+        comp_lines.append(remaining[:comp_max])
+        remaining = remaining[comp_max:]
+
+    linhas = []
+
+    # Y[0]=10082: Paciente + REQ
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], paciente[:55]))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['req'], f"REQ:{nr_req}-{nr_item}"))
+
+    # Y[1]=10073: DR(A) + CRM
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[1], x_dots_map['left'], f"DR(A){nome_medico[:30]} {crm}"))
+
+    # Y[2,3,4]: Composição (até 3 linhas)
+    for i in range(3):
+        if i < len(comp_lines) and comp_lines[i].strip():
+            linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[2 + i], x_dots_map['left'], comp_lines[i]))
+
+    # Y[5]=10037: Uso + Aplicação
+    if uso:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['left'], uso[:30]))
+    if aplicacao:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['aplicacao'], f"APLICACAO:{aplicacao}"))
+
+    # Y[6]=10028: Contém + REG
+    if contem:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['left'], f"CONTEM: {contem}"))
+    if registro:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['reg'], f"REG:{registro}"))
+
+    if not linhas:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
+
+    return _build_label_ampcx(linhas, dims, cal)
 
 
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
