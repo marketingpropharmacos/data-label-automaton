@@ -409,12 +409,12 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     font = 1
     rot = 1
     
-    # Coordenadas FC (ajuste fino solicitado: deslocar um pouco para a esquerda)
+    # Coordenadas FC (novo ajuste: deslocamento mais forte para a esquerda)
     # Linha 1 (Paciente+REQ): Y=78, Linha 2 (Médico+Conselho): Y=67, Linha 3 (REG): Y=12
-    # X: esquerda=18, REQ/REG=112, Conselho=129
-    x_left = 18
-    x_req_reg = 112
-    x_conselho = 129
+    # X: esquerda=8, REQ/REG=100, Conselho=116
+    x_left = 8
+    x_req_reg = 100
+    x_conselho = 116
 
     # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
