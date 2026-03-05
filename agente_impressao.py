@@ -419,7 +419,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_positions = [78, 67, 56, 45, 34, 23, 12]
+        y_positions = [89, 78, 67, 56, 45, 34, 23]
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
         for i, y in enumerate(y_positions):
@@ -439,21 +439,21 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
 
     linhas = []
-    # Linha 1: Paciente (Y=78, X=18) + REQ (Y=78, X=112)
+    # Linha 1: Paciente (Y=89) + REQ (Y=89)
     if paciente:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_left, paciente))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 89, x_left, paciente))
     req_str = f"REQ:{nr_req}-{nr_item}"
-    linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_req_reg, req_str))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 89, x_req_reg, req_str))
 
-    # Linha 2: DR(A) (Y=67, X=18) + Conselho (Y=67, X=129)
+    # Linha 2: DR(A) (Y=78) + Conselho (Y=78)
     if nome_medico:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, x_left, f"DR(A){nome_medico}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_left, f"DR(A){nome_medico}"))
     if crm:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, x_conselho, crm))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_conselho, crm))
     
-    # Linha REG (Y=12, X=112)
+    # Linha REG (Y=23)
     if registro:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 12, x_req_reg, f"REG:{registro}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 23, x_req_reg, f"REG:{registro}"))
 
     if not linhas:
         linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_left, 'SEM DADOS'))
