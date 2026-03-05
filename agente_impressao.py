@@ -451,12 +451,12 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     if crm:
         linhas.append(ppla_text_dots(rot, font, 1, 1, 67, x_conselho, crm))
     
-    # Linha REG (Y=12, X=116)
+    # Linha REG (Y=12, X=112)
     if registro:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 12, 116, f"REG:{registro}"))
-    
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 12, x_req_reg, f"REG:{registro}"))
+
     if not linhas:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, 21, 'SEM DADOS'))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_left, 'SEM DADOS'))
     
     return _build_label(linhas, dims, cal, modo)
 
