@@ -1304,6 +1304,105 @@ export type Database = {
         }
         Relationships: []
       }
+      rv_lab_metas: {
+        Row: {
+          ativo: boolean
+          colaborador_id: number
+          laboratorio_id: number
+          meta_formulas_dia: number | null
+          meta_producao: number | null
+          meta_tipo: string
+          setor: string
+          valor_unitario: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          colaborador_id: number
+          laboratorio_id: number
+          meta_formulas_dia?: number | null
+          meta_producao?: number | null
+          meta_tipo: string
+          setor: string
+          valor_unitario?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          colaborador_id?: number
+          laboratorio_id?: number
+          meta_formulas_dia?: number | null
+          meta_producao?: number | null
+          meta_tipo?: string
+          setor?: string
+          valor_unitario?: number | null
+        }
+        Relationships: []
+      }
+      rv_lab_metas_vendas: {
+        Row: {
+          ano: number
+          laboratorio_id: number
+          mes: number
+          meta_vendas: number
+        }
+        Insert: {
+          ano: number
+          laboratorio_id: number
+          mes: number
+          meta_vendas: number
+        }
+        Update: {
+          ano?: number
+          laboratorio_id?: number
+          mes?: number
+          meta_vendas?: number
+        }
+        Relationships: []
+      }
+      rv_lab_producao_diaria: {
+        Row: {
+          colaborador_id: number
+          competencia: string
+          created_at: string
+          created_by: string | null
+          data_lancamento: string
+          formulas_dia: number
+          id: number
+          laboratorio_id: number
+          observacao: string | null
+          producao_itens: number
+          setor: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: number
+          competencia: string
+          created_at?: string
+          created_by?: string | null
+          data_lancamento: string
+          formulas_dia?: number
+          id?: never
+          laboratorio_id: number
+          observacao?: string | null
+          producao_itens?: number
+          setor: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: number
+          competencia?: string
+          created_at?: string
+          created_by?: string | null
+          data_lancamento?: string
+          formulas_dia?: number
+          id?: never
+          laboratorio_id?: number
+          observacao?: string | null
+          producao_itens?: number
+          setor?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rv_lancamentos_manuais: {
         Row: {
           colaborador_id: number
