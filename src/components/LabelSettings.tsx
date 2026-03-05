@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, ArrowLeftRight, Send } from "lucide-react";
+import { Settings, Save, RefreshCw, Layout, Edit2, Printer, TestTube, Wifi, WifiOff, FileCode, Copy, ArrowLeftRight, Send, Monitor, Plus, Trash2 } from "lucide-react";
 import { type SuggestedFixes, type CalibrationFix } from "@/utils/pplaParser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,11 @@ import {
   setPharmacyConfig,
   getPrintAgentConfig,
   setPrintAgentConfig,
+  getPrintStations,
+  setPrintStations,
+  getActiveStationId,
+  setActiveStationId,
+  type PrintStation,
 } from "@/config/api";
 import { verificarConexao } from "@/services/requisicaoService";
 import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, testeProgressivoAgente, testeDotsAgente, testePplaDireto } from "@/services/printAgentService";
