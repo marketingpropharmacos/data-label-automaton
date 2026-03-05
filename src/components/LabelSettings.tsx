@@ -57,6 +57,10 @@ const LabelSettings = () => {
   const [apiConfig, setApiConfigState] = useState<ApiConfig>(getApiConfig());
   const [pharmacyConfig, setPharmacyConfigState] = useState<PharmacyConfig>(getPharmacyConfig());
   const [agentConfig, setAgentConfigState] = useState<PrintAgentConfig>(getPrintAgentConfig());
+  
+  // Multi-estação
+  const [stations, setStationsState] = useState<PrintStation[]>(getPrintStations());
+  const [activeStationId, setActiveStationIdState] = useState<string>(getActiveStationId());
 
   // Auto-salvar agentConfig sempre que mudar
   useEffect(() => {
