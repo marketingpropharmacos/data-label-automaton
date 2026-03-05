@@ -182,3 +182,65 @@ export const setLayoutPrinter = (layout: string, printer: string): void => {
 export const getLayoutPrinter = (layout: string): string | undefined => {
   return getLayoutPrinterMap()[layout];
 };
+
+// ─── Estações de Impressão (multi-PC) ───
+export interface PrintStation {
+  id: string;
+  nome: string;
+  agentUrl: string;
+  impressora: string;
+  calibracao?: import("@/types/requisicao").PrinterCalibrationConfig;
+}
+
+const STATIONS_KEY = 'label-system-print-stations';
+const ACTIVE_STATION_KEY = 'label-system-active-station';
+
+const DEFAULT_STATIONS: PrintStation[] = [
+  {
+    id: 'edi',
+    nome: 'PC da Edi',
+    agentUrl: '',
+    impressora: 'PEQUENO',
+  },
+  {
+    id: 'daniel',
+    nome: 'PC do Daniel',
+    agentUrl: 'https://nonethnical-leaden-veda.ngrok-free.dev',
+    impressora: 'argox01',
+  },
+];
+
+export const getPrintStations = (): PrintStation[] => {
+  try {
+    const stored = localStorage.getItem(STATIONS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    return DEFAULT_STATIONS;
+  } catch {
+    return DEFAULT_STATIONS;
+  }
+};
+
+export const setPrintStations = (stations: PrintStation[]): void => {
+  localStorage.setItem(STATIONS_KEY, JSON.stringify(stations));
+};
+
+export const getActiveStationId = (): string => {
+  try {
+    return localStorage.getItem(ACTIVE_STATION_KEY) || 'edi';
+  } catch {
+    return 'edi';
+  }
+};
+
+export const setActiveStationId = (id: string): void => {
+  localStorage.setItem(ACTIVE_STATION_KEY, id);
+};
+
+export const getActiveStation = (): PrintStation | undefined => {
+  const stations = getPrintStations();
+  const activeId = getActiveStationId();
+  return stations.find(s => s.id === activeId) || stations[0];
+};
