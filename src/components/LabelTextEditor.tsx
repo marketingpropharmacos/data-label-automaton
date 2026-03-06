@@ -215,8 +215,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     if (tipoUsoValido || aplicacao) {
       const usoLine = tipoUsoValido && aplicacao
-        ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
-        : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
+        ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
+        : tipoUsoValido || `APLICACAO:${aplicacao}`;
       lines.push(usoLine.substring(0, maxCols));
     }
 
