@@ -140,6 +140,134 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   return lines.slice(0, maxLines).join('\n');
 }
 
+// ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
+function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const maxCols = layoutConfig.colunasMax || 73;
+  const maxLines = layoutConfig.linhasMax || 8;
+
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoStr = tipo.conselho
+    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`
+    : "";
+
+  const isKit = rotulo.tipoItem === 'KIT' && rotulo.componentes && rotulo.componentes.length > 0;
+
+  if (isKit && rotulo.componentes) {
+    // KIT mode: each component gets its own line with metadata
+    const lines: string[] = [];
+
+    // Line 1: PACIENTE + REQ
+    const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, maxCols - 16);
+    const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 12);
+    lines.push(padLine(paciente, `REQ:${reqNum}`, maxCols));
+
+    // Line 2: DR(A)MEDICO + CONSELHO
+    const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
+    const drName = medico ? `DR(A)${medico}` : "";
+    lines.push(padLine(drName, conselhoStr, maxCols));
+
+    // Component lines with metadata
+    rotulo.componentes.forEach((comp) => {
+      const nomeExibicao = rotulo.eSinonimo
+        ? (comp.composicao || formatarNomeComponente(comp.nome))
+        : formatarNomeComponente(comp.nome);
+      lines.push(nomeExibicao.substring(0, maxCols));
+
+      const meta: string[] = [];
+      if (comp.ph) meta.push(`pH:${comp.ph}`);
+      if (comp.lote) meta.push(`L:${comp.lote}`);
+      if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
+      if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
+      if (meta.length > 0) lines.push(meta.join("  ").substring(0, maxCols));
+    });
+
+    // Usage + Application
+    const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
+    const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+    const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
+    if (tipoUsoValido || aplicacao) {
+      const usoLine = tipoUsoValido && aplicacao
+        ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
+        : tipoUsoValido || `APLICACAO:${aplicacao}`;
+      lines.push(usoLine.substring(0, maxCols));
+    }
+
+    // Contains + REG
+    const contemParts: string[] = [];
+    if (rotulo.contem) contemParts.push(`CONTEM: ${rotulo.contem}`);
+    const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+    if (contemParts.length > 0 || regStr) {
+      lines.push(padLine(contemParts.join(""), regStr, maxCols));
+    }
+
+    while (lines.length < maxLines) lines.push("");
+    return lines.slice(0, maxLines).join('\n');
+  }
+
+  // NON-KIT mode (Mescla or Item Único)
+  const lines: string[] = [];
+
+  // Line 1: PACIENTE + REQ
+  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, maxCols - 16);
+  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 12);
+  lines.push(padLine(paciente, `REQ:${reqNum}`, maxCols));
+
+  // Line 2: DR(A)MEDICO + CONSELHO
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  lines.push(padLine(drName, conselhoStr, maxCols));
+
+  // Line 3: Composição/Fórmula
+  const mescla = isValidComposicao(rotulo.composicao || "");
+  if (mescla) {
+    // Wrap composição across available lines
+    const compText = rotulo.composicao!.toUpperCase();
+    const compLines = wrapText(compText, maxCols, 3).split('\n');
+    compLines.forEach(l => lines.push(l));
+  } else {
+    const f = formatarFormula(rotulo.formula);
+    if (f) lines.push(f.substring(0, maxCols));
+  }
+
+  // Line: pH + Lote + Fabricação + Validade
+  const metaParts: string[] = [];
+  if (rotulo.ph) metaParts.push(`pH:${rotulo.ph}`);
+  const lote = rotulo.lote || "";
+  if (lote) {
+    if (lote.includes('/')) {
+      metaParts.push(`L:${lote}`);
+    } else {
+      const ano = formatarDataCurta(rotulo.dataFabricacao).split('/')[1] || "";
+      metaParts.push(`L:${lote}${ano ? '/' + ano : ''}`);
+    }
+  }
+  if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
+  if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
+  if (metaParts.length > 0) lines.push(metaParts.join("  ").substring(0, maxCols));
+
+  // Line: Tipo Uso + Aplicação
+  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
+  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
+  if (tipoUsoValido || aplicacao) {
+    const usoLine = tipoUsoValido && aplicacao
+      ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
+      : tipoUsoValido || `APLICACAO:${aplicacao}`;
+    lines.push(usoLine.substring(0, maxCols));
+  }
+
+  // Line: Contém + REG
+  const contemStr = rotulo.contem ? `CONTEM: ${rotulo.contem}` : "";
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+  if (contemStr || regStr) {
+    lines.push(padLine(contemStr, regStr, maxCols));
+  }
+
+  while (lines.length < maxLines) lines.push("");
+  return lines.slice(0, maxLines).join('\n');
+}
+
 // ---- A_PAC_GRAN specific generator (fixed grid, same header as PEQ) ----
 function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const maxCols = layoutConfig.colunasMax || 57;
@@ -193,12 +321,15 @@ function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType):
 function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType?: LayoutType): string {
   const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
 
-  // Route to specific generators for fixed-grid layouts
+  // Route to specific generators for each layout
   if (resolvedLayoutTipo === 'A_PAC_PEQ') {
     return generateTextPacPeq(rotulo, layoutConfig);
   }
   if (resolvedLayoutTipo === 'A_PAC_GRAN') {
     return generateTextPacGran(rotulo, layoutConfig);
+  }
+  if (resolvedLayoutTipo === 'AMP_CX') {
+    return generateTextAmpCx(rotulo, layoutConfig);
   }
 
   const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
@@ -331,7 +462,7 @@ const LabelTextEditor = ({
   useEffect(() => {
     if (rotulo) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
 
       let generated = generateText(rotulo, layoutConfig, layoutType);
       if (maxCols && maxLines) {
@@ -372,7 +503,7 @@ const LabelTextEditor = ({
     let newText = e.target.value;
     if (maxCols && maxLines) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
       newText = isFixedGrid
         ? truncateText(newText, maxCols, maxLines)
         : wrapText(newText, maxCols, maxLines);
