@@ -2968,10 +2968,18 @@ def buscar_requisicao(nr_requisicao):
         
         tipo_forma = row[15]
         
+        # Limpa nomePaciente: remove números/telefones prefixados
+        # Ex: "57 988 335 EMILY BRITO DA SILVA" -> "EMILY BRITO DA SILVA"
+        nome_paciente_raw = (row[2] or "").strip()
+        nome_paciente_limpo = re.sub(r'^[\d\s\-().+]+', '', nome_paciente_raw).strip()
+        # Se a limpeza removeu tudo, usa o original
+        if not nome_paciente_limpo or len(nome_paciente_limpo) < 3:
+            nome_paciente_limpo = nome_paciente_raw
+        
         dados_base = {
             "nrRequisicao": str(row[0]),
             "codigoFilial": str(row[1]),
-            "nomePaciente": row[2] or "",
+            "nomePaciente": nome_paciente_limpo,
             "prefixoCRM": row[3] or "",
             "numeroCRM": row[4] or "",
             "ufCRM": row[5] or "",
