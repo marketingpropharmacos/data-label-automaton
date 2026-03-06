@@ -2988,7 +2988,7 @@ def buscar_requisicao(nr_requisicao):
             "dataValidade": row[7].strftime('%d/%m/%Y') if row[7] else "",
             "numeroRegistro": row[8] or "",
             "posologia": row[9] or "",
-            "tipoUso": row[10] or "",
+            "tipoUso": mapear_tipo_uso(row[10] or ""),
             "observacoesFicha": row[11] or "",
             "volume": str(row[12]) if row[12] else "",
             "unidadeVolume": row[13] or "",
@@ -3964,7 +3964,7 @@ def buscar_requisicao(nr_requisicao):
                 
                 # Se encontrou múltiplos ativos diferentes, pode ser mescla
                 if len(ativos) > 1:
-                    composicao = " + ".join(ativos)
+                    composicao = ", ".join(ativos)
                     e_mescla = True
                     nome_formula = simplificar_nome_mescla(nome_produto)
             
