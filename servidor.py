@@ -68,6 +68,27 @@ def norm_texto(txt: str) -> str:
     txt = re.sub(r"[^A-Z0-9: /_-]+", "", txt)
     return txt.strip()
 
+# Mapeamento de TPUSO (código numérico) para texto legível
+TIPO_USO_MAP = {
+    '1': 'USO INTERNO',
+    '2': 'USO EXTERNO',
+    '3': 'USO EM CONSULTORIO',
+    '4': 'USO VETERINARIO',
+    '5': 'USO TOPICO',
+    '6': 'USO OFTALMICO',
+    '7': 'USO NASAL',
+    '8': 'USO ORAL',
+}
+
+def mapear_tipo_uso(tpuso):
+    """Converte código numérico TPUSO para texto descritivo."""
+    if not tpuso:
+        return ""
+    tpuso_str = str(tpuso).strip()
+    # Se já é texto (não numérico puro), retorna como está
+    if not tpuso_str.isdigit():
+        return tpuso_str
+    return TIPO_USO_MAP.get(tpuso_str, tpuso_str)
 
 # =====================================================
 # FUNÇÕES DE CLASSIFICAÇÃO: EMBALAGEM vs ATIVO
