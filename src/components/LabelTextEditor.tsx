@@ -159,16 +159,16 @@ function padReqNumber(nr: string): string {
   return num.padStart(6, '0');
 }
 
-// ---- Format conselho like FC: CONSELHO-UF-NUMERO ----
+// ---- Format conselho like FC: CONSELHO.UF-NUMERO (dot notation) ----
 function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string): string {
   const codigo = (prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   if (!tipo.conselho || !ufCRM || !numeroCRM) return "";
-  // If prefixoCRM is already a council name (not a single char code), use it directly
+  // If prefixoCRM is already a council name (not a single char code), use it directly with dot
   if (codigo.length > 1 && !/^\d+$/.test(codigo)) {
-    return `${codigo}-${ufCRM}-${numeroCRM}`;
+    return `${codigo}.${ufCRM}-${numeroCRM}`;
   }
-  return `${tipo.conselho}-${ufCRM}-${numeroCRM}`;
+  return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
 }
 
 // ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
