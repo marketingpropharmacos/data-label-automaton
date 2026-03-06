@@ -253,9 +253,12 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     if (f) lines.push(f.substring(0, maxCols));
   }
 
-  // Line: pH + Lote + Fabricação + Validade
+  // Line: pH + Lote + Fabricação + Validade (4 spaces between each)
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${rotulo.ph}`);
+  if (rotulo.ph) {
+    const phVal = String(rotulo.ph).replace('.', ',');
+    metaParts.push(`pH:${phVal}`);
+  }
   const lote = rotulo.lote || "";
   if (lote) {
     if (lote.includes('/')) {
@@ -267,7 +270,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   }
   if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
   if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
-  if (metaParts.length > 0) lines.push(metaParts.join("  ").substring(0, maxCols));
+  if (metaParts.length > 0) lines.push(metaParts.join("    ").substring(0, maxCols));
 
   // Line: Tipo Uso + Aplicação
   const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
@@ -275,8 +278,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   if (tipoUsoValido || aplicacao) {
     const usoLine = tipoUsoValido && aplicacao
-      ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
-      : tipoUsoValido || `APLICACAO:${aplicacao}`;
+      ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
+      : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
     lines.push(usoLine.substring(0, maxCols));
   }
 
