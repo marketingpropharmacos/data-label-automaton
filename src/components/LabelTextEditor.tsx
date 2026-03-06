@@ -145,27 +145,46 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   return lines.slice(0, maxLines).join('\n');
 }
 
+// ---- Clean patient name: remove leading phone numbers/digits ----
+function cleanPatientName(name: string): string {
+  if (!name) return "";
+  // Remove leading digits, spaces, and phone-like patterns (e.g. "57 988 335 ")
+  return name.replace(/^[\d\s]+/, '').trim();
+}
+
+// ---- Zero-pad requisition number to 6 digits ----
+function padReqNumber(nr: string): string {
+  if (!nr) return "000000";
+  const num = nr.replace(/\D/g, '');
+  return num.padStart(6, '0');
+}
+
+// ---- Format conselho with dots like FC: CNE.GR-SP-4804 ----
+function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string): string {
+  const codigo = (prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  if (!tipo.conselho) return "";
+  // FC format uses dots: CNE.GR-SP-4804
+  return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
+}
+
 // ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
 function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const maxCols = layoutConfig.colunasMax || 73;
   const maxLines = layoutConfig.linhasMax || 8;
 
-  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
-  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-  const conselhoStr = tipo.conselho
-    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`
-    : "";
+  const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
+  const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
+  const reqPadded = padReqNumber(rotulo.nrRequisicao);
+  const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
 
   const isKit = rotulo.tipoItem === 'KIT' && rotulo.componentes && rotulo.componentes.length > 0;
 
   if (isKit && rotulo.componentes) {
-    // KIT mode: each component gets its own line with metadata
     const lines: string[] = [];
 
     // Line 1: PACIENTE + REQ
-    const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, maxCols - 16);
-    const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 12);
-    lines.push(padLine(paciente, `REQ:${reqNum}`, maxCols));
+    lines.push(padLine(cleanName.substring(0, maxCols - reqStr.length - 2), reqStr, maxCols));
 
     // Line 2: DR(A)MEDICO + CONSELHO
     const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
@@ -193,17 +212,16 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     if (tipoUsoValido || aplicacao) {
       const usoLine = tipoUsoValido && aplicacao
-        ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
-        : tipoUsoValido || `APLICACAO:${aplicacao}`;
+        ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
+        : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
       lines.push(usoLine.substring(0, maxCols));
     }
 
     // Contains + REG
-    const contemParts: string[] = [];
-    if (rotulo.contem) contemParts.push(`CONTEM: ${rotulo.contem}`);
+    const contemStr = rotulo.contem ? `CONTEM: ${rotulo.contem}` : "";
     const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-    if (contemParts.length > 0 || regStr) {
-      lines.push(padLine(contemParts.join(""), regStr, maxCols));
+    if (contemStr || regStr) {
+      lines.push(padLine(contemStr, regStr, maxCols));
     }
 
     while (lines.length < maxLines) lines.push("");
@@ -213,20 +231,17 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   // NON-KIT mode (Mescla or Item Único)
   const lines: string[] = [];
 
-  // Line 1: PACIENTE + REQ
-  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, maxCols - 16);
-  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 12);
-  lines.push(padLine(paciente, `REQ:${reqNum}`, maxCols));
+  // Line 1: PACIENTE + REQ:008051-0
+  lines.push(padLine(cleanName.substring(0, maxCols - reqStr.length - 2), reqStr, maxCols));
 
-  // Line 2: DR(A)MEDICO + CONSELHO
+  // Line 2: DR(A)MEDICO + CONSELHO (dot format like FC)
   const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
   const drName = medico ? `DR(A)${medico}` : "";
   lines.push(padLine(drName, conselhoStr, maxCols));
 
-  // Line 3: Composição/Fórmula
+  // Line 3: Composição/Fórmula (comma-separated, not +)
   const mescla = isValidComposicao(rotulo.composicao || "");
   if (mescla) {
-    // Wrap composição across available lines
     const compText = rotulo.composicao!.toUpperCase();
     const compLines = wrapText(compText, maxCols, 3).split('\n');
     compLines.forEach(l => lines.push(l));
@@ -257,8 +272,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   if (tipoUsoValido || aplicacao) {
     const usoLine = tipoUsoValido && aplicacao
-      ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
-      : tipoUsoValido || `APLICACAO:${aplicacao}`;
+      ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
+      : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
     lines.push(usoLine.substring(0, maxCols));
   }
 
