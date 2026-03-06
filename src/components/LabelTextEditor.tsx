@@ -94,7 +94,12 @@ const formatarNomeComponente = (nome: string): string => {
 
 const isValidComposicao = (texto: string): boolean => {
   if (!texto?.trim()) return false;
-  return !/^[\d.,;\s]+$/.test(texto.trim());
+  // Reject purely numeric/punctuation strings
+  if (/^[\d.,;\s]+$/.test(texto.trim())) return false;
+  // Reject IBPT/tax data (semicolon-separated numbers, fiscal codes)
+  if (/IBPT|EMPRESOMETRO|NCM:|CFOP:|CST:/i.test(texto)) return false;
+  if ((texto.match(/;/g) || []).length >= 3) return false;
+  return true;
 };
 
 const tiposPrescritores: Record<string, { conselho: string }> = {

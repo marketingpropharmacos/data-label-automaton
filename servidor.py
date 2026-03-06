@@ -110,11 +110,24 @@ def is_embalagem_ou_obs(linha: str) -> bool:
         'MENOR 3CM', 'MENOR 4CM', 'MENOR 5CM',
         # Registro (não é ativo)
         'REG:',
+        # Dados tributários/fiscais (IBPT)
+        'IBPT', 'EMPRESOMETRO', 'NCM:', 'CFOP:', 'CST:',
     ]
     
     for keyword in EMBALAGEM_KEYWORDS:
         if keyword in linha_norm:
             return True
+    
+    # Padrão de dados fiscais: múltiplos números separados por ponto-e-vírgula
+    # Ex: "32.09;46.69;0.0.1," ou "4.20;18.48;18.00;0.00;01/10/2018;..."
+    if ';' in linha_norm:
+        # Conta segmentos separados por ";"
+        segmentos = linha_norm.split(';')
+        if len(segmentos) >= 3:
+            # Se maioria dos segmentos são números/datas, é dado fiscal
+            numericos = sum(1 for s in segmentos if re.match(r'^[\d.,/\s]+$', s.strip()))
+            if numericos >= len(segmentos) * 0.5:
+                return True
     
     return False
 
@@ -2955,10 +2968,18 @@ def buscar_requisicao(nr_requisicao):
         
         tipo_forma = row[15]
         
+        # Limpa nomePaciente: remove números/telefones prefixados
+        # Ex: "57 988 335 EMILY BRITO DA SILVA" -> "EMILY BRITO DA SILVA"
+        nome_paciente_raw = (row[2] or "").strip()
+        nome_paciente_limpo = re.sub(r'^[\d\s\-().+]+', '', nome_paciente_raw).strip()
+        # Se a limpeza removeu tudo, usa o original
+        if not nome_paciente_limpo or len(nome_paciente_limpo) < 3:
+            nome_paciente_limpo = nome_paciente_raw
+        
         dados_base = {
             "nrRequisicao": str(row[0]),
             "codigoFilial": str(row[1]),
-            "nomePaciente": row[2] or "",
+            "nomePaciente": nome_paciente_limpo,
             "prefixoCRM": row[3] or "",
             "numeroCRM": row[4] or "",
             "ufCRM": row[5] or "",
