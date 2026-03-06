@@ -159,13 +159,16 @@ function padReqNumber(nr: string): string {
   return num.padStart(6, '0');
 }
 
-// ---- Format conselho with dots like FC: CNE.GR-SP-4804 ----
+// ---- Format conselho like FC: CONSELHO-UF-NUMERO ----
 function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string): string {
   const codigo = (prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-  if (!tipo.conselho) return "";
-  // FC format uses dots: CNE.GR-SP-4804
-  return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
+  if (!tipo.conselho || !ufCRM || !numeroCRM) return "";
+  // If prefixoCRM is already a council name (not a single char code), use it directly
+  if (codigo.length > 1 && !/^\d+$/.test(codigo)) {
+    return `${codigo}-${ufCRM}-${numeroCRM}`;
+  }
+  return `${tipo.conselho}-${ufCRM}-${numeroCRM}`;
 }
 
 // ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
@@ -212,8 +215,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     if (tipoUsoValido || aplicacao) {
       const usoLine = tipoUsoValido && aplicacao
-        ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
-        : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
+        ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
+        : tipoUsoValido || `APLICACAO:${aplicacao}`;
       lines.push(usoLine.substring(0, maxCols));
     }
 
@@ -272,8 +275,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   if (tipoUsoValido || aplicacao) {
     const usoLine = tipoUsoValido && aplicacao
-      ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
-      : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
+      ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
+      : tipoUsoValido || `APLICACAO:${aplicacao}`;
     lines.push(usoLine.substring(0, maxCols));
   }
 

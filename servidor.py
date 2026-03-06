@@ -68,6 +68,27 @@ def norm_texto(txt: str) -> str:
     txt = re.sub(r"[^A-Z0-9: /_-]+", "", txt)
     return txt.strip()
 
+# Mapeamento de TPUSO (código numérico) para texto legível
+TIPO_USO_MAP = {
+    '1': 'USO INTERNO',
+    '2': 'USO EXTERNO',
+    '3': 'USO EM CONSULTORIO',
+    '4': 'USO VETERINARIO',
+    '5': 'USO TOPICO',
+    '6': 'USO OFTALMICO',
+    '7': 'USO NASAL',
+    '8': 'USO ORAL',
+}
+
+def mapear_tipo_uso(tpuso):
+    """Converte código numérico TPUSO para texto descritivo."""
+    if not tpuso:
+        return ""
+    tpuso_str = str(tpuso).strip()
+    # Se já é texto (não numérico puro), retorna como está
+    if not tpuso_str.isdigit():
+        return tpuso_str
+    return TIPO_USO_MAP.get(tpuso_str, tpuso_str)
 
 # =====================================================
 # FUNÇÕES DE CLASSIFICAÇÃO: EMBALAGEM vs ATIVO
@@ -2988,7 +3009,7 @@ def buscar_requisicao(nr_requisicao):
             "dataValidade": row[7].strftime('%d/%m/%Y') if row[7] else "",
             "numeroRegistro": row[8] or "",
             "posologia": row[9] or "",
-            "tipoUso": row[10] or "",
+            "tipoUso": mapear_tipo_uso(row[10] or ""),
             "observacoesFicha": row[11] or "",
             "volume": str(row[12]) if row[12] else "",
             "unidadeVolume": row[13] or "",
@@ -3964,7 +3985,7 @@ def buscar_requisicao(nr_requisicao):
                 
                 # Se encontrou múltiplos ativos diferentes, pode ser mescla
                 if len(ativos) > 1:
-                    composicao = " + ".join(ativos)
+                    composicao = ", ".join(ativos)
                     e_mescla = True
                     nome_formula = simplificar_nome_mescla(nome_produto)
             
@@ -4195,6 +4216,15 @@ def buscar_requisicao(nr_requisicao):
             else:
                 tipo_item = "PRODUTO ÚNICO"
             
+            # Busca pH do produto na FC06100
+            ph_item = ""
+            try:
+                ph_item = buscar_ph_componente(cursor, cdpro, filial)
+                if not ph_item and cdprin and cdprin != cdpro:
+                    ph_item = buscar_ph_componente(cursor, cdprin, filial)
+            except Exception as e:
+                print(f"  [pH] Erro ao buscar pH: {e}")
+            
             rotulo = {
                 **dados_base,
                 "nrItem": str(serier),  # Usa SERIER do banco - número exato da barra no FórmulaCerta
@@ -4208,6 +4238,7 @@ def buscar_requisicao(nr_requisicao):
                 "descricaoProduto": descricao_produto,
                 "observacoes": composicao,
                 "tipoItem": tipo_item,
+                "ph": ph_item,
             }
             
             # Se é KIT, adiciona dados completos ao rótulo
