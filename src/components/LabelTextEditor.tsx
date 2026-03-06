@@ -176,6 +176,25 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const maxCols = layoutConfig.colunasMax || 73;
   const maxLines = layoutConfig.linhasMax || 8;
 
+  // Colunas visuais aproximadas do layout de referência (mais próximas, sem jogar tudo no extremo direito)
+  const reqCol = 44;
+  const conselhoCol = 42;
+  const aplicacaoCol = 34;
+  const regCol = 46;
+
+  const placeAtColumn = (left: string, right: string, rightCol: number): string => {
+    const safeLeft = (left || "").substring(0, maxCols);
+    const safeRight = (right || "").substring(0, maxCols);
+
+    if (!safeRight) return safeLeft.substring(0, maxCols);
+
+    const leftMax = Math.max(0, rightCol - 1);
+    const trimmedLeft = safeLeft.substring(0, leftMax);
+    const spaces = Math.max(1, rightCol - trimmedLeft.length);
+
+    return (trimmedLeft + " ".repeat(spaces) + safeRight).substring(0, maxCols);
+  };
+
   const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
   const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
   const reqPadded = padReqNumber(rotulo.nrRequisicao);
@@ -186,13 +205,13 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   if (isKit && rotulo.componentes) {
     const lines: string[] = [];
 
-    // Line 1: PACIENTE + REQ
-    lines.push(padLine(cleanName.substring(0, maxCols - reqStr.length - 2), reqStr, maxCols));
+    // Line 1: PACIENTE + REQ (mais próximo, como referência)
+    lines.push(placeAtColumn(cleanName, reqStr, reqCol));
 
     // Line 2: DR(A)MEDICO + CONSELHO
-    const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
+    const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
     const drName = medico ? `DR(A)${medico}` : "";
-    lines.push(padLine(drName, conselhoStr, maxCols));
+    lines.push(placeAtColumn(drName, conselhoStr, conselhoCol));
 
     // Component lines with metadata
     rotulo.componentes.forEach((comp) => {
@@ -202,11 +221,11 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       lines.push(nomeExibicao.substring(0, maxCols));
 
       const meta: string[] = [];
-      if (comp.ph) meta.push(`pH:${comp.ph}`);
+      if (comp.ph) meta.push(`pH:${String(comp.ph).replace('.', ',')}`);
       if (comp.lote) meta.push(`L:${comp.lote}`);
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (meta.length > 0) lines.push(meta.join("  ").substring(0, maxCols));
+      if (meta.length > 0) lines.push(meta.join("    ").substring(0, maxCols));
     });
 
     // Usage + Application
@@ -214,18 +233,14 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     if (tipoUsoValido || aplicacao) {
-      const usoLine = tipoUsoValido && aplicacao
-        ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
-        : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
-      lines.push(usoLine.substring(0, maxCols));
+      const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
+      lines.push(placeAtColumn(tipoUsoValido, right, aplicacaoCol));
     }
 
-    // Contains + REG
-    const contemStr = rotulo.contem ? `CONTEM: ${rotulo.contem}` : "";
+    // Contains + REG (CONTEM sempre visível para preenchimento manual)
+    const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM: ";
     const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-    if (contemStr || regStr) {
-      lines.push(padLine(contemStr, regStr, maxCols));
-    }
+    lines.push(placeAtColumn(contemStr, regStr, regCol));
 
     while (lines.length < maxLines) lines.push("");
     return lines.slice(0, maxLines).join('\n');
@@ -234,15 +249,15 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   // NON-KIT mode (Mescla or Item Único)
   const lines: string[] = [];
 
-  // Line 1: PACIENTE + REQ:008051-0
-  lines.push(padLine(cleanName.substring(0, maxCols - reqStr.length - 2), reqStr, maxCols));
+  // Line 1: PACIENTE + REQ
+  lines.push(placeAtColumn(cleanName, reqStr, reqCol));
 
-  // Line 2: DR(A)MEDICO + CONSELHO (dot format like FC)
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - conselhoStr.length - 10) : "";
+  // Line 2: DR(A)MEDICO + CONSELHO
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
   const drName = medico ? `DR(A)${medico}` : "";
-  lines.push(padLine(drName, conselhoStr, maxCols));
+  lines.push(placeAtColumn(drName, conselhoStr, conselhoCol));
 
-  // Line 3: Composição/Fórmula (comma-separated, not +)
+  // Line 3: Composição/Fórmula
   const mescla = isValidComposicao(rotulo.composicao || "");
   if (mescla) {
     const compText = rotulo.composicao!.toUpperCase();
@@ -253,7 +268,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     if (f) lines.push(f.substring(0, maxCols));
   }
 
-  // Line: pH + Lote + Fabricação + Validade (4 spaces between each)
+  // Line: pH + Lote + Fabricação + Validade
   const metaParts: string[] = [];
   if (rotulo.ph) {
     const phVal = String(rotulo.ph).replace('.', ',');
@@ -277,18 +292,14 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   if (tipoUsoValido || aplicacao) {
-    const usoLine = tipoUsoValido && aplicacao
-      ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
-      : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
-    lines.push(usoLine.substring(0, maxCols));
+    const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
+    lines.push(placeAtColumn(tipoUsoValido, right, aplicacaoCol));
   }
 
-  // Line: Contém + REG
-  const contemStr = rotulo.contem ? `CONTEM: ${rotulo.contem}` : "";
+  // Line: Contém + REG (CONTEM sempre visível para preenchimento manual)
+  const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM: ";
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  if (contemStr || regStr) {
-    lines.push(padLine(contemStr, regStr, maxCols));
-  }
+  lines.push(placeAtColumn(contemStr, regStr, regCol));
 
   while (lines.length < maxLines) lines.push("");
   return lines.slice(0, maxLines).join('\n');
