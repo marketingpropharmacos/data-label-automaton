@@ -159,16 +159,16 @@ function padReqNumber(nr: string): string {
   return num.padStart(6, '0');
 }
 
-// ---- Format conselho like FC: CONSELHO-UF-NUMERO ----
+// ---- Format conselho like FC: CONSELHO.UF-NUMERO (dot notation) ----
 function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string): string {
   const codigo = (prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   if (!tipo.conselho || !ufCRM || !numeroCRM) return "";
-  // If prefixoCRM is already a council name (not a single char code), use it directly
+  // If prefixoCRM is already a council name (not a single char code), use it directly with dot
   if (codigo.length > 1 && !/^\d+$/.test(codigo)) {
-    return `${codigo}-${ufCRM}-${numeroCRM}`;
+    return `${codigo}.${ufCRM}-${numeroCRM}`;
   }
-  return `${tipo.conselho}-${ufCRM}-${numeroCRM}`;
+  return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
 }
 
 // ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
@@ -215,8 +215,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     if (tipoUsoValido || aplicacao) {
       const usoLine = tipoUsoValido && aplicacao
-        ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
-        : tipoUsoValido || `APLICACAO:${aplicacao}`;
+        ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
+        : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
       lines.push(usoLine.substring(0, maxCols));
     }
 
@@ -253,9 +253,12 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     if (f) lines.push(f.substring(0, maxCols));
   }
 
-  // Line: pH + Lote + Fabricação + Validade
+  // Line: pH + Lote + Fabricação + Validade (4 spaces between each)
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${rotulo.ph}`);
+  if (rotulo.ph) {
+    const phVal = String(rotulo.ph).replace('.', ',');
+    metaParts.push(`pH:${phVal}`);
+  }
   const lote = rotulo.lote || "";
   if (lote) {
     if (lote.includes('/')) {
@@ -267,7 +270,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   }
   if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
   if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
-  if (metaParts.length > 0) lines.push(metaParts.join("  ").substring(0, maxCols));
+  if (metaParts.length > 0) lines.push(metaParts.join("    ").substring(0, maxCols));
 
   // Line: Tipo Uso + Aplicação
   const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
@@ -275,8 +278,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   if (tipoUsoValido || aplicacao) {
     const usoLine = tipoUsoValido && aplicacao
-      ? padLine(tipoUsoValido, `APLICACAO:${aplicacao}`, maxCols)
-      : tipoUsoValido || `APLICACAO:${aplicacao}`;
+      ? padLine(tipoUsoValido, `APLICAÇÃO:${aplicacao}`, maxCols)
+      : tipoUsoValido || `APLICAÇÃO:${aplicacao}`;
     lines.push(usoLine.substring(0, maxCols));
   }
 
