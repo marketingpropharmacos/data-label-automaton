@@ -4195,6 +4195,15 @@ def buscar_requisicao(nr_requisicao):
             else:
                 tipo_item = "PRODUTO ÚNICO"
             
+            # Busca pH do produto na FC06100
+            ph_item = ""
+            try:
+                ph_item = buscar_ph_componente(cursor, cdpro, filial)
+                if not ph_item and cdprin and cdprin != cdpro:
+                    ph_item = buscar_ph_componente(cursor, cdprin, filial)
+            except Exception as e:
+                print(f"  [pH] Erro ao buscar pH: {e}")
+            
             rotulo = {
                 **dados_base,
                 "nrItem": str(serier),  # Usa SERIER do banco - número exato da barra no FórmulaCerta
@@ -4208,6 +4217,7 @@ def buscar_requisicao(nr_requisicao):
                 "descricaoProduto": descricao_produto,
                 "observacoes": composicao,
                 "tipoItem": tipo_item,
+                "ph": ph_item,
             }
             
             # Se é KIT, adiciona dados completos ao rótulo
