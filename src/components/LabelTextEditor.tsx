@@ -462,7 +462,7 @@ const LabelTextEditor = ({
   useEffect(() => {
     if (rotulo) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
 
       let generated = generateText(rotulo, layoutConfig, layoutType);
       if (maxCols && maxLines) {
@@ -503,7 +503,7 @@ const LabelTextEditor = ({
     let newText = e.target.value;
     if (maxCols && maxLines) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN';
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
       newText = isFixedGrid
         ? truncateText(newText, maxCols, maxLines)
         : wrapText(newText, maxCols, maxLines);
