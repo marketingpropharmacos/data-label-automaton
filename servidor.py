@@ -118,6 +118,17 @@ def is_embalagem_ou_obs(linha: str) -> bool:
         if keyword in linha_norm:
             return True
     
+    # Padrão de dados fiscais: múltiplos números separados por ponto-e-vírgula
+    # Ex: "32.09;46.69;0.0.1," ou "4.20;18.48;18.00;0.00;01/10/2018;..."
+    if ';' in linha_norm:
+        # Conta segmentos separados por ";"
+        segmentos = linha_norm.split(';')
+        if len(segmentos) >= 3:
+            # Se maioria dos segmentos são números/datas, é dado fiscal
+            numericos = sum(1 for s in segmentos if re.match(r'^[\d.,/\s]+$', s.strip()))
+            if numericos >= len(segmentos) * 0.5:
+                return True
+    
     return False
 
 
