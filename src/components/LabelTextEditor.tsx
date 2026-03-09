@@ -299,13 +299,11 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   const maxCols = layoutConfig.colunasMax || 57;
   const maxLines = layoutConfig.linhasMax || 8;
 
-  // Line 1: PACIENTE + REQ:RRRRRRR-N
   const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, 35);
   const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 10);
   const req = `REQ:${reqNum}`;
   const line1 = padLine(paciente, req, maxCols);
 
-  // Line 2: DR(A)MEDICO + CONSELHO-UF-NUMERO
   const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, 25) : "";
   const drName = medico ? `DR(A)${medico}` : "";
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
@@ -315,17 +313,163 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
     : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // Line 3: REG:XXXXX right-aligned
   const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
   const reg = `REG:${regNum}`;
   const line3 = padLine("", reg, maxCols);
 
-  // Lines 4-8: empty (available for manual editing)
   const lines = [line1, line2, line3];
-  while (lines.length < maxLines) {
-    lines.push("");
+  while (lines.length < maxLines) lines.push("");
+  return lines.slice(0, maxLines).join('\n');
+}
+
+// ---- AMP10 specific generator (89x38mm, 65 cols x 10 lines) ----
+function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const maxCols = layoutConfig.colunasMax || 65;
+  const maxLines = layoutConfig.linhasMax || 10;
+
+  const compactLine = (left: string, right: string): string => {
+    const safeLeft = (left || "").trim();
+    const safeRight = (right || "").trim();
+    if (safeLeft && safeRight) return `${safeLeft} ${safeRight}`.substring(0, maxCols);
+    return (safeLeft || safeRight).substring(0, maxCols);
+  };
+
+  const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
+  const reqPadded = padReqNumber(rotulo.nrRequisicao);
+  const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
+
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoStr = tipo.conselho
+    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`
+    : "";
+
+  const isKit = rotulo.tipoItem === 'KIT' && rotulo.componentes && rotulo.componentes.length > 0;
+  const lines: string[] = [];
+
+  lines.push(compactLine(cleanName, reqStr));
+
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  lines.push(compactLine(drName, conselhoStr));
+
+  if (isKit && rotulo.componentes) {
+    rotulo.componentes.forEach((comp) => {
+      const nomeExibicao = rotulo.eSinonimo
+        ? (comp.composicao || formatarNomeComponente(comp.nome))
+        : formatarNomeComponente(comp.nome);
+      lines.push(nomeExibicao.substring(0, maxCols));
+      const meta: string[] = [];
+      if (comp.ph) meta.push(`pH:${String(comp.ph).replace('.', ',')}`);
+      if (comp.lote) meta.push(`L:${comp.lote}`);
+      if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
+      if (comp.aplicacao) meta.push(`APLICAÇÃO:${comp.aplicacao}`);
+      if (meta.length > 0) lines.push(meta.join(" ").substring(0, maxCols));
+    });
+  } else {
+    const mescla = isValidComposicao(rotulo.composicao || "");
+    if (mescla) {
+      const compText = rotulo.composicao!.toUpperCase();
+      wrapText(compText, maxCols, 3).split('\n').forEach(l => lines.push(l));
+    } else {
+      const f = formatarFormula(rotulo.formula);
+      if (f) lines.push(f.substring(0, maxCols));
+    }
   }
 
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+  if (regStr) lines.push(regStr);
+
+  const metaParts: string[] = [];
+  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  if (rotulo.lote) {
+    const lote = rotulo.lote;
+    if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
+    else {
+      const ano = formatarDataCurta(rotulo.dataFabricacao).split('/')[1] || "";
+      metaParts.push(`L:${lote}${ano ? '/' + ano : ''}`);
+    }
+  }
+  if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
+  const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
+  if (aplicacao) metaParts.push(`APLICAÇÃO:${aplicacao}`);
+  if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
+
+  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
+  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  const posologia = rotulo.posologia?.toUpperCase() || "";
+  if (tipoUsoValido || posologia) {
+    const posStr = posologia ? `POS:${posologia}` : "";
+    lines.push(compactLine(tipoUsoValido, posStr));
+  }
+
+  while (lines.length < maxLines) lines.push("");
+  return lines.slice(0, maxLines).join('\n');
+}
+
+// ---- TIRZ specific generator (109x25mm, 73 cols x 8 lines) ----
+function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
+  const maxCols = layoutConfig.colunasMax || 73;
+  const maxLines = layoutConfig.linhasMax || 8;
+
+  const compactLine = (left: string, right: string): string => {
+    const safeLeft = (left || "").trim();
+    const safeRight = (right || "").trim();
+    if (safeLeft && safeRight) return `${safeLeft} ${safeRight}`.substring(0, maxCols);
+    return (safeLeft || safeRight).substring(0, maxCols);
+  };
+
+  const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
+  const reqPadded = padReqNumber(rotulo.nrRequisicao);
+  const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
+
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoStr = tipo.conselho
+    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`
+    : "";
+
+  const lines: string[] = [];
+
+  lines.push(compactLine(cleanName, reqStr));
+
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  lines.push(compactLine(drName, conselhoStr));
+
+  const f = formatarFormula(rotulo.formula);
+  if (f) lines.push(f.substring(0, maxCols));
+
+  const posologia = rotulo.posologia?.toUpperCase() || "";
+  if (posologia) lines.push(`POS:${posologia}`.substring(0, maxCols));
+
+  const metaParts: string[] = [];
+  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  if (rotulo.lote) {
+    const lote = rotulo.lote;
+    if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
+    else {
+      const ano = formatarDataCurta(rotulo.dataFabricacao).split('/')[1] || "";
+      metaParts.push(`L:${lote}${ano ? '/' + ano : ''}`);
+    }
+  }
+  if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
+  if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
+  if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
+
+  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
+  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
+  if (tipoUsoValido || aplicacao) {
+    const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
+    lines.push(compactLine(tipoUsoValido, right));
+  }
+
+  const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM:";
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+  lines.push(compactLine(contemStr, regStr));
+
+  while (lines.length < maxLines) lines.push("");
   return lines.slice(0, maxLines).join('\n');
 }
 
@@ -356,6 +500,12 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
   }
   if (resolvedLayoutTipo === 'AMP_CX') {
     return generateTextAmpCx(rotulo, layoutConfig);
+  }
+  if (resolvedLayoutTipo === 'AMP10') {
+    return generateTextAmp10(rotulo, layoutConfig);
+  }
+  if (resolvedLayoutTipo === 'TIRZ') {
+    return generateTextTirz(rotulo, layoutConfig);
   }
 
   const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
