@@ -188,6 +188,45 @@ export type Database = {
         }
         Relationships: []
       }
+      cache_metas_sugeridas: {
+        Row: {
+          ano: number
+          colaborador_id: number
+          detalhes: Json | null
+          loja_id: number
+          media_historica: number
+          mes: number
+          meses_considerados: number
+          meses_total: number
+          meta_sugerida: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          colaborador_id: number
+          detalhes?: Json | null
+          loja_id: number
+          media_historica?: number
+          mes: number
+          meses_considerados?: number
+          meses_total?: number
+          meta_sugerida?: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          colaborador_id?: number
+          detalhes?: Json | null
+          loja_id?: number
+          media_historica?: number
+          mes?: number
+          meses_considerados?: number
+          meses_total?: number
+          meta_sugerida?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cache_remuneracao_variavel: {
         Row: {
           checksum: string | null
