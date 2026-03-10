@@ -44,8 +44,8 @@ const LabelSettings = () => {
   const [isPrintingAgentTest, setIsPrintingAgentTest] = useState(false);
   const [agentPrinters, setAgentPrinters] = useState<string[]>([]);
   const [isLoadingPrinters, setIsLoadingPrinters] = useState(false);
-  const [isProgressiveTest, setIsProgressiveTest] = useState(false);
-  const [isDotsTest, setIsDotsTest] = useState(false);
+
+
   const [isDiagnosticOpen, setIsDiagnosticOpen] = useState(false);
   const [isDiagnosticLoading, setIsDiagnosticLoading] = useState(false);
   const [diagnosticResult, setDiagnosticResult] = useState<any>(null);
