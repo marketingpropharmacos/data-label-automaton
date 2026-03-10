@@ -1379,6 +1379,33 @@ export type Database = {
         }
         Relationships: []
       }
+      role_permissions: {
+        Row: {
+          can_edit: boolean
+          can_view: boolean
+          id: number
+          module: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          can_edit?: boolean
+          can_view?: boolean
+          id?: never
+          module: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          can_edit?: boolean
+          can_view?: boolean
+          id?: never
+          module?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rv_config_colaboradores: {
         Row: {
           ativo: boolean
@@ -1930,7 +1957,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "operador" | "lider"
+      app_role: "admin" | "operador" | "lider" | "viewer" | "financeiro"
       rv_colaborador_tipo:
         | "vendas"
         | "laboratorio"
@@ -2078,7 +2105,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "operador", "lider"],
+      app_role: ["admin", "operador", "lider", "viewer", "financeiro"],
       rv_colaborador_tipo: [
         "vendas",
         "laboratorio",
