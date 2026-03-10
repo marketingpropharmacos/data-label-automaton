@@ -24,7 +24,7 @@ import {
   type PrintStation,
 } from "@/config/api";
 import { verificarConexao } from "@/services/requisicaoService";
-import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, testeProgressivoAgente, testeDotsAgente, testePplaDireto } from "@/services/printAgentService";
+import { verificarAgente, listarImpressoras, testeImpressaoAgente, diagnosticoPPLA, testePplaDireto } from "@/services/printAgentService";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ApiConfig, PharmacyConfig, LayoutType, LayoutConfig, PrintAgentConfig, PrinterCalibrationConfig } from "@/types/requisicao";
 import { getLayouts, fieldLabels } from "@/config/layouts";
