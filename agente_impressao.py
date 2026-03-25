@@ -1415,80 +1415,108 @@ def teste_ppla_direto():
 
 
 # ============================================
-# AUTO-UPDATE via GitHub
+# AUTO-UPDATE via GitHub (polling automático)
 # ============================================
 GITHUB_RAW_URL = "https://raw.githubusercontent.com/marketingpropharmacos/data-label-automaton/main/agente_impressao.py"
 AGENT_FILE = os.path.abspath(__file__)
+UPDATE_INTERVAL_SECONDS = 120  # verifica a cada 2 minutos
+
+
+import hashlib
+
+def _hash_arquivo(conteudo: str) -> str:
+    return hashlib.md5(conteudo.encode("utf-8")).hexdigest()
+
+
+def _codigo_atual() -> str:
+    try:
+        with open(AGENT_FILE, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
 
 
 def _fetch_latest_version() -> Optional[str]:
-    """Baixa a versão mais recente do agente do GitHub."""
     try:
         req = urllib.request.Request(GITHUB_RAW_URL, headers={"Cache-Control": "no-cache"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             return resp.read().decode("utf-8")
     except Exception as e:
-        logger.error(f"[UPDATE] Erro ao buscar versão do GitHub: {e}")
+        logger.warning(f"[UPDATE] Erro ao buscar GitHub: {e}")
         return None
 
 
-def _restart_agent():
-    """Reinicia o processo do agente após breve delay."""
-    def _do_restart():
+def _aplicar_update(novo_codigo: str) -> bool:
+    try:
+        atual = _codigo_atual()
+        backup_path = AGENT_FILE + ".bak"
+        with open(backup_path, "w", encoding="utf-8") as f:
+            f.write(atual)
+        with open(AGENT_FILE, "w", encoding="utf-8") as f:
+            f.write(novo_codigo)
+        logger.info(f"[UPDATE] Arquivo atualizado. Backup em {backup_path}")
+        return True
+    except Exception as e:
+        logger.error(f"[UPDATE] Erro ao salvar: {e}")
+        return False
+
+
+def _reiniciar():
+    def _do():
         time.sleep(2)
         logger.info("[UPDATE] Reiniciando agente...")
         os.execv(sys.executable, [sys.executable] + sys.argv)
-    threading.Thread(target=_do_restart, daemon=True).start()
+    threading.Thread(target=_do, daemon=True).start()
+
+
+def _loop_auto_update():
+    """Thread que roda em background e verifica o GitHub a cada UPDATE_INTERVAL_SECONDS."""
+    logger.info(f"[UPDATE] Auto-update ativo — verificando a cada {UPDATE_INTERVAL_SECONDS}s")
+    while True:
+        time.sleep(UPDATE_INTERVAL_SECONDS)
+        try:
+            novo = _fetch_latest_version()
+            if not novo:
+                continue
+            atual = _codigo_atual()
+            if _hash_arquivo(novo) != _hash_arquivo(atual):
+                logger.info("[UPDATE] Nova versão detectada no GitHub! Aplicando...")
+                if _aplicar_update(novo):
+                    _reiniciar()
+                    break  # sai do loop — o processo vai reiniciar
+            else:
+                logger.debug("[UPDATE] Sem alterações no GitHub.")
+        except Exception as e:
+            logger.warning(f"[UPDATE] Erro no ciclo de verificação: {e}")
 
 
 @app.route('/update', methods=['POST'])
 def update_agent():
-    """Baixa a versão mais recente do agente do GitHub e reinicia.
-    Chamada pelo servidor central ou manualmente para atualizar sem mexer nos PCs."""
-    logger.info("[UPDATE] Atualização solicitada...")
-    novo_codigo = _fetch_latest_version()
-    if not novo_codigo:
-        return jsonify({"success": False, "error": "Não foi possível baixar a nova versão do GitHub"}), 500
+    """Força verificação e update imediato (sem esperar o ciclo automático)."""
+    logger.info("[UPDATE] Update manual solicitado...")
+    novo = _fetch_latest_version()
+    if not novo:
+        return jsonify({"success": False, "error": "Não foi possível baixar do GitHub"}), 500
 
-    # Verificar se há diferença
-    try:
-        with open(AGENT_FILE, "r", encoding="utf-8") as f:
-            codigo_atual = f.read()
-        if codigo_atual == novo_codigo:
-            logger.info("[UPDATE] Agente já está na versão mais recente.")
-            return jsonify({"success": True, "message": "Já está atualizado", "updated": False})
-    except Exception:
-        pass
+    atual = _codigo_atual()
+    if _hash_arquivo(novo) == _hash_arquivo(atual):
+        return jsonify({"success": True, "message": "Já está na versão mais recente", "updated": False})
 
-    # Salvar backup e sobrescrever
-    try:
-        backup_path = AGENT_FILE + ".bak"
-        with open(backup_path, "w", encoding="utf-8") as f:
-            f.write(codigo_atual if 'codigo_atual' in dir() else "")
-        with open(AGENT_FILE, "w", encoding="utf-8") as f:
-            f.write(novo_codigo)
-        logger.info(f"[UPDATE] Arquivo atualizado. Backup salvo em {backup_path}")
-    except Exception as e:
-        return jsonify({"success": False, "error": f"Erro ao salvar arquivo: {e}"}), 500
+    if not _aplicar_update(novo):
+        return jsonify({"success": False, "error": "Erro ao salvar arquivo"}), 500
 
-    _restart_agent()
-    return jsonify({"success": True, "message": "Atualizado! Agente reiniciando em 2 segundos...", "updated": True})
+    _reiniciar()
+    return jsonify({"success": True, "message": "Atualizado! Reiniciando em 2 segundos...", "updated": True})
 
 
 @app.route('/version', methods=['GET'])
 def version_info():
-    """Retorna hash da versão atual para comparação."""
-    import hashlib
-    try:
-        with open(AGENT_FILE, "r", encoding="utf-8") as f:
-            conteudo = f.read()
-        hash_atual = hashlib.md5(conteudo.encode()).hexdigest()[:8]
-    except Exception:
-        hash_atual = "unknown"
+    conteudo = _codigo_atual()
     return jsonify({
         "version": "3.2",
-        "hash": hash_atual,
+        "hash": _hash_arquivo(conteudo)[:8],
         "hostname": socket.gethostname(),
+        "update_interval_seconds": UPDATE_INTERVAL_SECONDS,
         "file": AGENT_FILE,
     })
 
@@ -1507,5 +1535,11 @@ if __name__ == '__main__':
     for k, v in PRINTER_CONFIGS.items():
         logger.info(f"  {k}: {v['largura_mm']}x{v['altura_mm']}mm ({v['cols_max']} cols)")
     logger.info(f"Health: http://localhost:{port}/health")
+    logger.info(f"Auto-update: verificando GitHub a cada {UPDATE_INTERVAL_SECONDS}s")
     logger.info("=" * 50)
+
+    # Iniciar thread de auto-update em background
+    t = threading.Thread(target=_loop_auto_update, daemon=True)
+    t.start()
+
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
