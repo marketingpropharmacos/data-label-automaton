@@ -138,11 +138,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
 
   // Lines 4-8: empty (available for manual editing)
   const lines = [line1, line2, line3];
-  while (lines.length < maxLines) {
-    lines.push("");
-  }
-
-  return lines.slice(0, maxLines).join('\n');
+  return lines.join('\n');
 }
 
 // ---- Clean patient name: remove leading phone numbers/digits ----
@@ -294,8 +290,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
   lines.push(compactLine(contemStr, regStr));
 
-  while (lines.length < maxLines) lines.push("");
-  return lines.slice(0, maxLines).join('\n');
+    return lines.join('\n');
 }
 
 // ---- A_PAC_GRAN specific generator (fixed grid, same header as PEQ) ----
@@ -322,8 +317,7 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   const line3 = padLine("", reg, maxCols);
 
   const lines = [line1, line2, line3];
-  while (lines.length < maxLines) lines.push("");
-  return lines.slice(0, maxLines).join('\n');
+  return lines.join('\n');
 }
 
 // ---- AMP10 specific generator (89x38mm, 65 cols x 10 lines) ----
@@ -407,8 +401,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     lines.push(compactLine(tipoUsoValido, posStr));
   }
 
-  while (lines.length < maxLines) lines.push("");
-  return lines.slice(0, maxLines).join('\n');
+  return lines.join('\n');
 }
 
 // ---- TIRZ specific generator (109x25mm, 73 cols x 8 lines) ----
@@ -473,8 +466,7 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
   lines.push(compactLine(contemStr, regStr));
 
-  while (lines.length < maxLines) lines.push("");
-  return lines.slice(0, maxLines).join('\n');
+  return lines.join('\n');
 }
 
 function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType): LayoutType {
