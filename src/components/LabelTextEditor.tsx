@@ -203,7 +203,11 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     lines.push(compactLine(drName, conselhoStr));
 
     // Component lines: NOME PH:X L:X F:XX/XX V:XX/XX (tudo na mesma linha)
-    rotulo.componentes.forEach((comp) => {
+    // Filtrar componentes tipo BLISTER (embalagem, não é conteúdo do rótulo)
+    const componentesVisiveis = rotulo.componentes.filter(
+      (comp) => !comp.nome?.toUpperCase().startsWith('BLISTER')
+    );
+    componentesVisiveis.forEach((comp) => {
       const nomeExibicao = rotulo.eSinonimo
         ? (comp.composicao || formatarNomeComponente(comp.nome))
         : formatarNomeComponente(comp.nome);
@@ -232,8 +236,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
     lines.push(compactLine(contemStr, regStr));
 
-    while (lines.length < maxLines) lines.push("");
-    return lines.slice(0, maxLines).join('\n');
+    // Não cortar linhas — Uso/Aplicação e Contem/REG devem sempre aparecer
+    return lines.join('\n');
   }
 
   // NON-KIT mode (Mescla or Item Único)
