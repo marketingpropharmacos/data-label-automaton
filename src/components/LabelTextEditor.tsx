@@ -360,9 +360,9 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       const meta: string[] = [];
       if (comp.ph) meta.push(`pH:${String(comp.ph).replace('.', ',')}`);
       if (comp.lote) meta.push(`L:${comp.lote}`);
+      if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (comp.aplicacao) meta.push(`APLICAÇÃO:${comp.aplicacao}`);
-      if (meta.length > 0) lines.push(meta.join(" ").substring(0, maxCols));
+      if (meta.length > 0) lines.push(meta.join("  ").substring(0, maxCols));
     });
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
@@ -375,9 +375,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     }
   }
 
-  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  if (regStr) lines.push(regStr);
-
+  // Linha meta: pH, L, F, V (sem aplicação)
   const metaParts: string[] = [];
   if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
   if (rotulo.lote) {
@@ -388,18 +386,24 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       metaParts.push(`L:${lote}${ano ? '/' + ano : ''}`);
     }
   }
+  if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
   if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
-  const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  if (aplicacao) metaParts.push(`APLICAÇÃO:${aplicacao}`);
-  if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
+  if (metaParts.length > 0) lines.push(metaParts.join("  ").substring(0, maxCols));
 
-  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
-  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  // Linha uso: posologia + aplicação
   const posologia = rotulo.posologia?.toUpperCase() || "";
-  if (tipoUsoValido || posologia) {
-    const posStr = posologia ? `POS:${posologia}` : "";
-    lines.push(compactLine(tipoUsoValido, posStr));
-  }
+  const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
+  const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
+  const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
+  lines.push(compactLine(posologiaValida, aplicacaoStr));
+
+  // Linha contém
+  const contem = rotulo.contem?.trim().toUpperCase() || "";
+  if (contem) lines.push(`CONTEM: ${contem}`.substring(0, maxCols));
+
+  // Linha REG (final)
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
+  if (regStr) lines.push(regStr);
 
   return lines.join('\n');
 }
