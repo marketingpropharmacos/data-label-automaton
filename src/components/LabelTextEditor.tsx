@@ -218,13 +218,13 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       lines.push(lineText.substring(0, maxCols));
     });
 
-    // Usage + Application
-    const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
-    const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+    // Usage (Posologia) + Application
+    const posologia = rotulo.posologia?.toUpperCase() || "";
+    const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
     {
       const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
-      lines.push(compactLine(tipoUsoValido, right));
+      lines.push(compactLine(posologiaValida, right));
     }
 
     // Contains + REG (CONTEM sempre visível para preenchimento manual)
@@ -276,13 +276,13 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
   if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
 
-  // Line: Tipo Uso + Aplicação (compacto)
-  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
-  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  // Line: Posologia + Aplicação (compacto)
+  const posologia = rotulo.posologia?.toUpperCase() || "";
+  const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   {
     const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
-    lines.push(compactLine(tipoUsoValido, right));
+    lines.push(compactLine(posologiaValida, right));
   }
 
   // Line: Contém + REG (CONTEM sempre visível para preenchimento manual)
