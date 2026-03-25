@@ -333,8 +333,10 @@ def _gerar_from_texto_livre(texto_livre, y_positions, x_start, rot, font, cols, 
     """Helper: converte textoLivre (linhas editadas na UI) em comandos PPLA."""
     linhas_texto = texto_livre.split('\n')
     pplb_lines = []
-    for i, y in enumerate(y_positions):
-        line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+    for i, line_text in enumerate(linhas_texto):
+        if i >= len(y_positions):
+            break
+        y = y_positions[i]
         if line_text.strip():
             pplb_lines.append(_ppla_text(rot, font, 1, 1, y, x_start, line_text[:cols], modo))
     if not pplb_lines:
@@ -384,8 +386,10 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     if texto_livre:
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
-        for i, y in enumerate(y_dots):
-            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+        for i, line_text in enumerate(linhas_texto):
+            if i >= len(y_dots):
+                break
+            y = y_dots[i]
             if line_text.strip():
                 pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['left'], line_text[:cols]))
         if not pplb_lines:
