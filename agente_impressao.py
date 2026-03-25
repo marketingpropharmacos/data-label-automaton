@@ -333,14 +333,19 @@ def _gerar_from_texto_livre(texto_livre, y_positions, x_start, rot, font, cols, 
     """Helper: converte textoLivre (linhas editadas na UI) em comandos PPLA."""
     linhas_texto = texto_livre.split('\n')
     pplb_lines = []
+
+    y_positions_calc = list(y_positions)
+    if len(linhas_texto) > len(y_positions_calc) and len(y_positions_calc) >= 2:
+        step = y_positions_calc[-1] - y_positions_calc[-2]
+        while len(y_positions_calc) < len(linhas_texto):
+            y_positions_calc.append(y_positions_calc[-1] + step)
+
     for i, line_text in enumerate(linhas_texto):
-        if i >= len(y_positions):
-            break
-        y = y_positions[i]
+        y = y_positions_calc[i]
         if line_text.strip():
             pplb_lines.append(_ppla_text(rot, font, 1, 1, y, x_start, line_text[:cols], modo))
     if not pplb_lines:
-        pplb_lines.append(_ppla_text(rot, font, 1, 1, y_positions[0], x_start, 'SEM DADOS', modo))
+        pplb_lines.append(_ppla_text(rot, font, 1, 1, y_positions_calc[0], x_start, 'SEM DADOS', modo))
     return _build_label(pplb_lines, dims, cal, modo)
 
 
@@ -386,14 +391,17 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     if texto_livre:
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
+        y_dots_calc = list(y_dots)
+        if len(linhas_texto) > len(y_dots_calc) and len(y_dots_calc) >= 2:
+            step = y_dots_calc[-1] - y_dots_calc[-2]
+            while len(y_dots_calc) < len(linhas_texto):
+                y_dots_calc.append(y_dots_calc[-1] + step)
         for i, line_text in enumerate(linhas_texto):
-            if i >= len(y_dots):
-                break
-            y = y_dots[i]
+            y = y_dots_calc[i]
             if line_text.strip():
                 pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['left'], line_text[:cols]))
         if not pplb_lines:
-            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots_calc[0], x_dots_map['left'], 'SEM DADOS'))
         return _build_label_ampcx(pplb_lines, dims, cal)
 
     # === Geração estruturada (paridade FC) ===
@@ -545,16 +553,8 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        linhas_texto = texto_livre.split('\n')
-        pplb_lines = []
-        for i, y in enumerate(y_dots):
-            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
-            if line_text.strip():
-                x = x_upper if i < 6 else x_lower
-                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x, line_text[:cols]))
-        if not pplb_lines:
-            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_upper, 'SEM DADOS'))
-        return _build_label_amp10(pplb_lines, dims, cal)
+        y_positions = [78, 67, 56, 45, 34, 23, 12, 1, -9]
+        return _gerar_from_texto_livre(texto_livre, y_positions, x_upper, rot, font, cols, dims, cal, 'dots')
 
     # === Dados do rótulo ===
     paciente = _clean_patient_name(rotulo.get('nomePaciente', ''))
@@ -684,15 +684,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         y_positions = [78, 67, 56, 45, 34, 23, 12]
-        linhas_texto = texto_livre.split('\n')
-        pplb_lines = []
-        for i, y in enumerate(y_positions):
-            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
-            if line_text.strip():
-                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_left, line_text[:cols]))
-        if not pplb_lines:
-            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, 67, x_left, 'SEM DADOS'))
-        return _build_label(pplb_lines, dims, cal, modo)
+        return _gerar_from_texto_livre(texto_livre, y_positions, x_left, rot, font, cols, dims, cal, modo)
 
     # Modo estruturado: gera campos separados como o FC faz (X distintos por campo)
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
@@ -747,15 +739,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        linhas_texto = texto_livre.split('\n')
-        pplb_lines = []
-        for i, y in enumerate(y_dots):
-            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
-            if line_text.strip():
-                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['field'], line_text[:cols]))
-        if not pplb_lines:
-            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
-        return _build_label(pplb_lines, dims, cal, modo)
+        return _gerar_from_texto_livre(texto_livre, y_dots, x_dots_map['field'], rot, font, cols, dims, cal, modo)
 
     # === Geração estruturada ===
     paciente = (rotulo.get('nomePaciente', '') or '').upper()
