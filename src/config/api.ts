@@ -188,7 +188,6 @@ export interface PrintStation {
   id: string;
   nome: string;
   agentUrl: string;
-  impressora: string;
   calibracao?: import("@/types/requisicao").PrinterCalibrationConfig;
 }
 
@@ -200,13 +199,11 @@ const DEFAULT_STATIONS: PrintStation[] = [
     id: 'edi',
     nome: 'PC da Edi',
     agentUrl: '',
-    impressora: 'PEQUENO',
   },
   {
     id: 'daniel',
     nome: 'PC do Daniel',
     agentUrl: 'https://nonethnical-leaden-veda.ngrok-free.dev',
-    impressora: 'argox01',
   },
 ];
 
