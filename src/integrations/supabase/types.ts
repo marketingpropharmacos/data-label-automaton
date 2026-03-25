@@ -20,6 +20,7 @@ export type Database = {
           acknowledged_at: string | null
           acknowledged_by: string | null
           changed_at: string
+          diff_summary: Json | null
           id: number
           new_checksum: string | null
           old_checksum: string | null
@@ -32,6 +33,7 @@ export type Database = {
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           changed_at?: string
+          diff_summary?: Json | null
           id?: never
           new_checksum?: string | null
           old_checksum?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           acknowledged_at?: string | null
           acknowledged_by?: string | null
           changed_at?: string
+          diff_summary?: Json | null
           id?: never
           new_checksum?: string | null
           old_checksum?: string | null
@@ -383,6 +386,51 @@ export type Database = {
         }
         Relationships: []
       }
+      config_aliquotas_impostos: {
+        Row: {
+          aliquota_efetiva: number
+          loja_id: number
+          tipo_receita: string
+          updated_at: string
+          vigencia_inicio: string
+        }
+        Insert: {
+          aliquota_efetiva?: number
+          loja_id: number
+          tipo_receita: string
+          updated_at?: string
+          vigencia_inicio?: string
+        }
+        Update: {
+          aliquota_efetiva?: number
+          loja_id?: number
+          tipo_receita?: string
+          updated_at?: string
+          vigencia_inicio?: string
+        }
+        Relationships: []
+      }
+      dim_forma_recebimento: {
+        Row: {
+          ativo: boolean
+          codigo: string
+          nome: string
+          ordem: number
+        }
+        Insert: {
+          ativo?: boolean
+          codigo: string
+          nome: string
+          ordem?: number
+        }
+        Update: {
+          ativo?: boolean
+          codigo?: string
+          nome?: string
+          ordem?: number
+        }
+        Relationships: []
+      }
       dim_laboratorio: {
         Row: {
           ativo: boolean
@@ -434,6 +482,27 @@ export type Database = {
           is_cost_center?: boolean
           loja_id?: number
           loja_nome?: string | null
+        }
+        Relationships: []
+      }
+      dim_modalidade_receita: {
+        Row: {
+          ativo: boolean
+          codigo: string
+          nome: string
+          ordem: number
+        }
+        Insert: {
+          ativo?: boolean
+          codigo: string
+          nome: string
+          ordem?: number
+        }
+        Update: {
+          ativo?: boolean
+          codigo?: string
+          nome?: string
+          ordem?: number
         }
         Relationships: []
       }
@@ -836,6 +905,1552 @@ export type Database = {
         }
         Relationships: []
       }
+      lb_action_items: {
+        Row: {
+          ai_confidence_score: number | null
+          cancel_reason: string | null
+          canceled_at: string | null
+          co_owners: string[] | null
+          completed_at: string | null
+          completion_evidence: Json | null
+          created_at: string
+          decision_id: string | null
+          description: string | null
+          display_id: string
+          due_date: string | null
+          effort_estimate: string | null
+          evidence_message_id: string | null
+          evidence_transcript_segment_id: string | null
+          id: string
+          is_recurring: boolean
+          origin_conversation_id: string | null
+          origin_meeting_id: string | null
+          origin_type: Database["public"]["Enums"]["lb_origin_type"]
+          original_due_date: string | null
+          owner_id: string | null
+          priority: Database["public"]["Enums"]["lb_priority"]
+          project_id: string | null
+          recurrence_pattern: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["lb_action_status"]
+          tags: string[] | null
+          times_rescheduled: number
+          title: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          cancel_reason?: string | null
+          canceled_at?: string | null
+          co_owners?: string[] | null
+          completed_at?: string | null
+          completion_evidence?: Json | null
+          created_at?: string
+          decision_id?: string | null
+          description?: string | null
+          display_id?: string
+          due_date?: string | null
+          effort_estimate?: string | null
+          evidence_message_id?: string | null
+          evidence_transcript_segment_id?: string | null
+          id?: string
+          is_recurring?: boolean
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          original_due_date?: string | null
+          owner_id?: string | null
+          priority?: Database["public"]["Enums"]["lb_priority"]
+          project_id?: string | null
+          recurrence_pattern?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["lb_action_status"]
+          tags?: string[] | null
+          times_rescheduled?: number
+          title: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          cancel_reason?: string | null
+          canceled_at?: string | null
+          co_owners?: string[] | null
+          completed_at?: string | null
+          completion_evidence?: Json | null
+          created_at?: string
+          decision_id?: string | null
+          description?: string | null
+          display_id?: string
+          due_date?: string | null
+          effort_estimate?: string | null
+          evidence_message_id?: string | null
+          evidence_transcript_segment_id?: string | null
+          id?: string
+          is_recurring?: boolean
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          original_due_date?: string | null
+          owner_id?: string | null
+          priority?: Database["public"]["Enums"]["lb_priority"]
+          project_id?: string | null
+          recurrence_pattern?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["lb_action_status"]
+          tags?: string[] | null
+          times_rescheduled?: number
+          title?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_action_items_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "lb_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_evidence_message_id_fkey"
+            columns: ["evidence_message_id"]
+            isOneToOne: false
+            referencedRelation: "lb_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_evidence_transcript_segment_id_fkey"
+            columns: ["evidence_transcript_segment_id"]
+            isOneToOne: false
+            referencedRelation: "lb_transcript_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_origin_conversation_id_fkey"
+            columns: ["origin_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_origin_meeting_id_fkey"
+            columns: ["origin_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_validated_by_fkey"
+            columns: ["validated_by"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_action_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_ai_extraction_batches: {
+        Row: {
+          avg_confidence_score: number | null
+          created_at: string
+          id: string
+          items_detected: number
+          items_discarded: number
+          items_edited: number
+          items_validated: number
+          model_version: string | null
+          processing_time_ms: number | null
+          source_id: string
+          source_type: string
+          workspace_id: string
+        }
+        Insert: {
+          avg_confidence_score?: number | null
+          created_at?: string
+          id?: string
+          items_detected?: number
+          items_discarded?: number
+          items_edited?: number
+          items_validated?: number
+          model_version?: string | null
+          processing_time_ms?: number | null
+          source_id: string
+          source_type: string
+          workspace_id: string
+        }
+        Update: {
+          avg_confidence_score?: number | null
+          created_at?: string
+          id?: string
+          items_detected?: number
+          items_discarded?: number
+          items_edited?: number
+          items_validated?: number
+          model_version?: string | null
+          processing_time_ms?: number | null
+          source_id?: string
+          source_type?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_ai_extraction_batches_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_audit_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["lb_audit_action"]
+          changes: Json | null
+          created_at: string
+          id: string
+          ip_address: unknown
+          target_id: string
+          target_type: string
+          user_agent: string | null
+          user_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["lb_audit_action"]
+          changes?: Json | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          target_id: string
+          target_type: string
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["lb_audit_action"]
+          changes?: Json | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown
+          target_id?: string
+          target_type?: string
+          user_agent?: string | null
+          user_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_audit_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_blockers: {
+        Row: {
+          action_item_id: string | null
+          ai_confidence_score: number | null
+          blocked_by_external: string | null
+          blocked_by_team_id: string | null
+          blocked_by_user_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          origin_conversation_id: string | null
+          origin_meeting_id: string | null
+          origin_type: Database["public"]["Enums"]["lb_origin_type"]
+          project_id: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          severity: Database["public"]["Enums"]["lb_blocker_severity"]
+          status: Database["public"]["Enums"]["lb_blocker_status"]
+          title: string
+          workspace_id: string
+        }
+        Insert: {
+          action_item_id?: string | null
+          ai_confidence_score?: number | null
+          blocked_by_external?: string | null
+          blocked_by_team_id?: string | null
+          blocked_by_user_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          project_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity?: Database["public"]["Enums"]["lb_blocker_severity"]
+          status?: Database["public"]["Enums"]["lb_blocker_status"]
+          title: string
+          workspace_id: string
+        }
+        Update: {
+          action_item_id?: string | null
+          ai_confidence_score?: number | null
+          blocked_by_external?: string | null
+          blocked_by_team_id?: string | null
+          blocked_by_user_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          project_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          severity?: Database["public"]["Enums"]["lb_blocker_severity"]
+          status?: Database["public"]["Enums"]["lb_blocker_status"]
+          title?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_blockers_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "lb_action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_blocked_by_team_id_fkey"
+            columns: ["blocked_by_team_id"]
+            isOneToOne: false
+            referencedRelation: "lb_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_blocked_by_user_id_fkey"
+            columns: ["blocked_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_origin_conversation_id_fkey"
+            columns: ["origin_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_origin_meeting_id_fkey"
+            columns: ["origin_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_blockers_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_conversations: {
+        Row: {
+          ai_processed_at: string | null
+          channel_name: string | null
+          created_at: string
+          external_thread_id: string | null
+          id: string
+          is_monitored: boolean
+          last_message_at: string | null
+          message_count: number
+          project_id: string | null
+          source_id: string
+          started_at: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ai_processed_at?: string | null
+          channel_name?: string | null
+          created_at?: string
+          external_thread_id?: string | null
+          id?: string
+          is_monitored?: boolean
+          last_message_at?: string | null
+          message_count?: number
+          project_id?: string | null
+          source_id: string
+          started_at?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ai_processed_at?: string | null
+          channel_name?: string | null
+          created_at?: string
+          external_thread_id?: string | null
+          id?: string
+          is_monitored?: boolean
+          last_message_at?: string | null
+          message_count?: number
+          project_id?: string | null
+          source_id?: string
+          started_at?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_conversations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_conversations_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "lb_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_conversations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_decisions: {
+        Row: {
+          ai_confidence_score: number | null
+          alternatives_considered: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_type: Database["public"]["Enums"]["lb_decision_type"] | null
+          description: string | null
+          display_id: string
+          evidence_message_id: string | null
+          evidence_transcript_segment_id: string | null
+          id: string
+          impact: Database["public"]["Enums"]["lb_impact_level"] | null
+          origin_conversation_id: string | null
+          origin_meeting_id: string | null
+          origin_type: Database["public"]["Enums"]["lb_origin_type"]
+          project_id: string | null
+          reversibility: Database["public"]["Enums"]["lb_reversibility"] | null
+          status: Database["public"]["Enums"]["lb_decision_status"]
+          superseded_by_id: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+          workspace_id: string
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          alternatives_considered?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_type?: Database["public"]["Enums"]["lb_decision_type"] | null
+          description?: string | null
+          display_id?: string
+          evidence_message_id?: string | null
+          evidence_transcript_segment_id?: string | null
+          id?: string
+          impact?: Database["public"]["Enums"]["lb_impact_level"] | null
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          project_id?: string | null
+          reversibility?: Database["public"]["Enums"]["lb_reversibility"] | null
+          status?: Database["public"]["Enums"]["lb_decision_status"]
+          superseded_by_id?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          workspace_id: string
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          alternatives_considered?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_type?: Database["public"]["Enums"]["lb_decision_type"] | null
+          description?: string | null
+          display_id?: string
+          evidence_message_id?: string | null
+          evidence_transcript_segment_id?: string | null
+          id?: string
+          impact?: Database["public"]["Enums"]["lb_impact_level"] | null
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          project_id?: string | null
+          reversibility?: Database["public"]["Enums"]["lb_reversibility"] | null
+          status?: Database["public"]["Enums"]["lb_decision_status"]
+          superseded_by_id?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_decisions_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_evidence_message_id_fkey"
+            columns: ["evidence_message_id"]
+            isOneToOne: false
+            referencedRelation: "lb_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_evidence_transcript_segment_id_fkey"
+            columns: ["evidence_transcript_segment_id"]
+            isOneToOne: false
+            referencedRelation: "lb_transcript_segments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_origin_conversation_id_fkey"
+            columns: ["origin_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_origin_meeting_id_fkey"
+            columns: ["origin_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "lb_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_validated_by_fkey"
+            columns: ["validated_by"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_decisions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_dependencies: {
+        Row: {
+          created_at: string
+          dependency_external: string | null
+          dependency_item_id: string | null
+          dependency_team_id: string | null
+          dependent_item_id: string
+          due_date: string | null
+          fulfilled_at: string | null
+          id: string
+          status: Database["public"]["Enums"]["lb_dependency_status"]
+          type: Database["public"]["Enums"]["lb_dependency_type"]
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          dependency_external?: string | null
+          dependency_item_id?: string | null
+          dependency_team_id?: string | null
+          dependent_item_id: string
+          due_date?: string | null
+          fulfilled_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["lb_dependency_status"]
+          type?: Database["public"]["Enums"]["lb_dependency_type"]
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          dependency_external?: string | null
+          dependency_item_id?: string | null
+          dependency_team_id?: string | null
+          dependent_item_id?: string
+          due_date?: string | null
+          fulfilled_at?: string | null
+          id?: string
+          status?: Database["public"]["Enums"]["lb_dependency_status"]
+          type?: Database["public"]["Enums"]["lb_dependency_type"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_dependencies_dependency_item_id_fkey"
+            columns: ["dependency_item_id"]
+            isOneToOne: false
+            referencedRelation: "lb_action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_dependencies_dependency_team_id_fkey"
+            columns: ["dependency_team_id"]
+            isOneToOne: false
+            referencedRelation: "lb_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_dependencies_dependent_item_id_fkey"
+            columns: ["dependent_item_id"]
+            isOneToOne: false
+            referencedRelation: "lb_action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_dependencies_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_evidence: {
+        Row: {
+          content: string | null
+          created_at: string
+          created_by: string | null
+          evidenceable_id: string
+          evidenceable_type: string
+          file_url: string | null
+          id: string
+          message_id: string | null
+          transcript_segment_id: string | null
+          type: Database["public"]["Enums"]["lb_evidence_type"]
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidenceable_id: string
+          evidenceable_type: string
+          file_url?: string | null
+          id?: string
+          message_id?: string | null
+          transcript_segment_id?: string | null
+          type: Database["public"]["Enums"]["lb_evidence_type"]
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidenceable_id?: string
+          evidenceable_type?: string
+          file_url?: string | null
+          id?: string
+          message_id?: string | null
+          transcript_segment_id?: string | null
+          type?: Database["public"]["Enums"]["lb_evidence_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_evidence_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_evidence_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "lb_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_evidence_transcript_segment_id_fkey"
+            columns: ["transcript_segment_id"]
+            isOneToOne: false
+            referencedRelation: "lb_transcript_segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_follow_ups: {
+        Row: {
+          ai_confidence_score: number | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          origin_conversation_id: string | null
+          origin_meeting_id: string | null
+          origin_type: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id: string | null
+          related_item_id: string
+          related_item_type: string
+          status: Database["public"]["Enums"]["lb_follow_up_status"]
+          title: string
+          workspace_id: string
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id?: string | null
+          related_item_id: string
+          related_item_type: string
+          status?: Database["public"]["Enums"]["lb_follow_up_status"]
+          title: string
+          workspace_id: string
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id?: string | null
+          related_item_id?: string
+          related_item_type?: string
+          status?: Database["public"]["Enums"]["lb_follow_up_status"]
+          title?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_follow_ups_origin_conversation_id_fkey"
+            columns: ["origin_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_follow_ups_origin_meeting_id_fkey"
+            columns: ["origin_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_follow_ups_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_follow_ups_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_integrations: {
+        Row: {
+          config: Json | null
+          created_at: string
+          error_message: string | null
+          id: string
+          last_sync_at: string | null
+          provider: Database["public"]["Enums"]["lb_integration_provider"]
+          status: Database["public"]["Enums"]["lb_integration_status"]
+          workspace_id: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          provider: Database["public"]["Enums"]["lb_integration_provider"]
+          status?: Database["public"]["Enums"]["lb_integration_status"]
+          workspace_id: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          provider?: Database["public"]["Enums"]["lb_integration_provider"]
+          status?: Database["public"]["Enums"]["lb_integration_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_integrations_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_meeting_participants: {
+        Row: {
+          external_name: string | null
+          id: string
+          meeting_id: string
+          speaker_label: string | null
+          user_id: string | null
+        }
+        Insert: {
+          external_name?: string | null
+          id?: string
+          meeting_id: string
+          speaker_label?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          external_name?: string | null
+          id?: string
+          meeting_id?: string
+          speaker_label?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_meeting_participants_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_meeting_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_meetings: {
+        Row: {
+          ai_processed_at: string | null
+          created_at: string
+          date: string
+          duration_minutes: number | null
+          id: string
+          project_id: string | null
+          recording_url: string | null
+          source_id: string | null
+          summary_long: string | null
+          summary_short: string | null
+          title: string
+          transcript_status: Database["public"]["Enums"]["lb_transcript_status"]
+          workspace_id: string
+        }
+        Insert: {
+          ai_processed_at?: string | null
+          created_at?: string
+          date?: string
+          duration_minutes?: number | null
+          id?: string
+          project_id?: string | null
+          recording_url?: string | null
+          source_id?: string | null
+          summary_long?: string | null
+          summary_short?: string | null
+          title: string
+          transcript_status?: Database["public"]["Enums"]["lb_transcript_status"]
+          workspace_id: string
+        }
+        Update: {
+          ai_processed_at?: string | null
+          created_at?: string
+          date?: string
+          duration_minutes?: number | null
+          id?: string
+          project_id?: string | null
+          recording_url?: string | null
+          source_id?: string | null
+          summary_long?: string | null
+          summary_short?: string | null
+          title?: string
+          transcript_status?: Database["public"]["Enums"]["lb_transcript_status"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_meetings_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_meetings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "lb_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_meetings_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          external_author_name: string | null
+          external_message_id: string | null
+          has_extraction: boolean
+          id: string
+          sent_at: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          external_author_name?: string | null
+          external_message_id?: string | null
+          has_extraction?: boolean
+          id?: string
+          sent_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          external_author_name?: string | null
+          external_message_id?: string | null
+          has_extraction?: boolean
+          id?: string
+          sent_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_notifications: {
+        Row: {
+          body: string | null
+          channel: Database["public"]["Enums"]["lb_notification_channel"]
+          created_at: string
+          id: string
+          read_at: string | null
+          reference_id: string | null
+          reference_type: string | null
+          title: string
+          type: Database["public"]["Enums"]["lb_notification_type"]
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          channel?: Database["public"]["Enums"]["lb_notification_channel"]
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          title: string
+          type: Database["public"]["Enums"]["lb_notification_type"]
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          channel?: Database["public"]["Enums"]["lb_notification_channel"]
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["lb_notification_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_organizations: {
+        Row: {
+          billing_info: Json | null
+          created_at: string
+          id: string
+          name: string
+          plan: Database["public"]["Enums"]["lb_plan_type"]
+          settings: Json | null
+          slug: string
+        }
+        Insert: {
+          billing_info?: Json | null
+          created_at?: string
+          id?: string
+          name: string
+          plan?: Database["public"]["Enums"]["lb_plan_type"]
+          settings?: Json | null
+          slug: string
+        }
+        Update: {
+          billing_info?: Json | null
+          created_at?: string
+          id?: string
+          name?: string
+          plan?: Database["public"]["Enums"]["lb_plan_type"]
+          settings?: Json | null
+          slug?: string
+        }
+        Relationships: []
+      }
+      lb_projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          start_date: string | null
+          status: Database["public"]["Enums"]["lb_project_status"]
+          target_end_date: string | null
+          team_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["lb_project_status"]
+          target_end_date?: string | null
+          team_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["lb_project_status"]
+          target_end_date?: string | null
+          team_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_projects_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "lb_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_projects_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_risks: {
+        Row: {
+          ai_confidence_score: number | null
+          created_at: string
+          description: string | null
+          id: string
+          impact: Database["public"]["Enums"]["lb_impact_level"]
+          mitigation_plan: string | null
+          origin_conversation_id: string | null
+          origin_meeting_id: string | null
+          origin_type: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id: string | null
+          probability: Database["public"]["Enums"]["lb_impact_level"]
+          project_id: string | null
+          status: Database["public"]["Enums"]["lb_risk_status"]
+          title: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          impact?: Database["public"]["Enums"]["lb_impact_level"]
+          mitigation_plan?: string | null
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id?: string | null
+          probability?: Database["public"]["Enums"]["lb_impact_level"]
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["lb_risk_status"]
+          title: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          impact?: Database["public"]["Enums"]["lb_impact_level"]
+          mitigation_plan?: string | null
+          origin_conversation_id?: string | null
+          origin_meeting_id?: string | null
+          origin_type?: Database["public"]["Enums"]["lb_origin_type"]
+          owner_id?: string | null
+          probability?: Database["public"]["Enums"]["lb_impact_level"]
+          project_id?: string | null
+          status?: Database["public"]["Enums"]["lb_risk_status"]
+          title?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_risks_origin_conversation_id_fkey"
+            columns: ["origin_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "lb_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_risks_origin_meeting_id_fkey"
+            columns: ["origin_meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_risks_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_risks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "lb_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_risks_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_sources: {
+        Row: {
+          config: Json | null
+          created_at: string
+          external_id: string | null
+          id: string
+          is_active: boolean
+          last_sync_at: string | null
+          name: string
+          type: Database["public"]["Enums"]["lb_source_type"]
+          workspace_id: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          name: string
+          type: Database["public"]["Enums"]["lb_source_type"]
+          workspace_id: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          name?: string
+          type?: Database["public"]["Enums"]["lb_source_type"]
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_sources_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_status_events: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          from_status: string | null
+          id: string
+          reason: string | null
+          to_status: string
+          trackable_id: string
+          trackable_type: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          reason?: string | null
+          to_status: string
+          trackable_id: string
+          trackable_type: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          reason?: string | null
+          to_status?: string
+          trackable_id?: string
+          trackable_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_status_events_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_team_memberships: {
+        Row: {
+          id: string
+          joined_at: string
+          role_in_team: string
+          team_id: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          joined_at?: string
+          role_in_team?: string
+          team_id: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          joined_at?: string
+          role_in_team?: string
+          team_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_team_memberships_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "lb_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_teams: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          lead_user_id: string | null
+          name: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_user_id?: string | null
+          name: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          lead_user_id?: string | null
+          name?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_teams_lead_user_id_fkey"
+            columns: ["lead_user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_teams_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "lb_workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_transcript_segments: {
+        Row: {
+          confidence: number | null
+          end_time: number
+          has_extraction: boolean
+          id: string
+          meeting_id: string
+          speaker_label: string | null
+          start_time: number
+          text: string
+          user_id: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          end_time?: number
+          has_extraction?: boolean
+          id?: string
+          meeting_id: string
+          speaker_label?: string | null
+          start_time?: number
+          text: string
+          user_id?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          end_time?: number
+          has_extraction?: boolean
+          id?: string
+          meeting_id?: string
+          speaker_label?: string | null
+          start_time?: number
+          text?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_transcript_segments_meeting_id_fkey"
+            columns: ["meeting_id"]
+            isOneToOne: false
+            referencedRelation: "lb_meetings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lb_transcript_segments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "lb_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_users: {
+        Row: {
+          auth_user_id: string
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          last_active_at: string | null
+          name: string
+          notification_preferences: Json | null
+          organization_id: string
+          role: Database["public"]["Enums"]["lb_user_role"]
+          timezone: string | null
+        }
+        Insert: {
+          auth_user_id: string
+          avatar_url?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          last_active_at?: string | null
+          name: string
+          notification_preferences?: Json | null
+          organization_id: string
+          role?: Database["public"]["Enums"]["lb_user_role"]
+          timezone?: string | null
+        }
+        Update: {
+          auth_user_id?: string
+          avatar_url?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          last_active_at?: string | null
+          name?: string
+          notification_preferences?: Json | null
+          organization_id?: string
+          role?: Database["public"]["Enums"]["lb_user_role"]
+          timezone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "lb_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lb_workspaces: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          organization_id: string
+          settings: Json | null
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          settings?: Json | null
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          settings?: Json | null
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lb_workspaces_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "lb_organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_baixa_motivo_subtipo: {
         Row: {
           categoria_dre_override: string | null
@@ -1100,6 +2715,36 @@ export type Database = {
         }
         Relationships: []
       }
+      periodo_status: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          module: string
+          period: string
+          reopened_at: string | null
+          reopened_by: string | null
+          status: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          module?: string
+          period: string
+          reopened_at?: string | null
+          reopened_by?: string | null
+          status?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          module?: string
+          period?: string
+          reopened_at?: string | null
+          reopened_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       planejamento_dre: {
         Row: {
           ano: number
@@ -1184,6 +2829,42 @@ export type Database = {
           is_manipulado?: boolean
           loja_id?: number
           valor_cmv?: number
+        }
+        Relationships: []
+      }
+      raw_alpha_dfc_cartoes_convenio: {
+        Row: {
+          competencia: string
+          created_at: string
+          fonte: string
+          id: number
+          loja_id: number
+          modalidade_id: number | null
+          modalidade_nome: string | null
+          qtd_titulos: number
+          valor: number
+        }
+        Insert: {
+          competencia: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id: number
+          modalidade_id?: number | null
+          modalidade_nome?: string | null
+          qtd_titulos?: number
+          valor?: number
+        }
+        Update: {
+          competencia?: string
+          created_at?: string
+          fonte?: string
+          id?: number
+          loja_id?: number
+          modalidade_id?: number | null
+          modalidade_nome?: string | null
+          qtd_titulos?: number
+          valor?: number
         }
         Relationships: []
       }
@@ -1406,13 +3087,53 @@ export type Database = {
         }
         Relationships: []
       }
+      rv_colaborador_movimentacoes: {
+        Row: {
+          colaborador_id: number
+          created_at: string
+          created_by: string | null
+          data_evento: string
+          id: number
+          loja_anterior_id: number | null
+          loja_nova_id: number | null
+          observacao: string | null
+          tipo_evento: string
+        }
+        Insert: {
+          colaborador_id: number
+          created_at?: string
+          created_by?: string | null
+          data_evento: string
+          id?: never
+          loja_anterior_id?: number | null
+          loja_nova_id?: number | null
+          observacao?: string | null
+          tipo_evento: string
+        }
+        Update: {
+          colaborador_id?: number
+          created_at?: string
+          created_by?: string | null
+          data_evento?: string
+          id?: never
+          loja_anterior_id?: number | null
+          loja_nova_id?: number | null
+          observacao?: string | null
+          tipo_evento?: string
+        }
+        Relationships: []
+      }
       rv_config_colaboradores: {
         Row: {
           ativo: boolean
           cargo: string | null
           cnpj_empresa: string | null
           colaborador_id: number
+          cpf: string | null
           created_at: string
+          data_admissao: string | null
+          data_inativacao: string | null
+          data_nascimento: string | null
           data_registro: string | null
           empresa_registro: string | null
           laboratorio_id: number | null
@@ -1429,7 +3150,11 @@ export type Database = {
           cargo?: string | null
           cnpj_empresa?: string | null
           colaborador_id: number
+          cpf?: string | null
           created_at?: string
+          data_admissao?: string | null
+          data_inativacao?: string | null
+          data_nascimento?: string | null
           data_registro?: string | null
           empresa_registro?: string | null
           laboratorio_id?: number | null
@@ -1446,7 +3171,11 @@ export type Database = {
           cargo?: string | null
           cnpj_empresa?: string | null
           colaborador_id?: number
+          cpf?: string | null
           created_at?: string
+          data_admissao?: string | null
+          data_inativacao?: string | null
+          data_nascimento?: string | null
           data_registro?: string | null
           empresa_registro?: string | null
           laboratorio_id?: number | null
@@ -1457,6 +3186,36 @@ export type Database = {
           rv_percentual_custom?: number | null
           setor_lab?: string | null
           tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
+        }
+        Relationships: []
+      }
+      rv_lab_deducoes: {
+        Row: {
+          colaborador_id: number
+          competencia: string
+          laboratorio_id: number
+          organizacao: boolean
+          reclamacoes: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          colaborador_id: number
+          competencia: string
+          laboratorio_id: number
+          organizacao?: boolean
+          reclamacoes?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          colaborador_id?: number
+          competencia?: string
+          laboratorio_id?: number
+          organizacao?: boolean
+          reclamacoes?: boolean
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -1922,6 +3681,17 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_impostos_calculados: {
+        Row: {
+          aliquota_efetiva: number | null
+          imposto_calculado: number | null
+          loja_id: number | null
+          mes: string | null
+          tipo_receita: string | null
+          valor_receita: number | null
+        }
+        Relationships: []
+      }
       vw_planocontas_dre_flags: {
         Row: {
           caminho: string | null
@@ -1946,8 +3716,34 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_receita_segmentada: {
+        Row: {
+          loja_id: number | null
+          mes: string | null
+          tipo_receita: string | null
+          valor_receita: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_my_permissions: {
+        Args: never
+        Returns: {
+          can_edit: boolean
+          can_view: boolean
+          id: number
+          module: string
+          role: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "role_permissions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1955,9 +3751,124 @@ export type Database = {
         }
         Returns: boolean
       }
+      lb_ensure_workspace: {
+        Args: {
+          p_auth_user_id: string
+          p_user_email: string
+          p_user_name: string
+        }
+        Returns: Json
+      }
+      lb_generate_display_id: {
+        Args: { prefix: string; seq_name: string }
+        Returns: string
+      }
     }
     Enums: {
-      app_role: "admin" | "operador" | "lider" | "viewer" | "financeiro"
+      app_role:
+        | "admin"
+        | "operador"
+        | "lider"
+        | "viewer"
+        | "financeiro"
+        | "operador_lab"
+      lb_action_status:
+        | "detected"
+        | "pending_validation"
+        | "validated"
+        | "assigned"
+        | "in_progress"
+        | "blocked"
+        | "waiting_input"
+        | "in_review"
+        | "done"
+        | "done_unverified"
+        | "canceled"
+        | "archived"
+      lb_audit_action:
+        | "created"
+        | "updated"
+        | "deleted"
+        | "validated"
+        | "discarded"
+        | "merged"
+        | "reclassified"
+        | "escalated"
+        | "auto_approved"
+      lb_blocker_severity: "critical" | "high" | "medium" | "low"
+      lb_blocker_status: "active" | "resolving" | "resolved"
+      lb_decision_status:
+        | "proposed"
+        | "active"
+        | "superseded"
+        | "reverted"
+        | "archived"
+      lb_decision_type: "strategic" | "tactical" | "operational" | "technical"
+      lb_dependency_status: "pending" | "in_progress" | "fulfilled" | "broken"
+      lb_dependency_type: "same_team" | "cross_team" | "external"
+      lb_evidence_type:
+        | "transcript_segment"
+        | "message"
+        | "url"
+        | "file"
+        | "commit"
+        | "deploy"
+        | "text_note"
+      lb_follow_up_status: "pending" | "done" | "overdue" | "canceled"
+      lb_impact_level: "high" | "medium" | "low"
+      lb_integration_provider:
+        | "slack"
+        | "teams"
+        | "google_meet"
+        | "zoom"
+        | "gmail"
+        | "outlook"
+        | "google_calendar"
+        | "outlook_calendar"
+        | "jira"
+        | "linear"
+        | "github"
+        | "notion"
+        | "webhook"
+      lb_integration_status: "active" | "paused" | "error" | "disconnected"
+      lb_notification_channel: "in_app" | "email" | "slack" | "teams"
+      lb_notification_type:
+        | "validation_needed"
+        | "task_assigned"
+        | "task_overdue"
+        | "follow_up_due"
+        | "blocker_escalation"
+        | "decision_conflict"
+        | "digest"
+        | "mention"
+      lb_origin_type: "meeting" | "conversation" | "decision" | "manual"
+      lb_plan_type: "free" | "starter" | "professional" | "enterprise"
+      lb_priority: "critical" | "high" | "medium" | "low"
+      lb_project_status: "active" | "paused" | "completed" | "archived"
+      lb_reversibility: "irreversible" | "costly" | "easy"
+      lb_risk_status:
+        | "identified"
+        | "mitigating"
+        | "mitigated"
+        | "occurred"
+        | "accepted"
+      lb_source_type:
+        | "slack_channel"
+        | "teams_channel"
+        | "google_meet"
+        | "zoom"
+        | "email_thread"
+        | "manual_upload"
+        | "webhook"
+        | "google_chat"
+        | "discord"
+      lb_transcript_status:
+        | "pending"
+        | "processing"
+        | "transcribed"
+        | "completed"
+        | "failed"
+      lb_user_role: "admin" | "manager" | "member" | "viewer" | "guest"
       rv_colaborador_tipo:
         | "vendas"
         | "laboratorio"
@@ -2105,7 +4016,120 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "operador", "lider", "viewer", "financeiro"],
+      app_role: [
+        "admin",
+        "operador",
+        "lider",
+        "viewer",
+        "financeiro",
+        "operador_lab",
+      ],
+      lb_action_status: [
+        "detected",
+        "pending_validation",
+        "validated",
+        "assigned",
+        "in_progress",
+        "blocked",
+        "waiting_input",
+        "in_review",
+        "done",
+        "done_unverified",
+        "canceled",
+        "archived",
+      ],
+      lb_audit_action: [
+        "created",
+        "updated",
+        "deleted",
+        "validated",
+        "discarded",
+        "merged",
+        "reclassified",
+        "escalated",
+        "auto_approved",
+      ],
+      lb_blocker_severity: ["critical", "high", "medium", "low"],
+      lb_blocker_status: ["active", "resolving", "resolved"],
+      lb_decision_status: [
+        "proposed",
+        "active",
+        "superseded",
+        "reverted",
+        "archived",
+      ],
+      lb_decision_type: ["strategic", "tactical", "operational", "technical"],
+      lb_dependency_status: ["pending", "in_progress", "fulfilled", "broken"],
+      lb_dependency_type: ["same_team", "cross_team", "external"],
+      lb_evidence_type: [
+        "transcript_segment",
+        "message",
+        "url",
+        "file",
+        "commit",
+        "deploy",
+        "text_note",
+      ],
+      lb_follow_up_status: ["pending", "done", "overdue", "canceled"],
+      lb_impact_level: ["high", "medium", "low"],
+      lb_integration_provider: [
+        "slack",
+        "teams",
+        "google_meet",
+        "zoom",
+        "gmail",
+        "outlook",
+        "google_calendar",
+        "outlook_calendar",
+        "jira",
+        "linear",
+        "github",
+        "notion",
+        "webhook",
+      ],
+      lb_integration_status: ["active", "paused", "error", "disconnected"],
+      lb_notification_channel: ["in_app", "email", "slack", "teams"],
+      lb_notification_type: [
+        "validation_needed",
+        "task_assigned",
+        "task_overdue",
+        "follow_up_due",
+        "blocker_escalation",
+        "decision_conflict",
+        "digest",
+        "mention",
+      ],
+      lb_origin_type: ["meeting", "conversation", "decision", "manual"],
+      lb_plan_type: ["free", "starter", "professional", "enterprise"],
+      lb_priority: ["critical", "high", "medium", "low"],
+      lb_project_status: ["active", "paused", "completed", "archived"],
+      lb_reversibility: ["irreversible", "costly", "easy"],
+      lb_risk_status: [
+        "identified",
+        "mitigating",
+        "mitigated",
+        "occurred",
+        "accepted",
+      ],
+      lb_source_type: [
+        "slack_channel",
+        "teams_channel",
+        "google_meet",
+        "zoom",
+        "email_thread",
+        "manual_upload",
+        "webhook",
+        "google_chat",
+        "discord",
+      ],
+      lb_transcript_status: [
+        "pending",
+        "processing",
+        "transcribed",
+        "completed",
+        "failed",
+      ],
+      lb_user_role: ["admin", "manager", "member", "viewer", "guest"],
       rv_colaborador_tipo: [
         "vendas",
         "laboratorio",

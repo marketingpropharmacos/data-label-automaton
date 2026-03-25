@@ -337,7 +337,6 @@ const LabelSettings = () => {
                         setAgentConfigState({
                           ...agentConfig,
                           agentUrl: station.agentUrl,
-                          impressora: station.impressora,
                           calibracao: station.calibracao || agentConfig.calibracao,
                         });
                         setIsAgentOnline(null);
@@ -391,44 +390,12 @@ const LabelSettings = () => {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="agentPrinter">Impressora</Label>
-                <Select
-                  value={agentConfig.impressora}
-                  onValueChange={(value) => {
-                    setAgentConfigState({ ...agentConfig, impressora: value });
-                    const updated = stations.map(s => s.id === activeStationId ? { ...s, impressora: value } : s);
-                    setStationsState(updated);
-                    setPrintStations(updated);
-                  }}
-                >
-                  <SelectTrigger id="agentPrinter">
-                    <SelectValue placeholder="Selecione a impressora" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {agentPrinters.length > 0 ? (
-                      agentPrinters.map((printer) => (
-                        <SelectItem key={printer} value={printer}>
-                          {printer}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value={agentConfig.impressora}>
-                        {agentConfig.impressora}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  Nome da impressora instalada no PC do agente
-                </p>
-              </div>
 
               <div className="flex gap-2 flex-wrap">
                 <Button onClick={() => {
                   setPrintAgentConfig(agentConfig);
                   // Salvar estação também
-                  const updated = stations.map(s => s.id === activeStationId ? { ...s, agentUrl: agentConfig.agentUrl, impressora: agentConfig.impressora, calibracao: agentConfig.calibracao } : s);
+                  const updated = stations.map(s => s.id === activeStationId ? { ...s, agentUrl: agentConfig.agentUrl, calibracao: agentConfig.calibracao } : s);
                   setStationsState(updated);
                   setPrintStations(updated);
                   toast({ title: "Configurações salvas", description: `Estação ${stations.find(s => s.id === activeStationId)?.nome} atualizada.` });
