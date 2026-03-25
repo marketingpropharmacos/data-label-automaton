@@ -202,19 +202,19 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const drName = medico ? `DR(A)${medico}` : "";
     lines.push(compactLine(drName, conselhoStr));
 
-    // Component lines with metadata
+    // Component lines: NOME PH:X L:X F:XX/XX V:XX/XX (tudo na mesma linha)
     rotulo.componentes.forEach((comp) => {
       const nomeExibicao = rotulo.eSinonimo
         ? (comp.composicao || formatarNomeComponente(comp.nome))
         : formatarNomeComponente(comp.nome);
-      lines.push(nomeExibicao.substring(0, maxCols));
-
       const meta: string[] = [];
-      if (comp.ph) meta.push(`pH:${String(comp.ph).replace('.', ',')}`);
       if (comp.lote) meta.push(`L:${comp.lote}`);
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (meta.length > 0) lines.push(meta.join(" ").substring(0, maxCols));
+      const metaStr = meta.join(" ");
+      const maxNome = metaStr ? maxCols - metaStr.length - 1 : maxCols;
+      const lineText = metaStr ? `${nomeExibicao.substring(0, maxNome)} ${metaStr}` : nomeExibicao;
+      lines.push(lineText.substring(0, maxCols));
     });
 
     // Usage + Application
