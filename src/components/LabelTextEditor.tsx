@@ -735,7 +735,7 @@ const LabelTextEditor = ({
           onClick={handleCursorMove}
           onFocus={updateCursorInfo}
           className="w-full bg-background text-foreground font-mono p-4 resize-none focus:outline-none border-none min-h-[200px]"
-          style={{ fontSize: `${editorFontSize}px`, lineHeight: '1.4' }}
+          style={{ fontSize: `${editorFontSize}px`, lineHeight: '1.4', letterSpacing: '-0.5px' }}
           spellCheck={false}
           rows={Math.max(8, text.split('\n').length + 2)}
         />
