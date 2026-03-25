@@ -87,6 +87,15 @@ PRINTER_CONFIGS = {
     },
 }
 
+# Mapeamento direto layout_tipo → config (não depende do nome Windows da impressora)
+LAYOUT_TO_CONFIG = {
+    'AMP10': 'AMP10',
+    'AMP_CX': 'AMP_CX',
+    'A_PAC_PEQ': 'PEQUEN',
+    'A_PAC_GRAN': 'A_PAC_GRAN',
+    'TIRZ': 'PEQUEN',
+}
+
 def get_printer_dims(nome_impressora):
     """Seleciona dimensões baseado no nome da impressora."""
     nome = (nome_impressora or '').upper()
@@ -97,6 +106,16 @@ def get_printer_dims(nome_impressora):
     for chave, dims in PRINTER_CONFIGS.items():
         if chave in nome:
             return dims
+    return PRINTER_CONFIGS['PEQUEN']
+
+def get_dims_by_layout(layout_tipo, fallback_impressora=None):
+    """Resolve dimensões pelo layout_tipo (confiável) em vez do nome da impressora."""
+    config_key = LAYOUT_TO_CONFIG.get(layout_tipo)
+    if config_key and config_key in PRINTER_CONFIGS:
+        return PRINTER_CONFIGS[config_key]
+    # Fallback: tenta pelo nome da impressora
+    if fallback_impressora:
+        return get_printer_dims(fallback_impressora)
     return PRINTER_CONFIGS['PEQUEN']
 
 
@@ -1036,7 +1055,7 @@ def imprimir():
         logger.warning(f"[PRINT] Modo recebido '{calibracao_in.get('modo')}' foi forçado para 'dots' para manter paridade FC")
 
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
-    dims = get_printer_dims(impressora)
+    dims = get_dims_by_layout(layout_tipo, impressora)
 
     # Gerar todas as etiquetas (cada uma já inclui setup completo em mm)
     comandos_todos = ""
@@ -1188,7 +1207,7 @@ def diagnostico_ppla():
     })
 
     impressora = find_printer_match(impressora_req) or impressora_req
-    dims = get_printer_dims(impressora)
+    dims = get_dims_by_layout(layout_tipo, impressora)
     gerador = GERADORES_PPLA.get(layout_tipo, gerar_ppla_ampcx)
 
     try:
