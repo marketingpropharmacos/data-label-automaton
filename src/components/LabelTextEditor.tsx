@@ -454,12 +454,12 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
   if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
 
-  const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
-  const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
+  const posologia = rotulo.posologia?.toUpperCase() || "";
+  const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  if (tipoUsoValido || aplicacao) {
+  if (posologiaValida || aplicacao) {
     const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
-    lines.push(compactLine(tipoUsoValido, right));
+    lines.push(compactLine(posologiaValida, right));
   }
 
   const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM:";
