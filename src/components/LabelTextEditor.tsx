@@ -482,24 +482,36 @@ function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType):
   return layoutConfig.tipo;
 }
 
+// Remove acentos, cedilha e caracteres especiais (impressora térmica não suporta)
+function stripAccents(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove combining diacritical marks
+    .replace(/ç/g, 'c')
+    .replace(/Ç/g, 'C')
+    .replace(/[^\x20-\x7E\n\r]/g, ''); // keep only basic ASCII printable + newlines
+}
+
 function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType?: LayoutType): string {
   const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
 
+  let result: string | null = null;
+
   // Route to specific generators for each layout
   if (resolvedLayoutTipo === 'A_PAC_PEQ') {
-    return generateTextPacPeq(rotulo, layoutConfig);
+    result = generateTextPacPeq(rotulo, layoutConfig);
+  } else if (resolvedLayoutTipo === 'A_PAC_GRAN') {
+    result = generateTextPacGran(rotulo, layoutConfig);
+  } else if (resolvedLayoutTipo === 'AMP_CX') {
+    result = generateTextAmpCx(rotulo, layoutConfig);
+  } else if (resolvedLayoutTipo === 'AMP10') {
+    result = generateTextAmp10(rotulo, layoutConfig);
+  } else if (resolvedLayoutTipo === 'TIRZ') {
+    result = generateTextTirz(rotulo, layoutConfig);
   }
-  if (resolvedLayoutTipo === 'A_PAC_GRAN') {
-    return generateTextPacGran(rotulo, layoutConfig);
-  }
-  if (resolvedLayoutTipo === 'AMP_CX') {
-    return generateTextAmpCx(rotulo, layoutConfig);
-  }
-  if (resolvedLayoutTipo === 'AMP10') {
-    return generateTextAmp10(rotulo, layoutConfig);
-  }
-  if (resolvedLayoutTipo === 'TIRZ') {
-    return generateTextTirz(rotulo, layoutConfig);
+
+  if (result !== null) {
+    return stripAccents(result);
   }
 
   const vis = (field: string) => layoutConfig.campoConfig[field as keyof typeof layoutConfig.campoConfig]?.visible !== false;
@@ -561,7 +573,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (vis('contem') && rotulo.contem) contemReg.push(`CONTÉM: ${rotulo.contem}`);
     if (vis('registro') && rotulo.numeroRegistro) contemReg.push(`REG:${rotulo.numeroRegistro}`);
     if (contemReg.length > 0) lines.push(contemReg.join("   "));
-    return lines.join('\n');
+    return stripAccents(lines.join('\n'));
   }
 
   const aplicacao = getAplicacao();
@@ -596,7 +608,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (obs) lines.push(`OBS: ${obs}`);
   }
   if (vis('registro') && rotulo.numeroRegistro) lines.push(`REG: ${rotulo.numeroRegistro}`);
-  return lines.join('\n');
+  return stripAccents(lines.join('\n'));
 }
 
 // ---- Component ----
