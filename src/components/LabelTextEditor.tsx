@@ -208,6 +208,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
         ? (comp.composicao || formatarNomeComponente(comp.nome))
         : formatarNomeComponente(comp.nome);
       const meta: string[] = [];
+      if (comp.ph) meta.push(`PH:${String(comp.ph).replace('.', ',')}`);
       if (comp.lote) meta.push(`L:${comp.lote}`);
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
@@ -221,7 +222,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
     const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
     const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-    if (tipoUsoValido || aplicacao) {
+    {
       const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
       lines.push(compactLine(tipoUsoValido, right));
     }
@@ -246,12 +247,11 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const drName = medico ? `DR(A)${medico}` : "";
   lines.push(compactLine(drName, conselhoStr));
 
-  // Line 3: Composição/Fórmula
+  // Line 3: Composição/Fórmula (1 linha apenas para não empurrar campos)
   const mescla = isValidComposicao(rotulo.composicao || "");
   if (mescla) {
     const compText = rotulo.composicao!.toUpperCase();
-    const compLines = wrapText(compText, maxCols, 3).split('\n');
-    compLines.forEach(l => lines.push(l));
+    lines.push(compText.substring(0, maxCols));
   } else {
     const f = formatarFormula(rotulo.formula);
     if (f) lines.push(f.substring(0, maxCols));
@@ -280,7 +280,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   const tipoUso = rotulo.tipoUso?.toUpperCase() || "";
   const tipoUsoValido = /^\d+$/.test(tipoUso) ? "" : tipoUso;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  if (tipoUsoValido || aplicacao) {
+  {
     const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
     lines.push(compactLine(tipoUsoValido, right));
   }
