@@ -437,8 +437,6 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const f = formatarFormula(rotulo.formula);
   if (f) lines.push(f.substring(0, maxCols));
 
-  const posologia = rotulo.posologia?.toUpperCase() || "";
-  if (posologia) lines.push(`POS:${posologia}`.substring(0, maxCols));
 
   const metaParts: string[] = [];
   if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
