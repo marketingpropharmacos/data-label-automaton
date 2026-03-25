@@ -573,7 +573,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (vis('contem') && rotulo.contem) contemReg.push(`CONTÉM: ${rotulo.contem}`);
     if (vis('registro') && rotulo.numeroRegistro) contemReg.push(`REG:${rotulo.numeroRegistro}`);
     if (contemReg.length > 0) lines.push(contemReg.join("   "));
-    return lines.join('\n');
+    return stripAccents(lines.join('\n'));
   }
 
   const aplicacao = getAplicacao();
