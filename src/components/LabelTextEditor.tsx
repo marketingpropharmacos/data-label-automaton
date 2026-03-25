@@ -608,7 +608,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (obs) lines.push(`OBS: ${obs}`);
   }
   if (vis('registro') && rotulo.numeroRegistro) lines.push(`REG: ${rotulo.numeroRegistro}`);
-  return lines.join('\n');
+  return stripAccents(lines.join('\n'));
 }
 
 // ---- Component ----
