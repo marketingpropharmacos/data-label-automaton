@@ -10,7 +10,7 @@ import LayoutEditor from "@/components/LayoutEditor";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPharmacyConfig, getPrintAgentConfig, getApiConfig, getModoImpressao, setModoImpressao, ModoImpressao, getLayoutPrinter, setLayoutPrinter } from "@/config/api";
+import { getPharmacyConfig, getPrintAgentConfig, getApiConfig, getModoImpressao, setModoImpressao, ModoImpressao, getLayoutPrinter, setLayoutPrinter, getLayoutStation, setActiveStationId, getActiveStation } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao } from "@/services/requisicaoService";
 import { imprimirViaAgente, imprimirViaRotutx, imprimirViaRotutxRaw } from "@/services/printAgentService";

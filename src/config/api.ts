@@ -160,13 +160,37 @@ const LAYOUT_PRINTER_MAP_KEY = 'label-system-layout-printer-map';
 
 export type LayoutPrinterMap = Record<string, string>;
 
+// Defaults hardcoded baseados na realidade física das estações
+const DEFAULT_LAYOUT_PRINTER_MAP: LayoutPrinterMap = {
+  'A_PAC_PEQ': 'PEQUENO',
+  'A_PAC_GRAN': 'GRANDE',
+  'AMP_CX': 'AMP_CX',
+  'AMP10': 'AMP10',
+  'TIRZ': 'AMP_CX',
+};
+
+// Mapeamento layout → estação (station id)
+const DEFAULT_LAYOUT_STATION_MAP: Record<string, string> = {
+  'A_PAC_PEQ': 'edi',
+  'A_PAC_GRAN': 'edi',
+  'AMP_CX': 'daniel',
+  'AMP10': 'daniel',
+  'TIRZ': 'daniel',
+};
+
 export const getLayoutPrinterMap = (): LayoutPrinterMap => {
   try {
     const stored = localStorage.getItem(LAYOUT_PRINTER_MAP_KEY);
-    return stored ? JSON.parse(stored) : {};
+    const userMap = stored ? JSON.parse(stored) : {};
+    // Merge: user overrides win, defaults fill gaps
+    return { ...DEFAULT_LAYOUT_PRINTER_MAP, ...userMap };
   } catch {
-    return {};
+    return { ...DEFAULT_LAYOUT_PRINTER_MAP };
   }
+};
+
+export const getLayoutStation = (layout: string): string | undefined => {
+  return DEFAULT_LAYOUT_STATION_MAP[layout];
 };
 
 export const setLayoutPrinterMap = (map: LayoutPrinterMap): void => {
