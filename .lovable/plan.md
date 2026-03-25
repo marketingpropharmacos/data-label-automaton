@@ -1,35 +1,48 @@
 
 
-## Plano: Corrigir layout AMP_CX — componentes na mesma linha com pH/L/F/V
+## Plano: Completar layout AMP_CX — diferenciar Kit vs Mescla com todos os campos
 
-### O que está errado hoje
+### Problema atual
 
-O `gerar_ppla_ampcx` (linhas 395-444) ignora completamente o campo `componentes` (kits). Ele usa apenas `composicao` e quebra em 3 linhas sem pH, Lote, Fabricação ou Validade. Também faltam Aplicação, Contem e REG.
+1. **Kit**: falta `PH:X` na linha de cada componente (só mostra L/F/V)
+2. **Uso + Aplicação**: condicional na linha 224/283 — se ambos vazios, a linha some (deveria sempre aparecer para edição manual)
+3. **Mescla/Item único**: a composição quebra em até 3 linhas, empurrando campos para fora do `maxLines=8`
+4. `linhasMax` do AMP_CX é 8, pode cortar as linhas finais
 
-### Layout correto (conforme o print do FC)
+### Layout esperado
 
+**Kit:**
 ```text
-Linha 1 (Y=82): PACIENTE                         REQ:008009-1
-Linha 2 (Y=73): DR(A)NOME CONSELHO.UF-NUM
-Linha 3 (Y=64): CLORETO MG PH:5.5 L:240601 F:06/24 V:12/24
-Linha 4 (Y=55): ACIDO TRANEXAMICO PH:6.0 L:240602 F:06/24 V:12/24
-Linha 5 (Y=46): USO TOPICO                       APLICACAO:ID/SC
-Linha 6 (Y=37): CONTEM: 5 FR                     REG:54321
+PACIENTE                         REQ:008009-1
+DR(A)NOME                        CRM.SP-282242
+CLORETO MG PH:5.5 L:240601 F:06/24 V:12/24
+ACIDO TRANEXAMICO PH:6.0 L:240602 F:06/24 V:12/24
+USO TOPICO                       APLICAÇÃO:ID/SC
+CONTEM: 5 FR                     REG:54321
 ```
 
-Cada componente do kit ocupa **uma linha** com seus metadados (pH, L, F, V) concatenados.
+**Mescla/Item único:**
+```text
+PACIENTE                         REQ:009134-0
+DR(A)NOME                        CRM-SP-282242
+VITAMINA D 600.000UI/ML
+pH:5,0  L:738/26  F:02/26  V:12/26
+USO EM CONSULTORIO               APLICAÇÃO:IM
+CONTEM: 1FR. DE 1ML              REG:21847
+```
 
-### Alteração
+### Alterações
 
-**`agente_impressao.py`** — Reescrever a seção "Geração estruturada" de `gerar_ppla_ampcx` (linhas 395-444):
+**`src/config/layouts.ts`** (1 linha)
+- Linha 68: `linhasMax: 8` → `linhasMax: 10`
 
-1. Extrair `componentes` do payload (como já faz o AMP10)
-2. **Se tem componentes (kit)**: cada componente em uma linha com formato `NOME PH:X L:X F:X V:X` (linhas Y=64, 55, até 3 componentes)
-3. **Se não tem componentes**: composição em 1 linha + pH/L/F/V na mesma linha
-4. Linha de **Uso + Aplicação** (Y=46): `USO` à esquerda, `APLICACAO:XX` à direita
-5. Linha de **Contem + REG** (Y=37): `CONTEM: XX` à esquerda, `REG:XXXXX` à direita
-6. Usar a mesma lógica de `_compact_line` para posicionar elementos à esquerda/direita
+**`src/components/LabelTextEditor.tsx`** — função `generateTextAmpCx`:
 
-### Arquivo alterado
-- `agente_impressao.py` — reescrever linhas 395-444 (~50 linhas)
+1. **Kit** (linhas 206-218): Adicionar `PH:X` no array `meta` antes de L/F/V — usar `comp.ph` (já existe no tipo `ComponenteKit`)
+2. **Kit + Non-kit** (linhas 224 e 283): Remover o `if` condicional — sempre exibir a linha `USO + APLICAÇÃO`, mesmo que vazia
+3. **Non-kit** (linhas 250-258): Limitar composição a **1 linha** (não 3) para não empurrar campos fora
+
+### Arquivos alterados
+- `src/config/layouts.ts` — 1 linha
+- `src/components/LabelTextEditor.tsx` — ~10 linhas
 
