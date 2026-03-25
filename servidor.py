@@ -868,6 +868,9 @@ def tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier):
             if hasattr(descr, 'read'):
                 descr = descr.read().decode('latin-1')
             
+            # DEBUG: mostra exatamente o que veio da FC12111
+            print(f"    [FC12111_ROW] CDPRO={cdpro}, NRLOT={nrlot}, CTLOT={ctlot}, DESCR={descr}")
+            
             # Lote da requisição
             lote_req = str(nrlot or ctlot or "").strip()
             
