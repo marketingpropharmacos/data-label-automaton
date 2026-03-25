@@ -1,24 +1,34 @@
 
 
-## Plano: Corrigir nomes das impressoras no mapeamento padrão
+## Plano: Corrigir fluxo de impressão para usar estação ativa
 
-### Mapeamento correto confirmado
+### Problema
+Quando você manda imprimir, o `executePrint` e `handlePrintFcRaw` usam `getPrintAgentConfig()` para obter `agentUrl` e `impressora`. Isso ignora completamente a estação ativa (que foi auto-selecionada ao trocar o layout). Resultado: a impressão vai para o agente errado com a impressora errada.
+
+### Correção em `src/pages/Index.tsx`
+
+**`executePrint` (linhas 165-229)**:
+- Trocar `agentConfig.agentUrl` por `getActiveStation()?.agentUrl`
+- Trocar fallback `agentConfigComDef.impressora` por `getLayoutPrinter(layoutType)`
+- Passar a `agentUrl` correta para `imprimirViaRotutx` e `imprimirViaAgente`
+
+**`handlePrintFcRaw` (linhas 247-290)**:
+- Trocar `agentConfig.agentUrl` por `getActiveStation()?.agentUrl`
+- Trocar `agentConfig.impressora` por `getLayoutPrinter(layoutType)`
+
+**Inicialização (useEffect linha 56)**:
+- Trocar `agentConfig.impressora` por `getLayoutPrinter(layoutType)` para que a impressora correta apareça desde o início
+
+### Resumo
 
 ```text
-Layout       → Impressora      → Estação
-──────────────────────────────────────────
-A_PAC_PEQ    → PEQUENO          → PC da Edi
-A_PAC_GRAN   → AMP GRANDE       → PC da Edi
-AMP_CX       → AMP CAIXA        → PC do Daniel
-AMP10        → CAIXA GRANDE     → PC do Daniel
-TIRZ         → PEQUENO          → PC da Edi (!)
+ANTES:  agentUrl  = getPrintAgentConfig().agentUrl  (fixo, global, antigo)
+        impressora = agentConfig.impressora          (campo legado)
+
+DEPOIS: agentUrl  = getActiveStation().agentUrl      (varia por layout→estação)
+        impressora = selectedPrinter || getLayoutPrinter(layoutType)
 ```
 
-**Mudança importante**: TIRZ passa do PC do Daniel para o PC da Edi.
-
-### Alterações
-
-**`src/config/api.ts`**:
-- `DEFAULT_LAYOUT_PRINTER_MAP`: atualizar `A_PAC_GRAN` → `'AMP GRANDE'`, `AMP_CX` → `'AMP CAIXA'`, `AMP10` → `'CAIXA GRANDE'`, `TIRZ` → `'PEQUENO'`
-- `DEFAULT_LAYOUT_STATION_MAP`: mudar `TIRZ` de `'daniel'` para `'edi'`
+### Arquivo alterado
+- `src/pages/Index.tsx`
 
