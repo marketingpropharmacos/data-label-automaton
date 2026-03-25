@@ -69,7 +69,8 @@ PRINTER_CONFIGS = {
         'largura_dots': 711, 'altura_dots': 305, 'gap_dots': 24,
         'cols_max': 65,
         'y_positions_mm': [350, 310, 270, 230, 190, 150, 110, 70, 40, 20],
-        'font': 2,
+        'font': 1,
+        'form_length': 289,
     },
     'A_PAC_GRAN': {
         'largura_mm': 76, 'altura_mm': 25,
@@ -190,11 +191,21 @@ def ppla_full_label(linhas_texto, altura_mm=25, margem_c=0, offset_r=0, contrast
 # PPLA MODO DOTS - Compatível com Fórmula Certa
 # Sem comando 'm', coordenadas em dots (203 DPI = 8 dots/mm)
 # ============================================
+def _format_y_dots(y):
+    """Formata coordenada Y em dots no padrão FC (7 dígitos).
+    Positivo: '0000078'. Negativo: '00000-9' (zeros antes do sinal)."""
+    if y >= 0:
+        return f"{y:07d}"
+    # FC formata negativo como '00000-9' (não '-000009')
+    neg_str = f"-{abs(y)}"
+    return neg_str.rjust(7, '0')
+
+
 def ppla_text_dots(rot, font, wmult, hmult, y_dots, x_dots, data):
     """Gera uma linha de texto PPLA em modo dots (formato FC).
     Formato: R(1)F(1)H(1)V(1)Y(7 dígitos)X(4 dígitos)DATA
     SEM '1' literal no prefixo - o primeiro dígito JÁ é a rotação."""
-    return f"{rot}{font}{wmult}{hmult}{y_dots:07d}{x_dots:04d}{data}"
+    return f"{rot}{font}{wmult}{hmult}{_format_y_dots(y_dots)}{x_dots:04d}{data}"
 
 
 def ppla_setup_dots(largura_dots=360, altura_dots=200, gap_dots=24, contraste=14, velocidade='C', form_length=289):
@@ -411,48 +422,179 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     return _build_label_ampcx(linhas, dims, cal)
 
 
+def _build_label_amp10(linhas, dims, cal):
+    """Build AMP10 label with FC-exact setup: f289, PA, D11, H14."""
+    contraste = cal.get('contraste', 14)
+    setup_parts = [
+        "\x02f289",
+        "\x02L",
+        "\x02e",
+        "PA",
+        "D11",
+        f"H{contraste:02d}",
+    ]
+    setup = "\r".join(setup_parts) + "\r"
+    content = "\r".join(linhas)
+    return setup + content + "\r" + "Q0001E\r"
+
+
+def _clean_patient_name(name):
+    """Remove IDs/telefones iniciais do nome do paciente (ex: '12345 JOAO SILVA' → 'JOAO SILVA')."""
+    name = (name or '').strip().upper()
+    # Remove leading numeric IDs
+    name = re.sub(r'^\d+\s*', '', name)
+    return name
+
+
+def _format_conselho_dots(rotulo):
+    """Formato FC com pontos: CONSELHO.UF-NUMERO (ex: COREN.SP-1038417)."""
+    prefixo = rotulo.get('prefixoCRM', '')
+    numero = rotulo.get('numeroCRM', '')
+    uf = rotulo.get('ufCRM', '')
+    if prefixo and uf and numero:
+        return f"{prefixo}.{uf}-{numero}"
+    parts = [p for p in [prefixo, uf, numero] if p]
+    return '-'.join(parts) if parts else ''
+
+
+def _compact_line(*segments):
+    """Junta segmentos com espaço simples, removendo vazios."""
+    return ' '.join(s for s in segments if s)
+
+
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout AMP10 (89x38mm) - 8 linhas."""
+    """Layout AMP10 (89x38mm) - Coordenadas FC exatas.
+    
+    Font=1, Rotation=1 (FIXOS - paridade FC)
+    Setup: f289, PA, D11, H14
+    Y levels (dots): 78, 67, 56, 45, 34, 23, 12, 1, -9
+    X positions: 21 (linhas 1-6), 4 (linhas 7-9)
+    
+    Para KITs: cada componente em linha separada com pH/L/F/V individuais
+    Para não-KIT: composição + metadados na estrutura tradicional
+    """
     if not dims:
         dims = PRINTER_CONFIGS['AMP10']
     cal = calibracao or {}
-    modo = cal.get('modo', 'dots')
     cols = dims['cols_max']
-    font = cal.get('fonte', dims.get('font', 2))
-    rot = cal.get('rotacao', 0)
-    
-    # Se textoLivre foi editado na UI, usar diretamente
+    font = 1
+    rot = 1
+
+    # Coordenadas Y DIRETAS do FC capturado (9 níveis)
+    y_dots = [78, 67, 56, 45, 34, 23, 12, 1, -9]
+    # X: 21 para linhas 1-6, 4 para linhas 7-9
+    x_upper = 21
+    x_lower = 4
+
+    # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_pos = [350, 310, 270, 230, 190, 150, 110, 70, 40, 20]
-        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
-    
-    paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
+        linhas_texto = texto_livre.split('\n')
+        pplb_lines = []
+        for i, y in enumerate(y_dots):
+            line_text = linhas_texto[i] if i < len(linhas_texto) else ''
+            if line_text.strip():
+                x = x_upper if i < 6 else x_lower
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x, line_text[:cols]))
+        if not pplb_lines:
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_upper, 'SEM DADOS'))
+        return _build_label_amp10(pplb_lines, dims, cal)
+
+    # === Dados do rótulo ===
+    paciente = _clean_patient_name(rotulo.get('nomePaciente', ''))
     nr_req = rotulo.get('nrRequisicao', '')
-    nr_item = rotulo.get('nrItem', '1')
+    nr_item = rotulo.get('nrItem', '0')
     nome_medico = (rotulo.get('nomeMedico', '') or '').upper()
-    crm = _crm_completo(rotulo)
-    composicao = _composicao(rotulo, cols)
-    linha_meta = _linha_meta(rotulo)
+    conselho = _format_conselho_dots(rotulo)
     registro = str(rotulo.get('numeroRegistro', '') or '')
-    aplicacao = (rotulo.get('aplicacao', '') or '')[:30].upper()
-    contem = (rotulo.get('contem', '') or '')[:30].upper()
-    
-    y_pos = [350, 310, 270, 230, 190, 150, 110, 70]
-    x_start = 10
-    
-    linhas = [
-        _ppla_text(rot, font, 1, 1, y_pos[0], x_start, paciente, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[0], 400, f"REQ:{nr_req}-{nr_item}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[1], x_start, f"DR. {nome_medico[:25]} CRM {crm}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[2], x_start, composicao, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[3], x_start, linha_meta, modo),
-        _ppla_text(rot, font, 1, 1, y_pos[4], x_start, f"REG: {registro}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[5], x_start, f"APLICACAO: {aplicacao}", modo),
-        _ppla_text(rot, font, 1, 1, y_pos[6], x_start, f"CONTEM: {contem}", modo),
-    ]
-    
-    return _build_label(linhas, dims, cal, modo)
+    uso = (rotulo.get('tipoUso', '') or rotulo.get('posologia', '') or '').upper()
+    aplicacao = (rotulo.get('aplicacao', '') or '').upper()
+    contem = (rotulo.get('contem', '') or '').upper()
+    componentes = rotulo.get('componentes', []) or []
+
+    linhas = []
+
+    # Linha 1 (Y=78, X=21): Paciente + REQ
+    req_str = f"REQ:{nr_req.zfill(6)}-{nr_item}"
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_upper, _compact_line(paciente[:45], req_str)))
+
+    # Linha 2 (Y=67, X=21): DR(A) + Conselho
+    medico_str = f"DR(A){nome_medico}"
+    linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[1], x_upper, _compact_line(medico_str[:40], conselho)))
+
+    # Linhas 3-8 (Y=56,45,34,23,12,1): Componentes do kit ou composição
+    content_y = y_dots[2:8]  # [56, 45, 34, 23, 12, 1]
+    content_x = [x_upper, x_upper, x_upper, x_upper, x_lower, x_lower]
+
+    if componentes and len(componentes) > 0:
+        # KIT: cada componente em sua linha com pH/L/F/V
+        for i, cy in enumerate(content_y):
+            if i < len(componentes):
+                comp = componentes[i]
+                nome = (comp.get('nome', '') or '').upper()
+                c_ph = comp.get('ph', '')
+                c_lote = comp.get('lote', '')
+                c_fab = comp.get('fabricacao', '')
+                c_val = comp.get('validade', '')
+                parts = [nome]
+                if c_ph: parts.append(f"pH:{c_ph}")
+                if c_lote: parts.append(f"L:{c_lote}")
+                if c_fab: parts.append(f"F:{c_fab}")
+                if c_val: parts.append(f"V:{c_val}")
+                line = ' '.join(parts)
+                linhas.append(ppla_text_dots(rot, font, 1, 1, cy, content_x[i], line[:cols]))
+    else:
+        # Não-KIT: composição + metadados
+        composicao_full = (rotulo.get('composicao', '') or rotulo.get('formula', '') or '').upper()
+        ph = rotulo.get('ph', '')
+        lote = rotulo.get('lote', '')
+        fab = rotulo.get('dataFabricacao', '')
+        val = rotulo.get('dataValidade', '')
+
+        # Quebrar composição em linhas
+        comp_lines = []
+        remaining = composicao_full
+        while remaining and len(comp_lines) < 4:
+            comp_lines.append(remaining[:cols])
+            remaining = remaining[cols:]
+
+        # Adicionar pH/L/F/V à primeira linha de composição (ou como linha separada)
+        meta_parts = []
+        if ph: meta_parts.append(f"pH:{ph}")
+        if lote: meta_parts.append(f"L:{lote}")
+        if fab: meta_parts.append(f"F:{fab}")
+        if val: meta_parts.append(f"V:{val}")
+        meta_str = ' '.join(meta_parts)
+
+        if comp_lines:
+            # Tentar encaixar meta na primeira linha
+            first = comp_lines[0]
+            combined = _compact_line(first, meta_str)
+            if len(combined) <= cols:
+                comp_lines[0] = combined
+            else:
+                comp_lines.insert(1, meta_str[:cols])
+        elif meta_str:
+            comp_lines.append(meta_str[:cols])
+
+        for i, cy in enumerate(content_y):
+            if i < len(comp_lines) and comp_lines[i].strip():
+                linhas.append(ppla_text_dots(rot, font, 1, 1, cy, content_x[i], comp_lines[i][:cols]))
+
+    # Linha 9 (Y=-9, X=4): Uso/Aplicação/REG
+    footer_parts = []
+    if uso: footer_parts.append(uso)
+    if contem: footer_parts.append(contem)
+    if aplicacao: footer_parts.append(f"AP:{aplicacao}")
+    if registro: footer_parts.append(f"REG:{registro}")
+    footer = _compact_line(*footer_parts) if footer_parts else ''
+    if footer:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[8], x_lower, footer[:cols]))
+
+    if not linhas:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_upper, 'SEM DADOS'))
+
+    return _build_label_amp10(linhas, dims, cal)
 
 
 def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):

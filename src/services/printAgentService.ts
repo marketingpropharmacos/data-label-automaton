@@ -324,6 +324,8 @@ export const imprimirViaAgente = async (
         composicao: r.composicao,
         descricaoProduto: r.descricaoProduto,
         textoLivre: r.textoLivre,
+        tipoItem: r.tipoItem,
+        componentes: r.componentes,
       })),
     };
 
