@@ -723,13 +723,13 @@ def resolve_lote_componente(cursor, cdfil, cdpro):
         colunas_fc03140 = [row[0] for row in cursor.fetchall()]
         tem_stlot = 'STLOT' in colunas_fc03140
         
-        # Query para buscar lote mais recente válido
+        # Query para buscar lote mais recente válido (ordena por fabricação mais recente, como o FC)
         cursor.execute("""
             SELECT FIRST 1 CTLOT, NRLOT, DTFAB, DTVAL
             FROM FC03140 
             WHERE CDFIL = ? AND CDPRO = ?
               AND (DTVAL IS NULL OR DTVAL >= CURRENT_DATE)
-            ORDER BY DTVAL DESC, DTFAB DESC
+            ORDER BY DTFAB DESC, DTVAL DESC
         """, (cdfil_int, cdpro_int))
         
         row = cursor.fetchone()
