@@ -403,40 +403,70 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     aplicacao = (rotulo.get('aplicacao', '') or '').upper()
     contem = (rotulo.get('contem', '') or '').upper()
     registro = str(rotulo.get('numeroRegistro', '') or '')
+    componentes = rotulo.get('componentes', []) or []
 
-    # Split composição into up to 3 lines
-    comp_max = 60
-    comp_lines = []
-    remaining = composicao_full
-    while remaining and len(comp_lines) < 3:
-        comp_lines.append(remaining[:comp_max])
-        remaining = remaining[comp_max:]
+    def _fmt_date_short(d):
+        """dd/mm/yyyy ou yyyy-mm-dd → mm/yy"""
+        d = (d or '').strip()
+        if not d:
+            return ''
+        if '/' in d and len(d) >= 10:
+            parts = d.split('/')
+            return f"{parts[1]}/{parts[2][-2:]}"
+        if '-' in d and len(d) >= 10:
+            parts = d.split('-')
+            return f"{parts[1]}/{parts[0][-2:]}"
+        return d[:5]
 
     linhas = []
 
-    # Y[0]=10082: Paciente + REQ
+    # Y[0]=82: Paciente + REQ
     linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], paciente[:55]))
     linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['req'], f"REQ:{nr_req}-{nr_item}"))
 
-    # Y[1]=10073: DR(A) + CRM
+    # Y[1]=73: DR(A) + CRM
     linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[1], x_dots_map['left'], f"DR(A){nome_medico[:30]} {crm}"))
 
-    # Y[2,3,4]: Composição (até 3 linhas)
-    for i in range(3):
-        if i < len(comp_lines) and comp_lines[i].strip():
-            linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[2 + i], x_dots_map['left'], comp_lines[i]))
+    # Y[2..] = Componentes ou composição com pH/L/F/V na mesma linha
+    if componentes:
+        for ci, comp in enumerate(componentes):
+            if ci >= 3:
+                break
+            nome_c = (comp.get('nome', '') or '').upper()
+            ph_c = (comp.get('ph', '') or '').strip()
+            lote_c = (comp.get('lote', '') or '').strip()
+            fab_c = _fmt_date_short(comp.get('fabricacao', ''))
+            val_c = _fmt_date_short(comp.get('validade', ''))
+            meta = f"PH:{ph_c} L:{lote_c} F:{fab_c} V:{val_c}"
+            max_nome = cols - len(meta) - 1
+            line_text = f"{nome_c[:max_nome]} {meta}"
+            linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[2 + ci], x_dots_map['left'], line_text[:cols]))
+        next_y_idx = 2 + min(len(componentes), 3)
+    else:
+        # Produto único: composição + pH/L/F/V na mesma linha
+        ph_val = (rotulo.get('ph', '') or '').strip()
+        lote_val = (rotulo.get('lote', '') or '').strip()
+        fab_val = _fmt_date_short(rotulo.get('dataFabricacao', ''))
+        val_val = _fmt_date_short(rotulo.get('dataValidade', ''))
+        meta = f"PH:{ph_val} L:{lote_val} F:{fab_val} V:{val_val}"
+        max_comp = cols - len(meta) - 1
+        line_text = f"{composicao_full[:max_comp]} {meta}"
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[2], x_dots_map['left'], line_text[:cols]))
+        next_y_idx = 3
 
-    # Y[5]=10037: Uso + Aplicação
+    # Uso + Aplicação
+    uso_y = y_dots[min(next_y_idx, len(y_dots) - 2)]
     if uso:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['left'], uso[:30]))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, uso_y, x_dots_map['left'], uso[:30]))
     if aplicacao:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[5], x_dots_map['aplicacao'], f"APLICACAO:{aplicacao}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, uso_y, x_dots_map['aplicacao'], f"APLICACAO:{aplicacao}"))
 
-    # Y[6]=10028: Contém + REG
-    if contem:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['left'], f"CONTEM: {contem}"))
+    # Contem + REG
+    contem_y = y_dots[min(next_y_idx + 1, len(y_dots) - 1)]
+    contem_text = f"CONTEM: {contem}" if contem else "CONTEM: "
+    linhas.append(ppla_text_dots(rot, font, 1, 1, contem_y, x_dots_map['left'], contem_text[:40]))
     if registro:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[6], x_dots_map['reg'], f"REG:{registro}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, contem_y, x_dots_map['reg'], f"REG:{registro}"))
 
     if not linhas:
         linhas.append(ppla_text_dots(rot, font, 1, 1, y_dots[0], x_dots_map['left'], 'SEM DADOS'))
