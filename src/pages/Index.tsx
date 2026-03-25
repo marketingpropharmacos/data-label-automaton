@@ -52,13 +52,18 @@ const Index = () => {
   // Carregar impressoras do agente
   useEffect(() => {
     const agentConfig = getPrintAgentConfig();
-    if (agentConfig.enabled && agentConfig.agentUrl) {
-      setSelectedPrinter(agentConfig.impressora || "");
-      listarImpressoras(agentConfig.agentUrl).then(result => {
-        if (result.success && result.data) {
-          setAvailablePrinters(result.data.impressoras);
-        }
-      });
+    if (agentConfig.enabled) {
+      // Usar impressora mapeada ao layout, não campo global legado
+      setSelectedPrinter(getLayoutPrinter(layoutType) || "");
+      // Carregar lista de impressoras da estação ativa
+      const station = getActiveStation();
+      if (station?.agentUrl) {
+        listarImpressoras(station.agentUrl).then(result => {
+          if (result.success && result.data) {
+            setAvailablePrinters(result.data.impressoras);
+          }
+        });
+      }
     }
   }, []);
 
@@ -164,6 +169,9 @@ const Index = () => {
 
     const agentConfig = getPrintAgentConfig();
     const apiConfig = getApiConfig();
+    const station = getActiveStation();
+    const agentUrl = station?.agentUrl || "";
+    const impressora = selectedPrinter || getLayoutPrinter(layoutType) || "";
     
     // Usar calibração do agente sem sobrescrever fonte/rotação por definição de layout
     const calibracaoPadrao = agentConfig.calibracao || {
@@ -174,14 +182,11 @@ const Index = () => {
       rotacao: 0,
       modo: 'dots',
     };
-    const agentConfigComDef = { ...agentConfig, calibracao: calibracaoPadrao };
     
     let result;
 
     // Modo ROTUTX: usar bytes do Fórmula Certa direto
-    if (modoImpressao === 'rotutx' && agentConfigComDef.enabled) {
-      const impressora = selectedPrinter || agentConfigComDef.impressora;
-      
+    if (modoImpressao === 'rotutx' && agentConfig.enabled && agentUrl) {
       // Imprimir cada rótulo via ROTUTX
       let sucessos = 0;
       let erros: string[] = [];
@@ -194,7 +199,7 @@ const Index = () => {
           "1", // série padrão
           rotulo.nrItem,
           impressora,
-          agentConfigComDef.agentUrl,
+          agentUrl,
           calibracaoPadrao
         );
         
@@ -205,7 +210,7 @@ const Index = () => {
             title: "ROTUTX não encontrado",
             description: `Item ${rotulo.nrItem}: usando modo agente como fallback.`,
           });
-          const configComImpressora = { ...agentConfigComDef, impressora };
+          const configComImpressora = { ...agentConfig, agentUrl, impressora, calibracao: calibracaoPadrao };
           const fallback = await imprimirViaAgente(configComImpressora, [rotulo], layoutType, farmaciaData);
           if (fallback.success) sucessos++;
           else erros.push(`Item ${rotulo.nrItem}: ${fallback.error}`);
@@ -219,13 +224,13 @@ const Index = () => {
         error: erros.length > 0 ? erros.join("; ") : undefined,
         data: { impressos: sucessos },
       };
-    } else if (agentConfigComDef.enabled) {
-      // Modo Agente (original) - usa calibração com definição mesclada
-      const configComImpressora = { ...agentConfigComDef, impressora: selectedPrinter || agentConfigComDef.impressora };
+    } else if (agentConfig.enabled && agentUrl) {
+      // Modo Agente (original) - usa estação ativa
+      const configComImpressora = { ...agentConfig, agentUrl, impressora, calibracao: calibracaoPadrao };
       result = await imprimirViaAgente(configComImpressora, rotulosSelecionados, layoutType, farmaciaData);
     } else {
-      // Agente desativado - não há mais fallback legado
-      result = { success: false, error: "Ative o Agente HTTP nas configurações para imprimir." };
+      // Agente desativado ou sem estação ativa
+      result = { success: false, error: agentUrl ? "Ative o Agente HTTP nas configurações para imprimir." : "Nenhuma estação ativa encontrada. Verifique o mapeamento layout→estação." };
     }
     
     setIsPrinting(false);
@@ -251,8 +256,9 @@ const Index = () => {
     }
     setIsPrinting(true);
     const apiConfig = getApiConfig();
-    const agentConfig = getPrintAgentConfig();
-    const impressora = selectedPrinter || agentConfig.impressora;
+    const station = getActiveStation();
+    const agentUrl = station?.agentUrl || "";
+    const impressora = selectedPrinter || getLayoutPrinter(layoutType) || "";
 
     // Tenta enviar todos os itens da requisição
     let sucessos = 0;
@@ -264,7 +270,7 @@ const Index = () => {
         searchedRequisition,
         rotulo.nrItem || "0",
         impressora,
-        agentConfig.agentUrl,
+        agentUrl,
         apiConfig.codigoFilial
       );
       if (result.success) {
