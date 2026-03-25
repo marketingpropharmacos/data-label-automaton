@@ -1,37 +1,35 @@
 
 
-## Plano: Resolver dimensões pelo layout_tipo em vez do nome da impressora
+## Plano: Corrigir layout AMP_CX — componentes na mesma linha com pH/L/F/V
 
-### O problema (1 linha)
-`get_printer_dims('CAIXA GRANDE')` não encontra "AMP10" no nome → retorna PEQUEN (38 cols) → texto truncado.
+### O que está errado hoje
 
-### A correção
+O `gerar_ppla_ampcx` (linhas 395-444) ignora completamente o campo `componentes` (kits). Ele usa apenas `composicao` e quebra em 3 linhas sem pH, Lote, Fabricação ou Validade. Também faltam Aplicação, Contem e REG.
 
-**`agente_impressao.py`** — 2 pontos:
+### Layout correto (conforme o print do FC)
 
-1. **Adicionar mapeamento layout→config** (após linha 100):
-```python
-LAYOUT_TO_CONFIG = {
-    'AMP10': 'AMP10',
-    'AMP_CX': 'AMP_CX',
-    'A_PAC_PEQ': 'PEQUEN',
-    'A_PAC_GRAN': 'A_PAC_GRAN',
-    'TIRZ': 'PEQUEN',
-}
+```text
+Linha 1 (Y=82): PACIENTE                         REQ:008009-1
+Linha 2 (Y=73): DR(A)NOME CONSELHO.UF-NUM
+Linha 3 (Y=64): CLORETO MG PH:5.5 L:240601 F:06/24 V:12/24
+Linha 4 (Y=55): ACIDO TRANEXAMICO PH:6.0 L:240602 F:06/24 V:12/24
+Linha 5 (Y=46): USO TOPICO                       APLICACAO:ID/SC
+Linha 6 (Y=37): CONTEM: 5 FR                     REG:54321
 ```
 
-2. **Linha 1039** — trocar resolução:
-```python
-# ANTES:
-dims = get_printer_dims(impressora)
+Cada componente do kit ocupa **uma linha** com seus metadados (pH, L, F, V) concatenados.
 
-# DEPOIS:
-config_key = LAYOUT_TO_CONFIG.get(layout_tipo, 'PEQUEN')
-dims = PRINTER_CONFIGS.get(config_key, PRINTER_CONFIGS['PEQUEN'])
-```
+### Alteração
 
-3. **Linha 1191** — mesma correção no `/diagnostico-ppla`.
+**`agente_impressao.py`** — Reescrever a seção "Geração estruturada" de `gerar_ppla_ampcx` (linhas 395-444):
+
+1. Extrair `componentes` do payload (como já faz o AMP10)
+2. **Se tem componentes (kit)**: cada componente em uma linha com formato `NOME PH:X L:X F:X V:X` (linhas Y=64, 55, até 3 componentes)
+3. **Se não tem componentes**: composição em 1 linha + pH/L/F/V na mesma linha
+4. Linha de **Uso + Aplicação** (Y=46): `USO` à esquerda, `APLICACAO:XX` à direita
+5. Linha de **Contem + REG** (Y=37): `CONTEM: XX` à esquerda, `REG:XXXXX` à direita
+6. Usar a mesma lógica de `_compact_line` para posicionar elementos à esquerda/direita
 
 ### Arquivo alterado
-- `agente_impressao.py` (3 edições pequenas)
+- `agente_impressao.py` — reescrever linhas 395-444 (~50 linhas)
 
