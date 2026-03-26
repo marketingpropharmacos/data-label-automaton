@@ -670,12 +670,16 @@ const LabelTextEditor = ({
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
   const [editorFontSize, setEditorFontSize] = useState(() => getStoredFontSize(layoutType));
   const [printQuantity, setPrintQuantity] = useState(1);
+  const [lineSpacing, setLineSpacing] = useState(getStoredLineSpacing);
+  const [metaInline, setMetaInline] = useState(getStoredMetaInline);
 
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
   const maxLines = layoutConfig.linhasMax;
+  const isAmp10 = layoutType === 'AMP10';
 
-  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType);
+  const amp10Opts = isAmp10 ? { metaInline } : undefined;
+  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType, amp10Opts);
 
   // Initialize textoLivre on load or layout change
   useEffect(() => {
@@ -683,7 +687,7 @@ const LabelTextEditor = ({
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
       const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
 
-      let generated = generateText(rotulo, layoutConfig, layoutType);
+      let generated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
       if (maxCols) {
         generated = isFixedGrid
           ? generated.split('\n').map(line => line.substring(0, maxCols)).join('\n')
@@ -691,7 +695,7 @@ const LabelTextEditor = ({
       }
       onTextChange(rotulo.id, generated);
     }
-  }, [rotulo?.id, layoutType]);
+  }, [rotulo?.id, layoutType, metaInline]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
