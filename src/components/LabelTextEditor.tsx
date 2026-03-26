@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RotuloItem, PharmacyConfig, LayoutConfig, LayoutType } from "@/types/requisicao";
@@ -352,17 +353,26 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   lines.push(compactLine(drName, conselhoStr));
 
   if (isKit && rotulo.componentes) {
-    rotulo.componentes.forEach((comp) => {
+    // Filtrar componentes tipo BLISTER (embalagem, não conteúdo do rótulo)
+    const componentesVisiveis = rotulo.componentes.filter(
+      (comp) => {
+        const nomeLimpo = formatarNomeComponente(comp.nome);
+        return !nomeLimpo.startsWith('BLISTER');
+      }
+    );
+    componentesVisiveis.forEach((comp) => {
       const nomeExibicao = rotulo.eSinonimo
         ? (comp.composicao || formatarNomeComponente(comp.nome))
         : formatarNomeComponente(comp.nome);
-      lines.push(nomeExibicao.substring(0, maxCols));
       const meta: string[] = [];
       if (comp.ph) meta.push(`pH:${String(comp.ph).replace('.', ',')}`);
       if (comp.lote) meta.push(`L:${comp.lote}`);
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      if (meta.length > 0) lines.push(meta.join("  ").substring(0, maxCols));
+      const metaStr = meta.join("  ");
+      // metaInline parameter will be passed via options
+      lines.push(nomeExibicao.substring(0, maxCols));
+      if (metaStr) lines.push(metaStr.substring(0, maxCols));
     });
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
