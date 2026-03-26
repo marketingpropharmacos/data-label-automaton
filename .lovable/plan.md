@@ -1,47 +1,55 @@
 
 
-## Plano: Ajustar layout AMP10 para paridade com Fórmula Certa
+## Plano: Melhorias no editor AMP10 — BLISTER, metadados e espaçamento
 
-### Layout de referência (foto)
+### 1. BLISTER FRENTE / BLISTER FUNDO
+
+Esses nomes vêm dos **componentes do kit** (`rotulo.componentes`). O banco de dados retorna itens como "BIS BLISTER FRENTE" e "BIS BLISTER FUNDO" como componentes do kit. A função `formatarNomeComponente` (linha 85) remove apenas o prefixo "BIS " mas mantém "BLISTER FRENTE/FUNDO".
+
+**Solução**: Não filtrar automaticamente — esses são componentes reais do kit vindos do banco. Se não devem aparecer, o ideal é filtrar pelo tipo ou nome. Vou adicionar um filtro que remove componentes cujo nome contenha "BLISTER" (ou outra palavra-chave que você defina).
+
+### 2. Toggle: metadados na mesma linha vs linha abaixo
+
+Atualmente, para kits no AMP10, o código gera:
 ```text
-GABRIELLE TOMSEN ALBERS          REQ:009148-4
-DR(A)GABRIELLE TOMSEN ALBERS     CREFITO-RS-200023
-HIDROXIAPATITA DE CALCIO NANOESFERAS 15%
-pH:7,0   L:817/26   F:03/26   V:03/27
-USO EM CONSULTORIO   APLICACAO:SC SUPERFICIAL
-CONTEM: 2 SERINGAS DE 1ML
-REG:21872
+CLORETO MG 400MG/2ML ENDOV
+L:729  F:02/26  V:02/27
 ```
 
-### Problemas no código atual
-1. Usa `tipoUso` em vez de `posologia` na linha de uso
-2. Falta `F:` (data fabricação) na linha de metadados pH/L/V
-3. Falta linha de `CONTEM`
-4. `REG:` aparece antes dos metadados em vez de no final
-5. `APLICACAO` aparece dentro dos metadados pH/L/F/V em vez de junto com USO
+Com o toggle "mesma linha", ficaria:
+```text
+CLORETO MG 400MG/2ML ENDOV  L:729  F:02/26  V:02/27
+```
+
+**Implementação**: Adicionar um botão/switch no header do editor ("↕ Compacto") que alterna entre os dois modos. O estado é salvo no localStorage por layout. Quando ativo, o `generateTextAmp10` concatena nome + metadados na mesma linha em vez de linhas separadas.
+
+### 3. Controle de espaçamento entre linhas
+
+Adicionar botões no header (junto ao controle de fonte) para ajustar o `line-height` do textarea:
+- Mínimo: 1.0 (linhas coladas)
+- Padrão: 1.4
+- Máximo: 2.0
+- Incremento: 0.1
+
+Isso afeta apenas o **preview visual** — a impressão física usa coordenadas Y fixas em dots.
 
 ### Alterações
 
-**`src/components/LabelTextEditor.tsx`** — função `generateTextAmp10` (linhas 346-404):
+**`src/components/LabelTextEditor.tsx`**:
 
-Reorganizar a ordem das linhas para item não-kit:
-1. **Linha 1**: PACIENTE + REQ
-2. **Linha 2**: DR(A)NOME + CONSELHO
-3. **Linha 3+**: Composição/fórmula (wrap)
-4. **Linha meta**: `pH:X,X   L:XXX/XX   F:MM/AA   V:MM/AA`
-5. **Linha uso**: `posologia` + `APLICACAO:XXX` (compactLine)
-6. **Linha contem**: `CONTEM: X` (do campo `rotulo.contem`)
-7. **Linha REG**: `REG:XXXXX` (movida para o final)
+1. **Filtro BLISTER** (linhas 354-366): No loop de componentes do kit, pular componentes cujo nome (após limpeza) comece com "BLISTER"
 
-Detalhes:
-- Remover `APLICAÇÃO` do array `metaParts` — mover para a linha de uso
-- Adicionar `F:` (fabricação) no array `metaParts` entre L e V
-- Substituir `tipoUso` por `posologia` (igual ao fix já feito no AMP_CX)
-- Adicionar linha `CONTEM: ${rotulo.contem}` antes de REG
-- Mover `REG:` para o final do rótulo
+2. **Toggle metadados** (linhas 354-366 + header):
+   - Novo state `metaInline` (boolean, persistido no localStorage)
+   - Quando `true`, concatenar `nomeExibicao + "  " + meta.join("  ")` em uma única linha
+   - Quando `false`, manter comportamento atual (2 linhas)
+   - Botão no header: ícone de linhas ↕ com tooltip
 
-Para kit: mesma lógica de reordenação — cada componente mostra nome + pH/L/F/V, depois no final vem USO+APLICAÇÃO, CONTEM, REG.
+3. **Controle de line-height** (header + textarea):
+   - Novo state `lineSpacing` (number, persistido no localStorage)
+   - Botões +/- no header ao lado do controle de fonte
+   - Aplicar no `style={{ lineHeight: lineSpacing }}` do textarea
 
-### Arquivo alterado
-- `src/components/LabelTextEditor.tsx` — ~30 linhas na função `generateTextAmp10`
+### Arquivos alterados
+- `src/components/LabelTextEditor.tsx`
 
