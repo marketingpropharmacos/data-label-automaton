@@ -633,14 +633,32 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
 // ---- Component ----
 
 const FONT_SIZE_KEY = 'label_editor_font_size';
+const LINE_SPACING_KEY = 'label_editor_line_spacing';
+const META_INLINE_KEY = 'label_editor_meta_inline';
+
 const getStoredFontSize = (layoutTipo?: string) => {
   try {
     const stored = localStorage.getItem(FONT_SIZE_KEY);
     if (stored) return parseInt(stored, 10);
   } catch {}
-  // A_PAC_PEQ usa fonte mínima por padrão (etiqueta pequena 45x25mm)
   if (layoutTipo === 'A_PAC_PEQ') return 5;
   return 14;
+};
+
+const getStoredLineSpacing = (): number => {
+  try {
+    const stored = localStorage.getItem(LINE_SPACING_KEY);
+    if (stored) return parseFloat(stored);
+  } catch {}
+  return 1.4;
+};
+
+const getStoredMetaInline = (): boolean => {
+  try {
+    const stored = localStorage.getItem(META_INLINE_KEY);
+    if (stored) return stored === 'true';
+  } catch {}
+  return false;
 };
 
 const LabelTextEditor = ({
