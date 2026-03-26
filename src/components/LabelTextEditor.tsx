@@ -511,7 +511,7 @@ function stripAccents(text: string): string {
     .replace(/[^\x20-\x7E\n\r]/g, ''); // keep only basic ASCII printable + newlines
 }
 
-function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType?: LayoutType): string {
+function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType?: LayoutType, amp10Options?: { metaInline?: boolean }): string {
   const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
 
   let result: string | null = null;
@@ -524,7 +524,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
   } else if (resolvedLayoutTipo === 'AMP_CX') {
     result = generateTextAmpCx(rotulo, layoutConfig);
   } else if (resolvedLayoutTipo === 'AMP10') {
-    result = generateTextAmp10(rotulo, layoutConfig);
+    result = generateTextAmp10(rotulo, layoutConfig, amp10Options);
   } else if (resolvedLayoutTipo === 'TIRZ') {
     result = generateTextTirz(rotulo, layoutConfig);
   }
