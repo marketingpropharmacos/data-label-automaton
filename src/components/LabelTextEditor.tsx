@@ -752,6 +752,19 @@ const LabelTextEditor = ({
     });
   };
 
+  const handleLineSpacingChange = (delta: number) => {
+    setLineSpacing(prev => {
+      const next = Math.max(1.0, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
+      localStorage.setItem(LINE_SPACING_KEY, String(next));
+      return next;
+    });
+  };
+
+  const handleMetaInlineToggle = (checked: boolean) => {
+    setMetaInline(checked);
+    localStorage.setItem(META_INLINE_KEY, String(checked));
+  };
+
   if (!rotulo) return null;
 
   return (
@@ -764,15 +777,37 @@ const LabelTextEditor = ({
             Registro: {currentIndex + 1}/{rotulos.length}
           </span>
         </div>
-        <div className="flex items-center gap-1">
-          <Type className="h-3.5 w-3.5 text-muted-foreground" />
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(-1)}>
-            <Minus className="h-3 w-3" />
-          </Button>
-          <span className="text-xs text-muted-foreground w-6 text-center">{editorFontSize}</span>
-          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(1)}>
-            <Plus className="h-3 w-3" />
-          </Button>
+        <div className="flex items-center gap-3">
+          {/* Font size */}
+          <div className="flex items-center gap-1">
+            <Type className="h-3.5 w-3.5 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(-1)}>
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-6 text-center">{editorFontSize}</span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFontSizeChange(1)}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+          {/* Line spacing */}
+          <div className="flex items-center gap-1">
+            <AlignVerticalSpaceAround className="h-3.5 w-3.5 text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleLineSpacingChange(-0.1)}>
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-xs text-muted-foreground w-6 text-center">{lineSpacing.toFixed(1)}</span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleLineSpacingChange(0.1)}>
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+          {/* Meta inline toggle (only for AMP10) */}
+          {isAmp10 && (
+            <div className="flex items-center gap-1.5">
+              <Rows3 className="h-3.5 w-3.5 text-muted-foreground" />
+              <Switch checked={metaInline} onCheckedChange={handleMetaInlineToggle} className="scale-75" />
+              <span className="text-xs text-muted-foreground">{metaInline ? 'Compacto' : 'Separado'}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -786,7 +821,7 @@ const LabelTextEditor = ({
           onClick={handleCursorMove}
           onFocus={updateCursorInfo}
           className="w-full bg-background text-foreground font-mono p-4 resize-none focus:outline-none border-none min-h-[200px]"
-          style={{ fontSize: `${editorFontSize}px`, lineHeight: '1.4', letterSpacing: '-0.5px' }}
+          style={{ fontSize: `${editorFontSize}px`, lineHeight: String(lineSpacing), letterSpacing: '-0.5px' }}
           spellCheck={false}
           rows={Math.max(8, text.split('\n').length + 2)}
         />
