@@ -3149,23 +3149,16 @@ def buscar_requisicao(nr_requisicao):
         
         # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
         # SERIER contém a sequência das barras (0, 1, 2...) conforme FórmulaCerta
-        # Verifica dinamicamente se FC03000 tem NOMRED para montar query compatível
-        cursor.execute("SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'FC03000'")
-        cols_fc03000 = [r[0] for r in cursor.fetchall()]
-        tem_nomred = 'NOMRED' in cols_fc03000
-        nomred_col = "P.NOMRED" if tem_nomred else "NULL"
-        join_fc03000 = "LEFT JOIN FC03000 P ON I.CDPRO = P.CDPRO" if tem_nomred else ""
-        print(f"  [FC03000] NOMRED={tem_nomred}")
-
+        # P.DESCRPRD = Descrição 2 (nome limpo, sem prefixo AMP e sem sufixo ENDOV)
         # NRREG e DTVAL vêm da FC12100 por SERIER (dados gravados na inclusão do pedido)
         # DTFAB vem da FC03140 usando o CTLOT registrado na inclusão do pedido (FC12110)
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN, I.ITEMID,
-                   {nomred_col}, R.NRREG, R.DTCAD, R.DTVAL, L.DTFAB, I.CTLOT
+                   P.DESCRPRD, R.NRREG, R.DTCAD, R.DTVAL, L.DTFAB, I.CTLOT
             FROM FC12110 I
             JOIN FC12100 R ON R.NRRQU = I.NRRQU AND R.CDFIL = I.CDFIL AND R.SERIER = I.SERIER
             LEFT JOIN FC03140 L ON L.CDFIL = I.CDFIL AND L.CDPRO = I.CDPRO AND L.CTLOT = I.CTLOT
-            {join_fc03000}
+            LEFT JOIN FC03000 P ON P.CDPRO = I.CDPRO
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
             ORDER BY I.SERIER
         """, (int(nr_requisicao), filial_db))
@@ -3762,7 +3755,7 @@ def buscar_requisicao(nr_requisicao):
             cdpro     = item[5]
             cdprin    = item[6]   # CDPRIN - código do produto principal (base para mesclas)
             item_id   = item[7]
-            nomred_fc03000 = (item[8] or "").strip()
+            descrprd_fc03000 = (item[8] or "").strip()  # DESCRPRD = Descrição 2 (nome limpo)
             # Dados da inclusão do pedido (FC12100 por SERIER e FC03140 por CTLOT)
             nrreg_item     = str(item[9]  or "").strip()   # NRREG por barra (FC12100)
             dtcad_item     = item[10]                       # DTCAD = data fabricação (FC12100)
@@ -3771,8 +3764,9 @@ def buscar_requisicao(nr_requisicao):
             ctlot_item     = item[13]                       # CTLOT registrado no pedido
 
             descr_fc12110 = item[1] or ""
-            nome_produto  = nomred_fc03000 if nomred_fc03000 else descr_fc12110
-            print(f"  [NOME] DESCR='{descr_fc12110[:40]}', NOMRED='{nomred_fc03000[:40]}' => usando '{nome_produto[:40]}'")
+            # Prioridade: DESCRPRD (Descrição 2, limpa) → DESCR da FC12110
+            nome_produto  = descrprd_fc03000 if descrprd_fc03000 else descr_fc12110
+            print(f"  [NOME] DESCR1='{descr_fc12110[:40]}', DESCRPRD='{descrprd_fc03000[:40]}' => usando '{nome_produto[:40]}'")
 
             # =====================================================
             # LOTE/FAB/VAL: dados gravados na inclusão do pedido
