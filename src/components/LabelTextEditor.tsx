@@ -391,9 +391,10 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
     }
   }
 
-  // Linha meta: pH, L, F, V (sem aplicação)
+  // Linha meta: PH, L, F, V (PH sempre visível para preenchimento manual)
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  const phValAmp10 = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
+  metaParts.push(`PH:${phValAmp10}`);
   if (rotulo.lote) {
     const lote = rotulo.lote;
     if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
@@ -457,9 +458,10 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const f = formatarFormula(rotulo.formula);
   if (f) lines.push(f.substring(0, maxCols));
 
-
+  // PH sempre visível para preenchimento manual
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  const phValTirz = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
+  metaParts.push(`PH:${phValTirz}`);
   if (rotulo.lote) {
     const lote = rotulo.lote;
     if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
