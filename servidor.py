@@ -3020,9 +3020,12 @@ def buscar_requisicao(nr_requisicao):
         
         # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
         # SERIER contém a sequência das barras (0, 1, 2...) conforme FórmulaCerta
+        # JOIN FC03000 para obter NOMRED (descrição 2 / nome reduzido para rótulo)
         cursor.execute("""
-            SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN, I.ITEMID
+            SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN, I.ITEMID,
+                   P.NOMRED
             FROM FC12110 I
+            LEFT JOIN FC03000 P ON I.CDPRO = P.CDPRO
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
             ORDER BY I.SERIER
         """, (int(nr_requisicao), filial_db))
@@ -3620,7 +3623,29 @@ def buscar_requisicao(nr_requisicao):
             cdprin = item[6]  # CDPRIN - código do produto principal (base para mesclas)
             # ITEMID - identificador do item na FC12110 (com fallback seguro)
             item_id = item[7] if len(item) > 7 else None
-            nome_produto = item[1] or ""  # DESCR da FC12110
+            nomred_fc03000 = (item[8] or "").strip() if len(item) > 8 else ""
+            descr_fc12110 = item[1] or ""  # DESCR da FC12110 (descrição 1)
+            # PRIORIDADE: Usa NOMRED (descrição 2 / nome reduzido) quando disponível
+            nome_produto = nomred_fc03000 if nomred_fc03000 else descr_fc12110
+            print(f"  [NOME] DESCR='{descr_fc12110[:40]}', NOMRED='{nomred_fc03000[:40]}' => usando '{nome_produto[:40]}'")
+            
+            # =====================================================
+            # RESOLVE LOTE/FAB/VAL do item via FC03140
+            # Sobrescreve datas da requisição (FC12100) com dados reais do lote
+            # =====================================================
+            lote_item = (item[4] or "").strip()
+            data_fab_item = dados_base["dataFabricacao"]
+            data_val_item = dados_base["dataValidade"]
+            
+            if cdpro:
+                lote_data = resolve_lote_componente(cursor, filial_db, cdpro)
+                if lote_data.get("lote"):
+                    lote_item = lote_data["lote"]
+                if lote_data.get("dtFab"):
+                    data_fab_item = lote_data["dtFab"]
+                if lote_data.get("dtVal"):
+                    data_val_item = lote_data["dtVal"]
+                print(f"  [LOTE ITEM] LT={lote_item}, F={data_fab_item}, V={data_val_item}")
             
             # =====================================================
             # PRIORIDADE: Busca dados na FC99999 usando CDPRIN quando disponível
@@ -4234,7 +4259,9 @@ def buscar_requisicao(nr_requisicao):
                 "formula": nome_formula,  # Nome simplificado para mesclas
                 "volume": str(item[2]) if item[2] else dados_base["volume"],
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
-                "lote": (item[4] or "").strip(),
+                "lote": lote_item,  # Lote do item (FC03140), não da requisição
+                "dataFabricacao": data_fab_item,  # Fabricação do lote real (FC03140)
+                "dataValidade": data_val_item,  # Validade do lote real (FC03140)
                 "quantidade": str(int(item[2])) if item[2] else "",
                 "composicao": composicao,
                 "aplicacao": aplicacao,
@@ -4242,6 +4269,7 @@ def buscar_requisicao(nr_requisicao):
                 "observacoes": composicao,
                 "tipoItem": tipo_item,
                 "ph": ph_item,
+                "numeroRegistro": str(dados_base.get("numeroRegistro", "") or ""),  # Registro completo sem truncar
             }
             
             # Se é KIT, adiciona dados completos ao rótulo

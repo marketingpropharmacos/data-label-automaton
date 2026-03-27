@@ -127,18 +127,19 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const drName = medico ? `DR(A)${medico}` : "";
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-  const conselhoStr = tipo.conselho
-    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`.substring(0, 15)
+  const conselhoNome = tipo.conselho || 'CRM';
+  const conselhoStr = rotulo.numeroCRM
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
     : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // Line 3: REG:GGGGGGGG (8 chars) right-aligned
-  const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = `REG:${regNum}`;
-  const line3 = padLine("", reg, maxCols);
+  // Line 3: REG:GGGGGGGG right-aligned
+  const regNum = String(rotulo.numeroRegistro || "");
+  const reg = regNum ? `REG:${regNum}` : "";
+  const line3 = reg ? padLine("", reg, maxCols) : "";
 
-  // Lines 4-8: empty (available for manual editing)
-  const lines = [line1, line2, line3];
+  const lines = [line1, line2];
+  if (line3) lines.push(line3);
   return lines.join('\n');
 }
 
@@ -258,12 +259,10 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     if (f) lines.push(f.substring(0, maxCols));
   }
 
-  // Line: pH + Lote + Fabricação + Validade (compacto)
+  // Line: PH + Lote + Fabricação + Validade (PH sempre visível para preenchimento manual)
   const metaParts: string[] = [];
-  if (rotulo.ph) {
-    const phVal = String(rotulo.ph).replace('.', ',');
-    metaParts.push(`pH:${phVal}`);
-  }
+  const phVal = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
+  metaParts.push(`PH:${phVal}`);
   const lote = rotulo.lote || "";
   if (lote) {
     if (lote.includes('/')) {
@@ -286,7 +285,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     lines.push(compactLine(posologiaValida, right));
   }
 
-  // Line: Contém + REG (CONTEM sempre visível para preenchimento manual)
+  // Line: Contém + REG
   const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM:";
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
   lines.push(compactLine(contemStr, regStr));
@@ -308,16 +307,18 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   const drName = medico ? `DR(A)${medico}` : "";
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-  const conselhoStr = tipo.conselho
-    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`.substring(0, 20)
+  const conselhoNome = tipo.conselho || 'CRM';
+  const conselhoStr = rotulo.numeroCRM
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 20)
     : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
-  const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = `REG:${regNum}`;
-  const line3 = padLine("", reg, maxCols);
+  const regNum = String(rotulo.numeroRegistro || "");
+  const reg = regNum ? `REG:${regNum}` : "";
+  const line3 = reg ? padLine("", reg, maxCols) : "";
 
-  const lines = [line1, line2, line3];
+  const lines = [line1, line2];
+  if (line3) lines.push(line3);
   return lines.join('\n');
 }
 
@@ -390,9 +391,10 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
     }
   }
 
-  // Linha meta: pH, L, F, V (sem aplicação)
+  // Linha meta: PH, L, F, V (PH sempre visível para preenchimento manual)
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  const phValAmp10 = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
+  metaParts.push(`PH:${phValAmp10}`);
   if (rotulo.lote) {
     const lote = rotulo.lote;
     if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
@@ -456,9 +458,10 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const f = formatarFormula(rotulo.formula);
   if (f) lines.push(f.substring(0, maxCols));
 
-
+  // PH sempre visível para preenchimento manual
   const metaParts: string[] = [];
-  if (rotulo.ph) metaParts.push(`pH:${String(rotulo.ph).replace('.', ',')}`);
+  const phValTirz = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
+  metaParts.push(`PH:${phValTirz}`);
   if (rotulo.lote) {
     const lote = rotulo.lote;
     if (lote.includes('/')) { metaParts.push(`L:${lote}`); }
