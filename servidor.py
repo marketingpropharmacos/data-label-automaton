@@ -1653,6 +1653,74 @@ def debug_kit(cdsac):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# =====================================================
+# ENDPOINT DE DIAGNÓSTICO: executa SELECT arbitrário (somente leitura)
+# Usado para investigar dados do banco sem alterar nada.
+# POST /api/debug/query
+# Body: { "sql": "SELECT ...", "params": [] }
+# =====================================================
+@app.route('/api/debug/query', methods=['POST', 'OPTIONS'])
+def debug_query():
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        body = request.get_json(force=True) or {}
+        sql = (body.get('sql') or '').strip()
+        params = body.get('params') or []
+
+        if not sql:
+            return jsonify({"success": False, "error": "Campo 'sql' obrigatório"}), 400
+
+        # Garante somente leitura: rejeita qualquer instrução que não seja SELECT
+        sql_upper = sql.upper().lstrip()
+        if not sql_upper.startswith('SELECT'):
+            return jsonify({"success": False, "error": "Apenas instruções SELECT são permitidas"}), 403
+
+        palavras_proibidas = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE',
+                              'TRUNCATE', 'MERGE', 'EXECUTE', 'GRANT', 'REVOKE']
+        for palavra in palavras_proibidas:
+            if palavra in sql_upper:
+                return jsonify({"success": False, "error": f"Instrução não permitida: {palavra}"}), 403
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+
+        colunas = [desc[0].strip() for desc in cursor.description]
+        rows = cursor.fetchall()
+        conn.close()
+
+        resultado = []
+        for row in rows:
+            registro = {}
+            for i, col in enumerate(colunas):
+                val = row[i]
+                if hasattr(val, 'read'):
+                    try:
+                        val = val.read().decode('latin-1')[:500]
+                    except Exception:
+                        val = '[BLOB]'
+                elif hasattr(val, 'strftime'):
+                    val = val.strftime('%d/%m/%Y')
+                elif val is not None:
+                    val = str(val).strip()
+                registro[col] = val
+            resultado.append(registro)
+
+        print(f"[DEBUG QUERY] {len(resultado)} linhas retornadas | SQL: {sql[:120]}")
+        return jsonify({
+            "success": True,
+            "colunas": colunas,
+            "total": len(resultado),
+            "dados": resultado
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # Debug: verificar se requisição existe no banco
 @app.route('/api/debug/verificar-requisicao/<nr_requisicao>', methods=['GET'])
 def debug_verificar_requisicao(nr_requisicao):
