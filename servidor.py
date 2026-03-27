@@ -1191,16 +1191,77 @@ def montar_kit_expandido(cursor, cdpro, cdfil, nrrqu=None, serier=None, e_sinoni
     
     print(f"  [MONTAR_KIT] ✓ Kit detectado! CDFRM={cdfrm}, DESCRFRM={descr_kit[:40] if descr_kit else 'N/A'}")
     
-    # PASSO 2: Tenta buscar componentes via FC12111 (ordem da requisição)
+    # PASSO 2a: Tenta buscar componentes TPCMP='F' da FC12110 (dados exatos da inclusão do pedido)
+    # Esses registros têm o CTLOT exato usado no pedido, o que garante lote/fab/val corretos.
+    # Só executa se tiver nrrqu e serier (contexto de requisição específica).
+    componentes_fc12110_f = []
+    if nrrqu and serier:
+        try:
+            cursor.execute("""
+                SELECT I.CDPRO, I.DESCR, I.CTLOT, I.NRLOT, I.QUANT, I.UNIDA,
+                       L.DTFAB, L.DTVAL
+                FROM FC12110 I
+                LEFT JOIN FC03140 L ON L.CDFIL = I.CDFIL
+                                    AND L.CDPRO = I.CDPRO
+                                    AND L.CTLOT = I.CTLOT
+                WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.SERIER = ? AND I.TPCMP = 'F'
+                ORDER BY I.CDPRO
+            """, (int(nrrqu), int(cdfil), int(serier)))
+            rows_f = cursor.fetchall()
+            for row in rows_f:
+                lote_f = str(row[3] or row[2] or "").strip()
+                fab_f  = row[6].strftime('%d/%m/%Y') if row[6] else ""
+                val_f  = row[7].strftime('%d/%m/%Y') if row[7] else ""
+                descr_f = row[1] or ""
+                if hasattr(descr_f, 'read'):
+                    descr_f = descr_f.read().decode('latin-1')
+                componentes_fc12110_f.append({
+                    "cdpro": row[0],
+                    "descr": descr_f.strip(),
+                    "ctlot": str(row[2] or ""),
+                    "lote_req": lote_f,
+                    "quant": str(row[4]) if row[4] else "",
+                    "unida": (row[5] or "").strip(),
+                    "dtFab": fab_f,
+                    "dtVal": val_f,
+                })
+            print(f"  [FC12110_F] {len(componentes_fc12110_f)} componentes TPCMP=F encontrados para SERIER={serier}")
+        except Exception as e:
+            print(f"  [FC12110_F ERRO] {e}")
+
+    # PASSO 2b: Tenta buscar componentes via FC12111 (ordem da requisição)
     componentes_fc12111 = []
     if nrrqu and serier:
         componentes_fc12111 = tenta_fc12111_componentes(cursor, nrrqu, cdfil, serier)
-    
+
     componentes_final = []
-    
-    if componentes_fc12111:
+
+    if componentes_fc12110_f:
+        # ESTRATÉGIA 0: Usa TPCMP='F' da FC12110 — lotes exatos da inclusão do pedido
+        print(f"  [MONTAR_KIT] Usando {len(componentes_fc12110_f)} componentes FC12110 TPCMP=F")
+        for comp in componentes_fc12110_f:
+            cdpro_comp = comp["cdpro"]
+            if e_sinonimo:
+                obsfic_data = extrair_obsfic_componente(cursor, cdpro_comp)
+                composicao_comp = obsfic_data["composicao"]
+                aplicacao_comp  = obsfic_data["aplicacao"]
+            else:
+                composicao_comp = extrair_composicao_componente(cursor, cdpro_comp)
+                aplicacao_comp  = ""
+            ph_comp = buscar_ph_componente(cursor, cdpro_comp, cdfil)
+            componentes_final.append({
+                "cdpro":      cdpro_comp,
+                "descr":      comp.get("descr", ""),
+                "lote":       comp.get("lote_req", ""),
+                "dtFab":      comp.get("dtFab", ""),
+                "dtVal":      comp.get("dtVal", ""),
+                "composicao": composicao_comp,
+                "aplicacao":  aplicacao_comp,
+                "ph":         ph_comp,
+            })
+    elif componentes_fc12111:
         print(f"  [MONTAR_KIT] Usando {len(componentes_fc12111)} componentes da FC12111")
-        
+
         # Usa FC12111 como base, complementa lote com FC03140 se necessário
         for comp in componentes_fc12111:
             cdpro_comp = comp["cdpro"]
