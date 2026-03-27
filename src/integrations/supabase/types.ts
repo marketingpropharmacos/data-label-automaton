@@ -16,34 +16,34 @@ export type Database = {
     Tables: {
       agentes_status: {
         Row: {
+          atualizado_em: string | null
+          hostname: string | null
           id: string
           nome: string
-          url: string
-          hostname: string
-          versao: string
-          status: string
+          status: string | null
           ultimo_ping: string | null
-          atualizado_em: string | null
+          url: string | null
+          versao: string | null
         }
         Insert: {
+          atualizado_em?: string | null
+          hostname?: string | null
           id: string
           nome: string
-          url?: string
-          hostname?: string
-          versao?: string
-          status?: string
+          status?: string | null
           ultimo_ping?: string | null
-          atualizado_em?: string | null
+          url?: string | null
+          versao?: string | null
         }
         Update: {
+          atualizado_em?: string | null
+          hostname?: string | null
           id?: string
           nome?: string
-          url?: string
-          hostname?: string
-          versao?: string
-          status?: string
+          status?: string | null
           ultimo_ping?: string | null
-          atualizado_em?: string | null
+          url?: string | null
+          versao?: string | null
         }
         Relationships: []
       }
@@ -3760,6 +3760,24 @@ export type Database = {
       }
     }
     Functions: {
+      get_lab_colaboradores: {
+        Args: { p_laboratorio_id: number }
+        Returns: {
+          ativo: boolean
+          cargo: string
+          cnpj_empresa: string
+          colaborador_id: number
+          empresa_registro: string
+          laboratorio_id: number
+          loja_origem_id: number
+          meta_lab_tipo: string
+          nome: string
+          nome_completo: string
+          rv_percentual_custom: number
+          setor_lab: string
+          tipo: string
+        }[]
+      }
       get_my_permissions: {
         Args: never
         Returns: {
