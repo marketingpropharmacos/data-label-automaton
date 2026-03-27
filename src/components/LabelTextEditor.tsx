@@ -127,18 +127,19 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const drName = medico ? `DR(A)${medico}` : "";
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
-  const conselhoStr = tipo.conselho
-    ? `${tipo.conselho}-${rotulo.ufCRM}-${rotulo.numeroCRM}`.substring(0, 15)
+  const conselhoNome = tipo.conselho || 'CRM';
+  const conselhoStr = rotulo.numeroCRM
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
     : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // Line 3: REG:GGGGGGGG (8 chars) right-aligned
-  const regNum = String(rotulo.numeroRegistro || "").substring(0, 8);
-  const reg = `REG:${regNum}`;
-  const line3 = padLine("", reg, maxCols);
+  // Line 3: REG:GGGGGGGG right-aligned
+  const regNum = String(rotulo.numeroRegistro || "");
+  const reg = regNum ? `REG:${regNum}` : "";
+  const line3 = reg ? padLine("", reg, maxCols) : "";
 
-  // Lines 4-8: empty (available for manual editing)
-  const lines = [line1, line2, line3];
+  const lines = [line1, line2];
+  if (line3) lines.push(line3);
   return lines.join('\n');
 }
 
