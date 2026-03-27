@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { SystemConfigService } from "@/services/systemConfigService";
 
 type AppRole = "admin" | "operador";
 
@@ -54,7 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (currentSession?.user) {
           // Usar setTimeout para evitar deadlock com Supabase
-          setTimeout(() => fetchUserRole(currentSession.user.id), 0);
+          setTimeout(async () => {
+            await fetchUserRole(currentSession.user.id);
+            // Sincronizar configs do Supabase → localStorage
+            await SystemConfigService.syncToLocalStorage();
+          }, 0);
         } else {
           setRole(null);
         }
@@ -74,6 +79,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (initialSession?.user) {
         fetchUserRole(initialSession.user.id);
+        // Sync configs on initial load too
+        SystemConfigService.syncToLocalStorage();
       } else {
         setIsLoading(false);
       }

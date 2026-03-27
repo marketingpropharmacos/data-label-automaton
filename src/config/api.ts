@@ -190,6 +190,13 @@ export const getLayoutPrinterMap = (): LayoutPrinterMap => {
 };
 
 export const getLayoutStation = (layout: string): string | undefined => {
+  try {
+    const stored = localStorage.getItem('label-system-layout-station-map');
+    if (stored) {
+      const map = JSON.parse(stored);
+      if (map[layout]) return map[layout];
+    }
+  } catch { /* ignore */ }
   return DEFAULT_LAYOUT_STATION_MAP[layout];
 };
 

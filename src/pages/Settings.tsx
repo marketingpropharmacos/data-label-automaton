@@ -1,12 +1,34 @@
-import { ArrowLeft } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, Upload, CheckCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import LabelSettings from "@/components/LabelSettings";
 import AgentesControl from "@/components/AgentesControl";
+import { useToast } from "@/hooks/use-toast";
+import { SystemConfigService } from "@/services/systemConfigService";
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
 
 const Settings = () => {
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { toast } = useToast();
+
+  const handlePublishConfigs = async () => {
+    setIsSyncing(true);
+    try {
+      const ok = await SystemConfigService.pushLocalStorageToSupabase();
+      toast({
+        title: ok ? "Configs publicadas!" : "Erro ao publicar",
+        description: ok
+          ? "Todas as configurações foram salvas no Supabase. Operadores receberão ao fazer login."
+          : "Não foi possível salvar. Verifique permissões.",
+        variant: ok ? "default" : "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -26,6 +48,20 @@ const Settings = () => {
             <div>
               <h1 className="text-xl font-bold text-primary">Configurações</h1>
               <p className="text-sm text-muted-foreground">Sistema de Rótulos</p>
+            </div>
+            <div className="ml-auto">
+              <Button
+                onClick={handlePublishConfigs}
+                disabled={isSyncing}
+                className="gap-2"
+              >
+                {isSyncing ? (
+                  <Upload className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle className="h-4 w-4" />
+                )}
+                Publicar Configs para Operadores
+              </Button>
             </div>
           </div>
         </div>
