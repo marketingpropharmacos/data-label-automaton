@@ -4259,7 +4259,9 @@ def buscar_requisicao(nr_requisicao):
                 "formula": nome_formula,  # Nome simplificado para mesclas
                 "volume": str(item[2]) if item[2] else dados_base["volume"],
                 "unidadeVolume": item[3] or dados_base["unidadeVolume"],
-                "lote": (item[4] or "").strip(),
+                "lote": lote_item,  # Lote do item (FC03140), não da requisição
+                "dataFabricacao": data_fab_item,  # Fabricação do lote real (FC03140)
+                "dataValidade": data_val_item,  # Validade do lote real (FC03140)
                 "quantidade": str(int(item[2])) if item[2] else "",
                 "composicao": composicao,
                 "aplicacao": aplicacao,
@@ -4267,6 +4269,7 @@ def buscar_requisicao(nr_requisicao):
                 "observacoes": composicao,
                 "tipoItem": tipo_item,
                 "ph": ph_item,
+                "numeroRegistro": str(dados_base.get("numeroRegistro", "") or ""),  # Registro completo sem truncar
             }
             
             # Se é KIT, adiciona dados completos ao rótulo
