@@ -385,7 +385,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
       if (comp.lote) meta.push(`L:${comp.lote}`);
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
-      const metaStr = meta.join(" ");
+      const metaStr = meta.join("  ");
       if (options?.metaInline && metaStr) {
         // Tudo na mesma linha: NOME  pH:X  L:X  F:X  V:X
         const maxNome = maxCols - metaStr.length - 2;
