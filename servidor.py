@@ -3088,30 +3088,22 @@ def buscar_requisicao(nr_requisicao):
         
         # Busca itens da requisição (fórmulas) - incluindo CDPRIN para buscar composição de mesclas
         # SERIER contém a sequência das barras (0, 1, 2...) conforme FórmulaCerta
-        # Verifica dinamicamente quais colunas existem para montar query compatível
+        # Verifica dinamicamente se FC03000 tem NOMRED para montar query compatível
         cursor.execute("SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'FC03000'")
         cols_fc03000 = [r[0] for r in cursor.fetchall()]
-        cursor.execute("SELECT TRIM(RDB$FIELD_NAME) FROM RDB$RELATION_FIELDS WHERE RDB$RELATION_NAME = 'FC12110'")
-        cols_fc12110 = [r[0] for r in cursor.fetchall()]
-
-        tem_nomred  = 'NOMRED'  in cols_fc03000
-        tem_nrreg   = 'NRREG'   in cols_fc12110
-        tem_dtfab   = 'DTFAB'   in cols_fc12110
-        tem_dtval   = 'DTVAL'   in cols_fc12110
-
-        nomred_col = "P.NOMRED"  if tem_nomred else "NULL"
-        nrreg_col  = "I.NRREG"   if tem_nrreg  else "NULL"
-        dtfab_col  = "I.DTFAB"   if tem_dtfab  else "NULL"
-        dtval_col  = "I.DTVAL"   if tem_dtval  else "NULL"
-
+        tem_nomred = 'NOMRED' in cols_fc03000
+        nomred_col = "P.NOMRED" if tem_nomred else "NULL"
         join_fc03000 = "LEFT JOIN FC03000 P ON I.CDPRO = P.CDPRO" if tem_nomred else ""
+        print(f"  [FC03000] NOMRED={tem_nomred}")
 
-        print(f"  [FC12110] NOMRED={tem_nomred}, NRREG={tem_nrreg}, DTFAB={tem_dtfab}, DTVAL={tem_dtval}")
-
+        # NRREG e DTVAL vêm da FC12100 por SERIER (dados gravados na inclusão do pedido)
+        # DTFAB vem da FC03140 usando o CTLOT registrado na inclusão do pedido (FC12110)
         cursor.execute(f"""
             SELECT I.SERIER, I.DESCR, I.QUANT, I.UNIDA, I.NRLOT, I.CDPRO, I.CDPRIN, I.ITEMID,
-                   {nomred_col}, {nrreg_col}, {dtfab_col}, {dtval_col}
+                   {nomred_col}, R.NRREG, R.DTCAD, R.DTVAL, L.DTFAB, I.CTLOT
             FROM FC12110 I
+            JOIN FC12100 R ON R.NRRQU = I.NRRQU AND R.CDFIL = I.CDFIL AND R.SERIER = I.SERIER
+            LEFT JOIN FC03140 L ON L.CDFIL = I.CDFIL AND L.CDPRO = I.CDPRO AND L.CTLOT = I.CTLOT
             {join_fc03000}
             WHERE I.NRRQU = ? AND I.CDFIL = ? AND I.TPCMP IN ('C', 'S')
             ORDER BY I.SERIER
@@ -3705,37 +3697,31 @@ def buscar_requisicao(nr_requisicao):
         
         data = []
         for idx, item in enumerate(itens):
-            serier = item[0]  # SERIER - número da barra (0, 1, 2...) direto do banco
-            cdpro = item[5]
-            cdprin = item[6]  # CDPRIN - código do produto principal (base para mesclas)
-            # ITEMID - identificador do item na FC12110 (com fallback seguro)
-            item_id = item[7] if len(item) > 7 else None
-            nomred_fc03000 = (item[8] or "").strip() if len(item) > 8 else ""
-            # Campos do pedido (inclusão): NRREG, DTFAB, DTVAL por item
-            nrreg_item = str(item[9] or "").strip() if len(item) > 9 else ""
-            dtfab_fc12110 = item[10] if len(item) > 10 else None
-            dtval_fc12110 = item[11] if len(item) > 11 else None
-            descr_fc12110 = item[1] or ""  # DESCR da FC12110 (descrição 1)
-            # PRIORIDADE: Usa NOMRED (descrição 2 / nome reduzido) quando disponível
-            nome_produto = nomred_fc03000 if nomred_fc03000 else descr_fc12110
+            serier    = item[0]   # SERIER - número da barra (0, 1, 2...) direto do banco
+            cdpro     = item[5]
+            cdprin    = item[6]   # CDPRIN - código do produto principal (base para mesclas)
+            item_id   = item[7]
+            nomred_fc03000 = (item[8] or "").strip()
+            # Dados da inclusão do pedido (FC12100 por SERIER e FC03140 por CTLOT)
+            nrreg_item     = str(item[9]  or "").strip()   # NRREG por barra (FC12100)
+            dtcad_item     = item[10]                       # DTCAD = data fabricação (FC12100)
+            dtval_item     = item[11]                       # DTVAL por barra (FC12100)
+            dtfab_fc03140  = item[12]                       # DTFAB real do lote (FC03140)
+            ctlot_item     = item[13]                       # CTLOT registrado no pedido
+
+            descr_fc12110 = item[1] or ""
+            nome_produto  = nomred_fc03000 if nomred_fc03000 else descr_fc12110
             print(f"  [NOME] DESCR='{descr_fc12110[:40]}', NOMRED='{nomred_fc03000[:40]}' => usando '{nome_produto[:40]}'")
 
             # =====================================================
-            # LOTE/FAB/VAL: usa dados da inclusão do pedido (FC12110) como fonte primária
-            # Fallback para FC03140 apenas se os campos do pedido estiverem vazios
+            # LOTE/FAB/VAL: dados gravados na inclusão do pedido
+            # NRLOT e CTLOT vêm da FC12110; DTFAB da FC03140 (pelo CTLOT do pedido);
+            # DTVAL da FC12100 por SERIER; fallback para dados_base somente se vazio.
             # =====================================================
-            lote_item = (item[4] or "").strip()
-            data_fab_item = dtfab_fc12110.strftime('%d/%m/%Y') if dtfab_fc12110 else dados_base["dataFabricacao"]
-            data_val_item = dtval_fc12110.strftime('%d/%m/%Y') if dtval_fc12110 else dados_base["dataValidade"]
-
-            if cdpro and not (lote_item and data_fab_item and data_val_item):
-                lote_data = resolve_lote_componente(cursor, filial_db, cdpro)
-                if not lote_item and lote_data.get("lote"):
-                    lote_item = lote_data["lote"]
-                if not data_fab_item and lote_data.get("dtFab"):
-                    data_fab_item = lote_data["dtFab"]
-                if not data_val_item and lote_data.get("dtVal"):
-                    data_val_item = lote_data["dtVal"]
+            lote_item     = (item[4] or "").strip()   # NRLOT da FC12110
+            data_fab_item = dtfab_fc03140.strftime('%d/%m/%Y') if dtfab_fc03140 else \
+                            (dtcad_item.strftime('%d/%m/%Y') if dtcad_item else dados_base["dataFabricacao"])
+            data_val_item = dtval_item.strftime('%d/%m/%Y') if dtval_item else dados_base["dataValidade"]
             print(f"  [LOTE ITEM] NRREG={nrreg_item}, LT={lote_item}, F={data_fab_item}, V={data_val_item}")
             
             # =====================================================
