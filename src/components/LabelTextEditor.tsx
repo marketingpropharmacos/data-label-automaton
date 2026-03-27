@@ -209,9 +209,12 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     lines.push(compactLine(drName, conselhoStr));
 
     // Component lines: NOME PH:X L:X F:XX/XX V:XX/XX (tudo na mesma linha)
-    // Filtrar componentes tipo BLISTER (embalagem, não é conteúdo do rótulo)
+    // Filtrar componentes de embalagem (BLISTER, CAIXA MED, etc.)
     const componentesVisiveis = rotulo.componentes.filter(
-      (comp) => !comp.nome?.toUpperCase().startsWith('BLISTER')
+      (comp) => {
+        const nome = comp.nome?.toUpperCase() || '';
+        return !nome.startsWith('BLISTER') && !nome.startsWith('CAIXA MED');
+      }
     );
     componentesVisiveis.forEach((comp) => {
       const nomeExibicao = rotulo.eSinonimo
@@ -363,11 +366,13 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   lines.push(compactLine(drName, conselhoStr));
 
   if (isKit && rotulo.componentes) {
-    // Filtrar componentes tipo BLISTER (embalagem, não conteúdo do rótulo)
+    // Filtrar componentes de embalagem (BLISTER, CAIXA MED, etc.)
     const componentesVisiveis = rotulo.componentes.filter(
       (comp) => {
+        const nome = comp.nome?.toUpperCase() || '';
         const nomeLimpo = formatarNomeComponente(comp.nome);
-        return !nomeLimpo.startsWith('BLISTER');
+        return !nome.startsWith('BLISTER') && !nome.startsWith('CAIXA MED') &&
+               !nomeLimpo.startsWith('BLISTER') && !nomeLimpo.startsWith('CAIXA MED');
       }
     );
     componentesVisiveis.forEach((comp) => {
