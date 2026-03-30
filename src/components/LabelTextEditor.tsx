@@ -744,7 +744,7 @@ const LabelTextEditor = ({
     let newText = e.target.value;
     if (maxCols && maxLines) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
+      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'AMP_CX';
       newText = isFixedGrid
         ? truncateText(newText, maxCols, maxLines)
         : wrapText(newText, maxCols, maxLines);
