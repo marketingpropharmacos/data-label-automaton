@@ -745,9 +745,16 @@ const LabelTextEditor = ({
     if (maxCols && maxLines) {
       const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
       const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'AMP_CX';
-      newText = isFixedGrid
-        ? truncateText(newText, maxCols, maxLines)
-        : wrapText(newText, maxCols, maxLines);
+      const isFreeScroll = resolvedLayoutTipo === 'A_PAC_GRAN';
+      if (isFreeScroll) {
+        // A_PAC_GRAN: sem limite de coluna durante edição — texto flui livremente na linha
+        const lines = newText.split('\n').slice(0, maxLines);
+        newText = lines.join('\n');
+      } else {
+        newText = isFixedGrid
+          ? truncateText(newText, maxCols, maxLines)
+          : wrapText(newText, maxCols, maxLines);
+      }
     }
     onTextChange(rotulo.id, newText);
     setTimeout(updateCursorInfo, 0);
