@@ -82,6 +82,43 @@ export const SystemConfigService = {
         localStorage.setItem("label-system-layout-station-map", JSON.stringify(stationMap.value));
       }
 
+      // Injetar URLs ao vivo dos agentes (agentes_status) nas print_stations
+      // Isso garante que operadores sempre recebam a URL correta do ngrok sem configurar nada
+      try {
+        const { data: agentes } = await supabase
+          .from("agentes_status")
+          .select("id, url, status, ultimo_ping");
+
+        if (agentes && agentes.length > 0) {
+          const stationsRaw = localStorage.getItem("label-system-print-stations");
+          const stations: PrintStation[] = stationsRaw ? JSON.parse(stationsRaw) : [];
+
+          const now = Date.now();
+          let updated = false;
+
+          const merged = stations.map((station) => {
+            const agente = agentes.find((a) => a.id === station.id);
+            if (!agente?.url) return station;
+
+            // Só atualiza se o agente pingou nos últimos 5 minutos
+            const pingAge = agente.ultimo_ping
+              ? (now - new Date(agente.ultimo_ping).getTime()) / 1000
+              : Infinity;
+            if (pingAge > 300) return station;
+
+            if (station.agentUrl !== agente.url) updated = true;
+            return { ...station, agentUrl: agente.url };
+          });
+
+          if (updated) {
+            localStorage.setItem("label-system-print-stations", JSON.stringify(merged));
+            console.log("[SystemConfig] URLs dos agentes atualizadas via agentes_status");
+          }
+        }
+      } catch (urlErr) {
+        console.warn("[SystemConfig] Não foi possível atualizar URLs dos agentes:", urlErr);
+      }
+
       console.log("[SystemConfig] Configs sincronizadas do Supabase → localStorage");
     } catch (err) {
       console.error("[SystemConfig] Erro ao sincronizar configs:", err);
