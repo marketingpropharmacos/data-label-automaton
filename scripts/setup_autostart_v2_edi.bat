@@ -19,7 +19,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set PASTA=C:\ServidorRotulos
+set PASTA=C:\servidor_rotulos
 set AGENTE_ID=edi
 
 REM ---- Verificar pasta ----
