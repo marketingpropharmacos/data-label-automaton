@@ -162,7 +162,7 @@ export type LayoutPrinterMap = Record<string, string>;
 
 // Defaults hardcoded baseados na realidade física das estações
 const DEFAULT_LAYOUT_PRINTER_MAP: LayoutPrinterMap = {
-  'A_PAC_PEQ': 'PEQUENO',
+  'A_PAC_PEQ': 'AMP PEQUENA NOVA',
   'A_PAC_GRAN': 'AMP GRANDE',
   'AMP_CX': 'AMP CAIXA',
   'AMP10': 'CAIXA GRANDE',
