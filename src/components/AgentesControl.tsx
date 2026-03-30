@@ -114,7 +114,10 @@ export default function AgentesControl() {
 
     setLoading((l) => ({ ...l, [`health_${agente.id}`]: true }));
     try {
-      const resp = await fetch(`${agente.url}/health`, { signal: AbortSignal.timeout(5000) });
+      const resp = await fetch(`${agente.url}/health`, {
+        signal: AbortSignal.timeout(5000),
+        headers: { "ngrok-skip-browser-warning": "true" },
+      });
       const data = await resp.json();
       toast({
         title: `${agente.nome} — ONLINE`,
