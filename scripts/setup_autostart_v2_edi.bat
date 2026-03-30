@@ -107,7 +107,7 @@ echo [2/5] Criando start_agent_v2.bat com path fixo do Python...
     echo     if defined NGROK_EXE ^(
     echo         echo Iniciando ngrok...
     echo         echo [%%date%% %%time%%] Iniciando ngrok: %%NGROK_EXE%% >> "%%LOG%%"
-    echo         start "ngrok - ProPharmacos" "%%NGROK_EXE%%" http 5001
+    echo         start "ngrok - ProPharmacos" "%%NGROK_EXE%%" http 5002
     echo         timeout /t 5 /nobreak ^>nul
     echo     ^) else ^(
     echo         echo [AVISO] ngrok nao encontrado - pulando.
