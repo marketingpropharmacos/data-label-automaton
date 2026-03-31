@@ -4777,6 +4777,7 @@ def _mapear_para_agente(data: dict) -> dict:
             "lote": str(r.get("lote") or ""),
             "textoLivre": str(r.get("textoLivre") or ""),
             "componentes": r.get("componentes") or [],
+            "yOffsetDots": int(r.get("yOffsetDots") or 0),
         })
 
     return {

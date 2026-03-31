@@ -326,6 +326,7 @@ export const imprimirViaAgente = async (
         textoLivre: r.textoLivre,
         tipoItem: r.tipoItem,
         componentes: r.componentes,
+        yOffsetDots: (r as any).yOffsetDots || 0,
       })),
     };
 
