@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RotuloItem, PharmacyConfig, LayoutConfig, LayoutType } from "@/types/requisicao";
+import { useToast } from "@/hooks/use-toast";
 
 // ---- Word-wrap utility ----
 function wrapText(text: string, maxCols: number, maxLines: number): string {
@@ -702,6 +703,7 @@ const LabelTextEditor = ({
    layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
    onPrint, onPrintAll, onPrintFcRaw, isPrinting, availablePrinters, selectedPrinter, onPrinterChange,
  }: LabelTextEditorProps) => {
+  const { toast } = useToast();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
   const [editorFontSize, setEditorFontSize] = useState(() => getStoredFontSize(layoutType));
@@ -720,19 +722,22 @@ const LabelTextEditor = ({
 
   // Initialize textoLivre on load or layout change
   useEffect(() => {
-    if (rotulo) {
-      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
+    if (!rotulo) return;
 
-      let generated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
-      if (maxCols) {
-        generated = isFixedGrid
-          ? generated.split('\n').map(line => line.substring(0, maxCols)).join('\n')
-          : wrapText(generated, maxCols, Number.MAX_SAFE_INTEGER);
-      }
-      onTextChange(rotulo.id, generated);
+    // Não sobrescrever texto editado/restaurado manualmente.
+    if (rotulo.textoLivre !== undefined) return;
+
+    const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
+    const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
+
+    let generated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+    if (maxCols) {
+      generated = isFixedGrid
+        ? generated.split('\n').map(line => line.substring(0, maxCols)).join('\n')
+        : wrapText(generated, maxCols, Number.MAX_SAFE_INTEGER);
     }
-  }, [rotulo?.id, layoutType, metaInline]);
+    onTextChange(rotulo.id, generated);
+  }, [rotulo?.id, rotulo?.textoLivre, layoutType, metaInline]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
@@ -854,6 +859,35 @@ const LabelTextEditor = ({
 
   const isPacPeq = layoutType === 'A_PAC_PEQ';
 
+  const handleSaveAllTexts = () => {
+    const requisicoes = new Set<string>();
+    if (searchedRequisition?.trim()) requisicoes.add(searchedRequisition.trim());
+    if (rotulos[0]?.nrRequisicao?.trim()) requisicoes.add(rotulos[0].nrRequisicao.trim());
+
+    if (requisicoes.size === 0 || rotulos.length === 0) {
+      toast({
+        title: "Nada para salvar",
+        description: "Busque uma requisição antes de salvar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const savedMap: Record<string, string> = {};
+    rotulos.forEach((r) => {
+      if (r.textoLivre !== undefined) savedMap[r.id] = r.textoLivre;
+    });
+
+    requisicoes.forEach((req) => {
+      localStorage.setItem(`saved_rotulos_${req}`, JSON.stringify(savedMap));
+    });
+
+    toast({
+      title: "Edições salvas",
+      description: `${Object.keys(savedMap).length} rótulo(s) salvo(s) para a requisição ${Array.from(requisicoes)[0]}.`,
+    });
+  };
+
   if (!rotulo) return null;
 
   return (
@@ -915,21 +949,7 @@ const LabelTextEditor = ({
             size="icon"
             className="h-7 w-7"
             title="Salvar edições de todos os rótulos desta requisição"
-            onClick={() => {
-              if (!searchedRequisition || rotulos.length === 0) return;
-              const savedMap: Record<string, string> = {};
-              rotulos.forEach(r => {
-                if (r.textoLivre) savedMap[r.id] = r.textoLivre;
-              });
-              localStorage.setItem(`saved_rotulos_${searchedRequisition}`, JSON.stringify(savedMap));
-              // Show visual feedback via toast (import via props not available, use alert-like feedback)
-              const btn = document.querySelector('[data-save-btn]') as HTMLElement;
-              if (btn) {
-                btn.classList.add('text-primary');
-                setTimeout(() => btn.classList.remove('text-primary'), 1500);
-              }
-            }}
-            data-save-btn=""
+            onClick={handleSaveAllTexts}
           >
             <Save className="h-4 w-4" />
           </Button>
