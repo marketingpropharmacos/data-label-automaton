@@ -909,7 +909,30 @@ const LabelTextEditor = ({
               </Button>
             </div>
           )}
-        </div>
+          {/* Botão Salvar edições */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title="Salvar edições de todos os rótulos desta requisição"
+            onClick={() => {
+              if (!searchedRequisition || rotulos.length === 0) return;
+              const savedMap: Record<string, string> = {};
+              rotulos.forEach(r => {
+                if (r.textoLivre) savedMap[r.id] = r.textoLivre;
+              });
+              localStorage.setItem(`saved_rotulos_${searchedRequisition}`, JSON.stringify(savedMap));
+              // Show visual feedback via toast (import via props not available, use alert-like feedback)
+              const btn = document.querySelector('[data-save-btn]') as HTMLElement;
+              if (btn) {
+                btn.classList.add('text-green-500');
+                setTimeout(() => btn.classList.remove('text-green-500'), 1500);
+              }
+            }}
+            data-save-btn=""
+          >
+            <Save className="h-4 w-4" />
+          </Button>
       </div>
 
       {/* Textarea */}

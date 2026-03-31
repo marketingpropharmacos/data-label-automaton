@@ -327,6 +327,7 @@ export const imprimirViaAgente = async (
         tipoItem: r.tipoItem,
         componentes: r.componentes,
         yOffsetDots: (r as any).yOffsetDots || 0,
+        lineSpacingFactor: (r as any).lineSpacingFactor || 1.0,
       })),
     };
 
