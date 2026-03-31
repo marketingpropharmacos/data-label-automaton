@@ -869,6 +869,18 @@ const LabelTextEditor = ({
     });
   };
 
+  const handleSaveGeneralLayout = () => {
+    saveGeneralDefaults(layoutType, {
+      fontSize: editorFontSize,
+      lineSpacing,
+      metaInline,
+    });
+    toast({
+      title: "Layout geral salvo!",
+      description: `As configurações (fonte ${editorFontSize}, espaçamento ${lineSpacing.toFixed(1)}) foram salvas como padrão para todas as requisições do layout ${layoutConfig.nome}.`,
+    });
+  };
+
   if (!rotulo) return null;
 
   return (
