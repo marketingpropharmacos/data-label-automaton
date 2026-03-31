@@ -3048,6 +3048,36 @@ export type Database = {
         }
         Relationships: []
       }
+      rateio_empreendimento_criterios: {
+        Row: {
+          ano: number
+          created_at: string
+          id: number
+          loja_id: number
+          loja_nome: string
+          percentual: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: number
+          loja_id: number
+          loja_nome: string
+          percentual?: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: number
+          loja_id?: number
+          loja_nome?: string
+          percentual?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       raw_alpha_cmv_diario: {
         Row: {
           competencia: string
