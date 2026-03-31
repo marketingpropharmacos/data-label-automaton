@@ -147,15 +147,18 @@ const Index = () => {
     if (rotulos.length === 0) return;
     setIsPrinting(true);
     const rotuloAtual = rotulos[currentIndex];
-    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual }));
+    // Inject yOffsetDots for A_PAC_PEQ
+    const yOffsetDots = layoutType === 'A_PAC_PEQ' ? parseInt(localStorage.getItem('label_editor_y_offset_A_PAC_PEQ') || '0', 10) : 0;
+    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual, yOffsetDots }));
     await executePrint(rotulosSelecionados);
   };
 
   const handlePrintAll = async (quantity: number = 1) => {
     if (rotulos.length === 0) return;
     setIsPrinting(true);
+    const yOffsetDots = layoutType === 'A_PAC_PEQ' ? parseInt(localStorage.getItem('label_editor_y_offset_A_PAC_PEQ') || '0', 10) : 0;
     const rotulosSelecionados = rotulos.flatMap(r => 
-      Array.from({ length: quantity }, () => ({ ...r }))
+      Array.from({ length: quantity }, () => ({ ...r, yOffsetDots }))
     );
     await executePrint(rotulosSelecionados);
   };
