@@ -653,6 +653,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
 const FONT_SIZE_KEY = 'label_editor_font_size';
 const LINE_SPACING_KEY = 'label_editor_line_spacing';
 const META_INLINE_KEY = 'label_editor_meta_inline';
+const Y_OFFSET_KEY = 'label_editor_y_offset_A_PAC_PEQ';
 
 const getStoredFontSize = (layoutTipo?: string) => {
   try {
@@ -679,6 +680,14 @@ const getStoredMetaInline = (): boolean => {
   return false;
 };
 
+const getStoredYOffset = (): number => {
+  try {
+    const stored = localStorage.getItem(Y_OFFSET_KEY);
+    if (stored) return parseInt(stored, 10);
+  } catch {}
+  return 0;
+};
+
 const LabelTextEditor = ({
    rotulos, currentIndex, onIndexChange, onTextChange,
    layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
@@ -690,6 +699,7 @@ const LabelTextEditor = ({
   const [printQuantity, setPrintQuantity] = useState(1);
   const [lineSpacing, setLineSpacing] = useState(getStoredLineSpacing);
   const [metaInline, setMetaInline] = useState(getStoredMetaInline);
+  const [yOffset, setYOffset] = useState(getStoredYOffset);
 
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
@@ -790,6 +800,16 @@ const LabelTextEditor = ({
     localStorage.setItem(META_INLINE_KEY, String(checked));
   };
 
+  const handleYOffsetChange = (delta: number) => {
+    setYOffset(prev => {
+      const next = Math.max(0, Math.min(30, prev + delta));
+      localStorage.setItem(Y_OFFSET_KEY, String(next));
+      return next;
+    });
+  };
+
+  const isPacPeq = layoutType === 'A_PAC_PEQ';
+
   if (!rotulo) return null;
 
   return (
@@ -831,6 +851,19 @@ const LabelTextEditor = ({
               <Rows3 className="h-3.5 w-3.5 text-muted-foreground" />
               <Switch checked={metaInline} onCheckedChange={handleMetaInlineToggle} className="scale-75" />
               <span className="text-xs text-muted-foreground">{metaInline ? 'Compacto' : 'Separado'}</span>
+            </div>
+          )}
+          {/* Y-offset control (only for A_PAC_PEQ) */}
+          {isPacPeq && (
+            <div className="flex items-center gap-1" title="Offset vertical (subir linhas em dots)">
+              <span className="text-xs text-muted-foreground">↕Y</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(-1)}>
+                <Minus className="h-3 w-3" />
+              </Button>
+              <span className="text-xs text-muted-foreground w-6 text-center">{yOffset}</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(1)}>
+                <Plus className="h-3 w-3" />
+              </Button>
             </div>
           )}
         </div>
