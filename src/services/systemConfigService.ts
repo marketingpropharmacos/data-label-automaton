@@ -8,6 +8,7 @@ type ConfigKey =
   | "print_stations"
   | "layout_printer_map"
   | "layout_station_map"
+  | "print_agent_config"
   | "modo_impressao";
 
 // ── Read ────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export const SystemConfigService = {
         pharmacy_config: "label-system-pharmacy-config",
         print_stations: "label-system-print-stations",
         layout_printer_map: "label-system-layout-printer-map",
+        print_agent_config: "label-system-print-agent-config",
         modo_impressao: "label-system-modo-impressao",
       };
 
@@ -148,6 +150,7 @@ export const SystemConfigService = {
         { configKey: "pharmacy_config", storageKey: "label-system-pharmacy-config" },
         { configKey: "print_stations", storageKey: "label-system-print-stations" },
         { configKey: "layout_printer_map", storageKey: "label-system-layout-printer-map" },
+        { configKey: "print_agent_config", storageKey: "label-system-print-agent-config" },
         { configKey: "modo_impressao", storageKey: "label-system-modo-impressao" },
       ];
 
