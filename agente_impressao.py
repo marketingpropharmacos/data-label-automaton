@@ -866,7 +866,8 @@ def gerar_ppla_tirz(rotulo, farmacia, dims=None, calibracao=None):
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         y_pos = [220, 190, 160, 130, 100, 70, 40, 20]
-        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo)
+        lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
+        return _gerar_from_texto_livre(texto_livre, y_pos, 10, rot, font, cols, dims, cal, modo, lsf)
     
     paciente = (rotulo.get('nomePaciente', '') or '')[:cols].upper()
     nr_req = rotulo.get('nrRequisicao', '')
