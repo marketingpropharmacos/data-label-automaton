@@ -60,6 +60,7 @@ export const SystemConfigService = {
         pharmacy_config: "label-system-pharmacy-config",
         print_stations: "label-system-print-stations",
         layout_printer_map: "label-system-layout-printer-map",
+        print_agent_config: "label-system-print-agent-config",
         modo_impressao: "label-system-modo-impressao",
       };
 
