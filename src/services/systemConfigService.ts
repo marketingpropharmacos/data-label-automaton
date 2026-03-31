@@ -134,6 +134,7 @@ export const SystemConfigService = {
   saveLayoutPrinterMap: (map: LayoutPrinterMap) => setConfig("layout_printer_map", map),
   saveLayoutStationMap: (map: Record<string, string>) => setConfig("layout_station_map", map),
   saveModoImpressao: (modo: string) => setConfig("modo_impressao", modo),
+  savePrintAgentConfig: (config: object) => setConfig("print_agent_config", config),
 
   // Read individual configs
   getApiConfig: () => getConfig<ApiConfig>("api_config"),
