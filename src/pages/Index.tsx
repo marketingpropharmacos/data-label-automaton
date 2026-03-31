@@ -161,7 +161,8 @@ const Index = () => {
     const rotuloAtual = rotulos[currentIndex];
     // Inject yOffsetDots for A_PAC_PEQ
     const yOffsetDots = layoutType === 'A_PAC_PEQ' ? parseInt(localStorage.getItem('label_editor_y_offset_A_PAC_PEQ') || '0', 10) : 0;
-    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual, yOffsetDots }));
+    const lineSpacingFactor = parseFloat(localStorage.getItem('label_editor_line_spacing') || '1.4');
+    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual, yOffsetDots, lineSpacingFactor }));
     await executePrint(rotulosSelecionados);
   };
 
