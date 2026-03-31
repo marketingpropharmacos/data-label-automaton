@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
