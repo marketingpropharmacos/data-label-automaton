@@ -708,16 +708,7 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     # Linha com REG: → REG em x_reg
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-<<<<<<< HEAD
-        y_fine = int(rotulo.get('yOffsetDots', 0) or 0)
-        lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
-        base_step = 11  # dots entre linhas padrão
-        effective_step = int(base_step * lsf)
-        y_non_reg = [89 + y_fine - i * (effective_step - base_step) for i in range(7)]
-        y_reg = 12 + y_fine
-=======
         y_positions = [89, 78, 67, 56, 45, 34, 23, 12]
->>>>>>> a38c3c1 (fix: padroniza A_PAC_PEQ com PPLA real do Fórmula Certa)
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
         pos_idx = 0
