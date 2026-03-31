@@ -802,7 +802,7 @@ const LabelTextEditor = ({
 
   const handleYOffsetChange = (delta: number) => {
     setYOffset(prev => {
-      const next = Math.max(0, Math.min(80, prev + delta));
+      const next = Math.max(0, Math.min(150, prev + delta));
       localStorage.setItem(Y_OFFSET_KEY, String(next));
       return next;
     });
