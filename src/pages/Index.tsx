@@ -119,11 +119,24 @@ const Index = () => {
     const result = await buscarRequisicao(requisitionNumber);
     
     if (result.success && result.data && result.data.length > 0) {
-      setRotulos(result.data);
+      // Restaurar edições salvas do localStorage
+      const savedKey = `saved_rotulos_${requisitionNumber}`;
+      const savedData = localStorage.getItem(savedKey);
+      let restoredRotulos = result.data;
+      if (savedData) {
+        try {
+          const savedMap: Record<string, string> = JSON.parse(savedData);
+          restoredRotulos = result.data.map(r => {
+            const savedText = savedMap[r.id];
+            return savedText ? { ...r, textoLivre: savedText } : r;
+          });
+        } catch { /* ignore corrupt data */ }
+      }
+      setRotulos(restoredRotulos);
       setCurrentIndex(0);
       toast({
         title: "Requisição encontrada!",
-        description: `${result.data.length} rótulo(s) carregado(s).`,
+        description: `${restoredRotulos.length} rótulo(s) carregado(s).${savedData ? ' Edições salvas restauradas.' : ''}`,
       });
     } else {
       setRotulos([]);
