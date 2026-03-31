@@ -166,7 +166,7 @@ const DEFAULT_LAYOUT_PRINTER_MAP: LayoutPrinterMap = {
   'A_PAC_GRAN': 'AMP GRANDE',
   'AMP_CX': 'AMP CAIXA',
   'AMP10': 'CAIXA GRANDE',
-  'TIRZ': 'PEQUENO',
+  'TIRZ': 'AMP PEQUENA NOVA',
 };
 
 // Mapeamento layout → estação (station id)
