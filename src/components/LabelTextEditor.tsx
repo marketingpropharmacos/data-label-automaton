@@ -730,8 +730,8 @@ const LabelTextEditor = ({
   const [cursorInfo, setCursorInfo] = useState({ line: 1, col: 1, totalLines: 1, totalCols: 1 });
   const [editorFontSize, setEditorFontSize] = useState(() => getStoredFontSize(layoutType));
   const [printQuantity, setPrintQuantity] = useState(1);
-  const [lineSpacing, setLineSpacing] = useState(getStoredLineSpacing);
-  const [metaInline, setMetaInline] = useState(getStoredMetaInline);
+  const [lineSpacing, setLineSpacing] = useState(() => getStoredLineSpacing(layoutType));
+  const [metaInline, setMetaInline] = useState(() => getStoredMetaInline(layoutType));
 
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
