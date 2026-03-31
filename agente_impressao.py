@@ -399,9 +399,16 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
+        lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
         y_dots_calc = list(y_dots)
+        # Aplicar fator de espaçamento
+        if lsf != 1.0 and len(y_dots_calc) >= 2:
+            base_y = y_dots_calc[0]
+            step = y_dots_calc[1] - y_dots_calc[0]
+            for i in range(1, len(y_dots_calc)):
+                y_dots_calc[i] = base_y + int(step * lsf * i)
         if len(linhas_texto) > len(y_dots_calc) and len(y_dots_calc) >= 2:
             step = y_dots_calc[-1] - y_dots_calc[-2]
             while len(y_dots_calc) < len(linhas_texto):
