@@ -683,63 +683,73 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
 
 
 def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
-    """Layout A.PAC.PEQ (45x25mm) - Estrutura PPLA idêntica ao Fórmula Certa.
-    
-    Coordenadas ajustadas: mais à esquerda (X-6) e uma linha acima (Y+11)
-    Y=89 X=15  Paciente       | Y=89 X=110 REQ:XXXXXX-N
-    Y=78 X=15  DR(A)Nome      | Y=78 X=127 CONSELHO-UF-NUM
-    Y=67 X=15  (texto livre 1 ou vazio)
-    Y=56 X=15  (texto livre 2)
-    Y=45 X=15  (texto livre 3)
-    Y=34 X=15  (texto livre 4)
-    Y=23 X=110 REG:XXXXX
+    """Layout A.PAC.PEQ (45x25mm) - Coordenadas FC captura real.
+
+    Y=89 X=12   Paciente            | Y=89 X=116  REQ:XXXXXX-N
+    Y=78 X=12   DR(A)Nome CRF-UF-N
+    Y=67 X=129  REG:XXXXX
     """
     if not dims:
         dims = PRINTER_CONFIGS['PEQUEN']
     cal = calibracao or {}
-    modo = 'dots'
     cols = dims['cols_max']
     font = 1
     rot = 1
-    
-    # Coordenadas FC (novo ajuste: deslocamento mais forte para a esquerda)
-    # Linha 1 (Paciente+REQ): Y=78, Linha 2 (Médico+Conselho): Y=67, Linha 3 (REG): Y=12
-    # X: paridade FC - esquerda=21, REQ/REG=110, Conselho=130
-    x_left = 21
-    x_req_reg = 110
-    x_conselho = 130
 
-    # WYSIWYG: textoLivre reflete exatamente o que o operador vê no editor
+    # Coordenadas FC captura real
+    x_paciente = 12
+    x_req = 116
+    x_reg = 129
+
+    # WYSIWYG: textoLivre reflete o que o operador vê no editor
     # Grid de 8 posições Y: [89, 78, 67, 56, 45, 34, 23, 12]
-    # yOffsetDots = offset fino em dots (acumulado pelo botão ↑/↓, sem limite superior)
-    # Linhas em branco consomem posições mas não geram comando PPLA
-    # REG: sempre posicionado em Y=12+offset, independente de onde estiver no texto
+    # Linhas em branco consomem posições Y mas não geram comando PPLA.
+    # Linha com REQ: → patient em x_paciente + REQ em x_req (mesmo Y)
+    # Linha com REG: → REG em x_reg
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
+<<<<<<< HEAD
         y_fine = int(rotulo.get('yOffsetDots', 0) or 0)
         lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
         base_step = 11  # dots entre linhas padrão
         effective_step = int(base_step * lsf)
         y_non_reg = [89 + y_fine - i * (effective_step - base_step) for i in range(7)]
         y_reg = 12 + y_fine
+=======
+        y_positions = [89, 78, 67, 56, 45, 34, 23, 12]
+>>>>>>> a38c3c1 (fix: padroniza A_PAC_PEQ com PPLA real do Fórmula Certa)
         linhas_texto = texto_livre.split('\n')
         pplb_lines = []
-        non_reg_idx = 0
+        pos_idx = 0
         for line_text in linhas_texto:
             stripped = line_text.strip()
             if not stripped:
-                non_reg_idx += 1  # linha em branco consome uma posição
+                pos_idx += 1
+                continue
+            y = y_positions[pos_idx] if pos_idx < len(y_positions) else y_positions[-1]
+            if 'REQ:' in stripped:
+                req_match = re.search(r'(REQ:\S+)', stripped)
+                if req_match:
+                    patient_part = stripped[:req_match.start()].strip()
+                    if patient_part:
+                        pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_paciente, patient_part[:cols]))
+                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_req, req_match.group(1)[:cols]))
+                else:
+                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_paciente, stripped[:cols]))
             elif 'REG:' in stripped:
-                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_reg, x_left, line_text[:cols]))
+                reg_match = re.search(r'(REG:\S+)', stripped)
+                if reg_match:
+                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_reg, reg_match.group(1)[:cols]))
+                else:
+                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_paciente, stripped[:cols]))
             else:
-                if non_reg_idx < len(y_non_reg):
-                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_non_reg[non_reg_idx], x_left, line_text[:cols]))
-                non_reg_idx += 1
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_paciente, stripped[:cols]))
+            pos_idx += 1
         if not pplb_lines:
-            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_non_reg[0], x_left, 'SEM DADOS'))
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
 
-    # Modo estruturado: gera campos separados como o FC faz (X distintos por campo)
+    # Modo estruturado: gera campos com X distintos como FC (fallback sem textoLivre)
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
@@ -748,24 +758,25 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
 
     linhas = []
-    # Linha 1: Paciente + REQ
+    # Y=89: Paciente + REQ
     if paciente:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78 - y_offset, x_left, paciente))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 89, x_paciente, paciente))
     req_str = f"REQ:{nr_req}-{nr_item}"
-    linhas.append(ppla_text_dots(rot, font, 1, 1, 78 - y_offset, x_req_reg, req_str))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 89, x_req, req_str))
 
-    # Linha 2: DR(A) + Conselho
+    # Y=78: DR(A)Médico CRF-UF-NUM (tudo na mesma linha, X=12)
     if nome_medico:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 - y_offset, x_left, f"DR(A){nome_medico}"))
-    if crm:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 - y_offset, x_conselho, crm))
+        medico_str = f"DR(A){nome_medico}"
+        if crm:
+            medico_str = f"{medico_str} {crm}"
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78, x_paciente, medico_str[:cols]))
 
-    # Linha REG
+    # Y=67, X=129: REG
     if registro:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 12 - y_offset, x_req_reg, f"REG:{registro}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 67, x_reg, f"REG:{registro}"))
 
     if not linhas:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78 + y_offset, x_left, 'SEM DADOS'))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 89, x_paciente, 'SEM DADOS'))
 
     return _build_label_ppla(linhas, cal)
 

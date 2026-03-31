@@ -159,20 +159,15 @@ const Index = () => {
     if (rotulos.length === 0) return;
     setIsPrinting(true);
     const rotuloAtual = rotulos[currentIndex];
-    // Inject yOffsetDots for A_PAC_PEQ
-    const yOffsetDots = layoutType === 'A_PAC_PEQ' ? parseInt(localStorage.getItem('label_editor_y_offset_A_PAC_PEQ') || '0', 10) : 0;
-    const lineSpacingFactor = parseFloat(localStorage.getItem('label_editor_line_spacing') || '1.4');
-    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual, yOffsetDots, lineSpacingFactor }));
+    const rotulosSelecionados = Array.from({ length: quantity }, () => ({ ...rotuloAtual }));
     await executePrint(rotulosSelecionados);
   };
 
   const handlePrintAll = async (quantity: number = 1) => {
     if (rotulos.length === 0) return;
     setIsPrinting(true);
-    const yOffsetDots = layoutType === 'A_PAC_PEQ' ? parseInt(localStorage.getItem('label_editor_y_offset_A_PAC_PEQ') || '0', 10) : 0;
-    const lineSpacingFactor = parseFloat(localStorage.getItem('label_editor_line_spacing') || '1.4');
-    const rotulosSelecionados = rotulos.flatMap(r => 
-      Array.from({ length: quantity }, () => ({ ...r, yOffsetDots, lineSpacingFactor }))
+    const rotulosSelecionados = rotulos.flatMap(r =>
+      Array.from({ length: quantity }, () => ({ ...r }))
     );
     await executePrint(rotulosSelecionados);
   };

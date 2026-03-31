@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -146,19 +146,11 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const reg = regNum ? `REG:${regNum}` : "";
   const lineReg = reg ? padLine("", reg, maxCols) : "";
 
-  // Grid WYSIWYG de 8 linhas — cada linha corresponde a uma posição PPLA:
-  // [Y=89, Y=78, Y=67, Y=56, Y=45, Y=34, Y=23, Y=12]
-  // Linha 0 em branco = margem superior. Remova (clique ↑) para subir o layout todo.
-  return [
-    "",      // pos 0 → Y=89 (margem: remova para subir)
-    line1,   // pos 1 → Y=78 (Paciente + REQ)
-    line2,   // pos 2 → Y=67 (Médico + Conselho)
-    "",      // pos 3 → Y=56
-    "",      // pos 4 → Y=45
-    "",      // pos 5 → Y=34
-    "",      // pos 6 → Y=23
-    lineReg, // pos 7 → Y=12 (REG — posição fixa no agente)
-  ].join('\n');
+  // 3 linhas fixas — espelho exato do PPLA FC:
+  // Y=89: Paciente (X=12) + REQ (X=116)
+  // Y=78: DR(A)Médico CRF-UF-NUM (X=12)
+  // Y=67: REG (X=129)
+  return [line1, line2, lineReg].join('\n');
 }
 
 // ---- Clean patient name: remove leading phone numbers/digits ----
@@ -663,8 +655,6 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
 const FONT_SIZE_KEY = 'label_editor_font_size';
 const LINE_SPACING_KEY = 'label_editor_line_spacing';
 const META_INLINE_KEY = 'label_editor_meta_inline';
-const Y_OFFSET_KEY = 'label_editor_y_offset_A_PAC_PEQ';
-
 const getStoredFontSize = (layoutTipo?: string) => {
   try {
     const stored = localStorage.getItem(FONT_SIZE_KEY);
@@ -690,14 +680,6 @@ const getStoredMetaInline = (): boolean => {
   return false;
 };
 
-const getStoredYOffset = (): number => {
-  try {
-    const stored = localStorage.getItem(Y_OFFSET_KEY);
-    if (stored) return parseInt(stored, 10);
-  } catch {}
-  return 0;
-};
-
 const LabelTextEditor = ({
    rotulos, currentIndex, onIndexChange, onTextChange,
    layoutConfig, layoutType, pharmacyConfig, searchedRequisition,
@@ -710,7 +692,6 @@ const LabelTextEditor = ({
   const [printQuantity, setPrintQuantity] = useState(1);
   const [lineSpacing, setLineSpacing] = useState(getStoredLineSpacing);
   const [metaInline, setMetaInline] = useState(getStoredMetaInline);
-  const [yOffset, setYOffset] = useState(getStoredYOffset);
 
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
@@ -719,6 +700,11 @@ const LabelTextEditor = ({
 
   const amp10Opts = isAmp10 ? { metaInline } : undefined;
   const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+
+  // Limpa chaves de localStorage obsoletas (yOffset antigo)
+  useEffect(() => {
+    localStorage.removeItem('label_editor_y_offset_A_PAC_PEQ');
+  }, []);
 
   // Initialize textoLivre on load or layout change
   useEffect(() => {
@@ -814,51 +800,6 @@ const LabelTextEditor = ({
     localStorage.setItem(META_INLINE_KEY, String(checked));
   };
 
-  const STEP = 5; // dots por clique (~0.6mm)
-  const LINE_DOTS = 11; // dots entre linhas do grid
-
-  const handleYOffsetChange = (delta: number) => {
-    if (!rotulo) return;
-    setYOffset(prev => {
-      const next = prev + delta * STEP;
-
-      if (delta > 0) {
-        // Subindo: quando acumula ≥ LINE_DOTS, consome uma linha em branco do topo
-        if (next >= LINE_DOTS) {
-          const lines = text.split('\n');
-          if (lines[0].trim() === '') {
-            onTextChange(rotulo.id, lines.slice(1).join('\n'));
-            const adjusted = next - LINE_DOTS;
-            localStorage.setItem(Y_OFFSET_KEY, String(adjusted));
-            return adjusted;
-          }
-        }
-        // Sem linha em branco para consumir: sem limite (corta no topo, OK)
-      } else {
-        // Descendo: quando vai abaixo de 0, adiciona linha em branco no topo
-        if (next < 0) {
-          const lines = text.split('\n');
-          const blanksAtTop = lines.findIndex(l => l.trim() !== '');
-          const count = blanksAtTop === -1 ? lines.length : blanksAtTop;
-          if (count < 4) {
-            onTextChange(rotulo.id, ['', ...lines].join('\n'));
-            const adjusted = next + LINE_DOTS;
-            localStorage.setItem(Y_OFFSET_KEY, String(adjusted));
-            return adjusted;
-          }
-          // Não pode adicionar mais blanks: para no zero
-          localStorage.setItem(Y_OFFSET_KEY, '0');
-          return 0;
-        }
-      }
-
-      localStorage.setItem(Y_OFFSET_KEY, String(next));
-      return next;
-    });
-  };
-
-  const isPacPeq = layoutType === 'A_PAC_PEQ';
-
   const handleSaveAllTexts = () => {
     const requisicoes = new Set<string>();
     if (searchedRequisition?.trim()) requisicoes.add(searchedRequisition.trim());
@@ -931,18 +872,6 @@ const LabelTextEditor = ({
               <span className="text-xs text-muted-foreground">{metaInline ? 'Compacto' : 'Separado'}</span>
             </div>
           )}
-          {/* Controle de posição vertical (só A_PAC_PEQ) */}
-          {isPacPeq && (
-            <div className="flex items-center gap-1" title="Subir/descer o layout inteiro no rótulo">
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(1)} title="Subir layout">
-                <ChevronUp className="h-3 w-3" />
-              </Button>
-              <span className="text-xs text-muted-foreground">pos</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(-1)} title="Descer layout">
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
           {/* Botão Salvar edições */}
           <Button
             variant="ghost"
@@ -970,8 +899,6 @@ const LabelTextEditor = ({
             fontSize: `${editorFontSize}px`,
             lineHeight: String(lineSpacing),
             letterSpacing: '-0.5px',
-            transform: isPacPeq && yOffset !== 0 ? `translateY(-${yOffset * 1.2}px)` : undefined,
-            transition: 'transform 0.08s ease',
           }}
           spellCheck={false}
           rows={Math.max(8, text.split('\n').length + 2)}
@@ -981,11 +908,6 @@ const LabelTextEditor = ({
       {/* Cursor info bar */}
       <div className="bg-muted/30 border-t border-border px-4 py-1 text-xs text-muted-foreground font-mono flex items-center justify-between">
         <span>Lin: {cursorInfo.line}{maxLines ? `/${maxLines}` : `/${cursorInfo.totalLines}`}  Col: {cursorInfo.col}{maxCols ? `/${maxCols}` : `/${cursorInfo.totalCols}`}</span>
-        {isPacPeq && yOffset !== 0 && (
-          <span className="text-primary text-xs font-semibold">
-            {yOffset > 0 ? `↑ +${yOffset} dots` : `↓ ${yOffset} dots`}
-          </span>
-        )}
       </div>
 
       {/* Navigation */}
