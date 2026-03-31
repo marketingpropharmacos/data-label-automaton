@@ -693,14 +693,30 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     x_req_reg = 110
     x_conselho = 130
 
-    # Offset vertical configurável pelo operador (subir linhas = diminuir Y no PPLA)
-    y_offset = int(rotulo.get('yOffsetDots', 0) or 0)
-
-    # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
+    # WYSIWYG: textoLivre reflete exatamente o que o operador vê no editor
+    # Grid de 8 posições Y: [89, 78, 67, 56, 45, 34, 23, 12]
+    # Linhas em branco no texto consumem posições mas não geram comando PPLA
+    # REG: sempre posicionado em Y=12, independente de onde estiver no texto
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_positions = [78 - y_offset, 67 - y_offset, 56 - y_offset, 45 - y_offset, 34 - y_offset, 23 - y_offset, 12 - y_offset]
-        return _gerar_from_texto_livre(texto_livre, y_positions, x_left, rot, font, cols, dims, cal, modo)
+        y_non_reg = [89, 78, 67, 56, 45, 34, 23]
+        y_reg = 12
+        linhas_texto = texto_livre.split('\n')
+        pplb_lines = []
+        non_reg_idx = 0
+        for line_text in linhas_texto:
+            stripped = line_text.strip()
+            if not stripped:
+                non_reg_idx += 1  # linha em branco consome uma posição
+            elif 'REG:' in stripped:
+                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_reg, x_left, line_text[:cols]))
+            else:
+                if non_reg_idx < len(y_non_reg):
+                    pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_non_reg[non_reg_idx], x_left, line_text[:cols]))
+                non_reg_idx += 1
+        if not pplb_lines:
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_non_reg[0], x_left, 'SEM DADOS'))
+        return _build_label_ppla(pplb_lines, cal)
 
     # Modo estruturado: gera campos separados como o FC faz (X distintos por campo)
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()

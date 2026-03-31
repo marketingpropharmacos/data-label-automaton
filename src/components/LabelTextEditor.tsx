@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Printer, Minus, Plus, Type, Zap, AlignVerticalSpaceAround, Rows3 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -122,7 +122,6 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
 // ---- A_PAC_PEQ specific generator (fixed grid) ----
 function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const maxCols = layoutConfig.colunasMax || 38;
-  const maxLines = layoutConfig.linhasMax || 8;
 
   // Line 1: PACIENTE (25 chars) + REQ:RRRRRRR (7 chars)
   const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, 25);
@@ -141,14 +140,24 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
     : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // Line 3: REG:GGGGGGGG right-aligned
+  // Line REG: right-aligned
   const regNum = String(rotulo.numeroRegistro || "");
   const reg = regNum ? `REG:${regNum}` : "";
-  const line3 = reg ? padLine("", reg, maxCols) : "";
+  const lineReg = reg ? padLine("", reg, maxCols) : "";
 
-  const lines = [line1, line2];
-  if (line3) lines.push(line3);
-  return lines.join('\n');
+  // Grid WYSIWYG de 8 linhas — cada linha corresponde a uma posição PPLA:
+  // [Y=89, Y=78, Y=67, Y=56, Y=45, Y=34, Y=23, Y=12]
+  // Linha 0 em branco = margem superior. Remova (clique ↑) para subir o layout todo.
+  return [
+    "",      // pos 0 → Y=89 (margem: remova para subir)
+    line1,   // pos 1 → Y=78 (Paciente + REQ)
+    line2,   // pos 2 → Y=67 (Médico + Conselho)
+    "",      // pos 3 → Y=56
+    "",      // pos 4 → Y=45
+    "",      // pos 5 → Y=34
+    "",      // pos 6 → Y=23
+    lineReg, // pos 7 → Y=12 (REG — posição fixa no agente)
+  ].join('\n');
 }
 
 // ---- Clean patient name: remove leading phone numbers/digits ----
@@ -801,11 +810,21 @@ const LabelTextEditor = ({
   };
 
   const handleYOffsetChange = (delta: number) => {
-    setYOffset(prev => {
-      const next = Math.max(0, Math.min(150, prev + delta));
-      localStorage.setItem(Y_OFFSET_KEY, String(next));
-      return next;
-    });
+    if (!rotulo) return;
+    const lines = text.split('\n');
+    if (delta > 0) {
+      // Subir: remove a primeira linha se estiver em branco
+      if (lines[0].trim() === '') {
+        onTextChange(rotulo.id, lines.slice(1).join('\n'));
+      }
+    } else {
+      // Descer: adiciona linha em branco no topo (máx 4 margens)
+      const blanksAtTop = lines.findIndex(l => l.trim() !== '');
+      const count = blanksAtTop === -1 ? lines.length : blanksAtTop;
+      if (count < 4) {
+        onTextChange(rotulo.id, ['', ...lines].join('\n'));
+      }
+    }
   };
 
   const isPacPeq = layoutType === 'A_PAC_PEQ';
@@ -853,16 +872,15 @@ const LabelTextEditor = ({
               <span className="text-xs text-muted-foreground">{metaInline ? 'Compacto' : 'Separado'}</span>
             </div>
           )}
-          {/* Y-offset control (only for A_PAC_PEQ) */}
+          {/* Controle de posição vertical (só A_PAC_PEQ) */}
           {isPacPeq && (
-            <div className="flex items-center gap-1" title="Offset vertical de impressão (subir linhas em dots)">
-              <span className="text-xs text-muted-foreground">↕Y</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(-1)}>
-                <Minus className="h-3 w-3" />
+            <div className="flex items-center gap-1" title="Subir/descer o layout inteiro no rótulo">
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(1)} title="Subir layout">
+                <ChevronUp className="h-3 w-3" />
               </Button>
-              <span className="text-xs text-muted-foreground w-6 text-center">{yOffset}</span>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(1)}>
-                <Plus className="h-3 w-3" />
+              <span className="text-xs text-muted-foreground">pos</span>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleYOffsetChange(-1)} title="Descer layout">
+                <ChevronDown className="h-3 w-3" />
               </Button>
             </div>
           )}
@@ -888,9 +906,12 @@ const LabelTextEditor = ({
       {/* Cursor info bar */}
       <div className="bg-muted/30 border-t border-border px-4 py-1 text-xs text-muted-foreground font-mono flex items-center justify-between">
         <span>Lin: {cursorInfo.line}{maxLines ? `/${maxLines}` : `/${cursorInfo.totalLines}`}  Col: {cursorInfo.col}{maxCols ? `/${maxCols}` : `/${cursorInfo.totalCols}`}</span>
-        {isPacPeq && yOffset > 0 && (
-          <span className="text-primary font-semibold">↕ Offset: +{yOffset} dots (≈{(yOffset * 0.12).toFixed(1)}mm acima)</span>
-        )}
+        {isPacPeq && (() => {
+          const blanks = text.split('\n').findIndex(l => l.trim() !== '');
+          const top = blanks === -1 ? 0 : blanks;
+          if (top === 0) return <span className="text-primary text-xs font-semibold">↑ Layout no topo</span>;
+          return null;
+        })()}
       </div>
 
       {/* Navigation */}

@@ -192,8 +192,11 @@ const Index = () => {
     
     let result;
 
+    // A_PAC_PEQ usa sempre Agente (textoLivre WYSIWYG não funciona em ROTUTX)
+    const effectiveModo = layoutType === 'A_PAC_PEQ' ? 'agente' : modoImpressao;
+
     // Modo ROTUTX: usar bytes do Fórmula Certa direto
-    if (modoImpressao === 'rotutx' && agentConfig.enabled && agentUrl) {
+    if (effectiveModo === 'rotutx' && agentConfig.enabled && agentUrl) {
       // Imprimir cada rótulo via ROTUTX
       let sucessos = 0;
       let erros: string[] = [];
