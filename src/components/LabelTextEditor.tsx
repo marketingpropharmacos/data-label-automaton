@@ -653,6 +653,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
 const FONT_SIZE_KEY = 'label_editor_font_size';
 const LINE_SPACING_KEY = 'label_editor_line_spacing';
 const META_INLINE_KEY = 'label_editor_meta_inline';
+const Y_OFFSET_KEY = 'label_editor_y_offset_A_PAC_PEQ';
 
 const getStoredFontSize = (layoutTipo?: string) => {
   try {
