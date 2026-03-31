@@ -782,7 +782,8 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     # Se textoLivre foi editado na UI, usar diretamente
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        return _gerar_from_texto_livre(texto_livre, y_dots, x_dots_map['field'], rot, font, cols, dims, cal, modo)
+        lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
+        return _gerar_from_texto_livre(texto_livre, y_dots, x_dots_map['field'], rot, font, cols, dims, cal, modo, lsf)
 
     # === Geração estruturada ===
     paciente = (rotulo.get('nomePaciente', '') or '').upper()
