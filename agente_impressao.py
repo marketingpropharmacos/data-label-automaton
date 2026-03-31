@@ -693,13 +693,13 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     x_req_reg = 110
     x_conselho = 130
 
-    # Offset vertical configurável pelo operador (subir linhas)
+    # Offset vertical configurável pelo operador (subir linhas = diminuir Y no PPLA)
     y_offset = int(rotulo.get('yOffsetDots', 0) or 0)
 
     # Se textoLivre foi editado na UI, usar diretamente (WYSIWYG)
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        y_positions = [78 + y_offset, 67 + y_offset, 56 + y_offset, 45 + y_offset, 34 + y_offset, 23 + y_offset, 12 + y_offset]
+        y_positions = [78 - y_offset, 67 - y_offset, 56 - y_offset, 45 - y_offset, 34 - y_offset, 23 - y_offset, 12 - y_offset]
         return _gerar_from_texto_livre(texto_livre, y_positions, x_left, rot, font, cols, dims, cal, modo)
 
     # Modo estruturado: gera campos separados como o FC faz (X distintos por campo)
@@ -711,21 +711,21 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
 
     linhas = []
-    # Linha 1: Paciente (Y=78+offset) + REQ (Y=78+offset)
+    # Linha 1: Paciente + REQ
     if paciente:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 78 + y_offset, x_left, paciente))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 78 - y_offset, x_left, paciente))
     req_str = f"REQ:{nr_req}-{nr_item}"
-    linhas.append(ppla_text_dots(rot, font, 1, 1, 78 + y_offset, x_req_reg, req_str))
+    linhas.append(ppla_text_dots(rot, font, 1, 1, 78 - y_offset, x_req_reg, req_str))
 
-    # Linha 2: DR(A) (Y=67+offset) + Conselho (Y=67+offset)
+    # Linha 2: DR(A) + Conselho
     if nome_medico:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 + y_offset, x_left, f"DR(A){nome_medico}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 - y_offset, x_left, f"DR(A){nome_medico}"))
     if crm:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 + y_offset, x_conselho, crm))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 67 - y_offset, x_conselho, crm))
 
-    # Linha REG (Y=12+offset)
+    # Linha REG
     if registro:
-        linhas.append(ppla_text_dots(rot, font, 1, 1, 12 + y_offset, x_req_reg, f"REG:{registro}"))
+        linhas.append(ppla_text_dots(rot, font, 1, 1, 12 - y_offset, x_req_reg, f"REG:{registro}"))
 
     if not linhas:
         linhas.append(ppla_text_dots(rot, font, 1, 1, 78 + y_offset, x_left, 'SEM DADOS'))
