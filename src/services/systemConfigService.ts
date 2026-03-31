@@ -149,6 +149,7 @@ export const SystemConfigService = {
         { configKey: "pharmacy_config", storageKey: "label-system-pharmacy-config" },
         { configKey: "print_stations", storageKey: "label-system-print-stations" },
         { configKey: "layout_printer_map", storageKey: "label-system-layout-printer-map" },
+        { configKey: "print_agent_config", storageKey: "label-system-print-agent-config" },
         { configKey: "modo_impressao", storageKey: "label-system-modo-impressao" },
       ];
 
