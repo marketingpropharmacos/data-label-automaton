@@ -16,6 +16,7 @@ import { buscarRequisicao } from "@/services/requisicaoService";
 import { imprimirViaAgente, imprimirViaRotutx, imprimirViaRotutxRaw } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 import { listarImpressoras } from "@/services/printAgentService";
+import { supabase } from "@/integrations/supabase/client";
 
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
 import { Edit } from "lucide-react";
