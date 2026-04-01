@@ -3624,6 +3624,39 @@ export type Database = {
         }
         Relationships: []
       }
+      rv_lab_metas_diarias: {
+        Row: {
+          colaborador_id: number
+          competencia: string
+          data_dia: string
+          id: number
+          laboratorio_id: number
+          meta_dia: number
+          setor: string
+          updated_at: string
+        }
+        Insert: {
+          colaborador_id: number
+          competencia: string
+          data_dia: string
+          id?: never
+          laboratorio_id: number
+          meta_dia?: number
+          setor: string
+          updated_at?: string
+        }
+        Update: {
+          colaborador_id?: number
+          competencia?: string
+          data_dia?: string
+          id?: never
+          laboratorio_id?: number
+          meta_dia?: number
+          setor?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rv_lab_metas_vendas: {
         Row: {
           ano: number
@@ -3747,6 +3780,33 @@ export type Database = {
           created_at?: string
           meta_percentual?: number
           trimestre?: number
+        }
+        Relationships: []
+      }
+      saved_rotulos: {
+        Row: {
+          id: number
+          item_id: string
+          nr_requisicao: string
+          saved_by: string | null
+          texto_livre: string
+          updated_at: string
+        }
+        Insert: {
+          id?: never
+          item_id: string
+          nr_requisicao: string
+          saved_by?: string | null
+          texto_livre: string
+          updated_at?: string
+        }
+        Update: {
+          id?: never
+          item_id?: string
+          nr_requisicao?: string
+          saved_by?: string | null
+          texto_livre?: string
+          updated_at?: string
         }
         Relationships: []
       }
