@@ -801,12 +801,10 @@ const LabelTextEditor = ({
     localStorage.setItem(META_INLINE_KEY, String(checked));
   };
 
-  const handleSaveAllTexts = () => {
-    const requisicoes = new Set<string>();
-    if (searchedRequisition?.trim()) requisicoes.add(searchedRequisition.trim());
-    if (rotulos[0]?.nrRequisicao?.trim()) requisicoes.add(rotulos[0].nrRequisicao.trim());
+  const handleSaveAllTexts = async () => {
+    const nrReq = searchedRequisition?.trim() || rotulos[0]?.nrRequisicao?.trim();
 
-    if (requisicoes.size === 0 || rotulos.length === 0) {
+    if (!nrReq || rotulos.length === 0) {
       toast({
         title: "Nada para salvar",
         description: "Busque uma requisição antes de salvar.",
@@ -815,19 +813,36 @@ const LabelTextEditor = ({
       return;
     }
 
-    const savedMap: Record<string, string> = {};
-    rotulos.forEach((r) => {
-      if (r.textoLivre !== undefined) savedMap[r.id] = r.textoLivre;
-    });
+    const { data: { user } } = await supabase.auth.getUser();
 
-    requisicoes.forEach((req) => {
-      localStorage.setItem(`saved_rotulos_${req}`, JSON.stringify(savedMap));
-    });
+    const upserts = rotulos
+      .filter(r => r.textoLivre !== undefined)
+      .map(r => ({
+        nr_requisicao: nrReq,
+        item_id: r.id,
+        texto_livre: r.textoLivre,
+        saved_by: user?.id || null,
+        updated_at: new Date().toISOString(),
+      }));
 
-    toast({
-      title: "Edições salvas",
-      description: `${Object.keys(savedMap).length} rótulo(s) salvo(s) para a requisição ${Array.from(requisicoes)[0]}.`,
-    });
+    if (upserts.length === 0) return;
+
+    const { error } = await supabase
+      .from('saved_rotulos')
+      .upsert(upserts, { onConflict: 'nr_requisicao,item_id' });
+
+    if (error) {
+      toast({
+        title: "Erro ao salvar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Edições salvas",
+        description: `${upserts.length} rótulo(s) salvo(s) na nuvem para req ${nrReq}.`,
+      });
+    }
   };
 
 
