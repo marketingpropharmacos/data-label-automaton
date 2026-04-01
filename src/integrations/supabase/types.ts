@@ -3894,6 +3894,30 @@ export type Database = {
         }
         Relationships: []
       }
+      user_loja_access: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          loja_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          loja_id: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          loja_id?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -4243,6 +4267,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_manage_rv_lab_meta_diaria: {
+        Args: { _colaborador_id: number; _laboratorio_id: number }
+        Returns: boolean
+      }
       get_lab_colaboradores: {
         Args: { p_laboratorio_id: number }
         Returns: {
@@ -4286,6 +4314,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_workspace_admin: { Args: { _workspace_id: string }; Returns: boolean }
+      is_workspace_admin_or_manager: {
+        Args: { _workspace_id: string }
+        Returns: boolean
+      }
+      is_workspace_member: { Args: { _workspace_id: string }; Returns: boolean }
       lb_ensure_workspace: {
         Args: {
           p_auth_user_id: string
