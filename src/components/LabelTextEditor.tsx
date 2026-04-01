@@ -707,12 +707,19 @@ const LabelTextEditor = ({
     localStorage.removeItem('label_editor_y_offset_A_PAC_PEQ');
   }, []);
 
+  // Track previous layout to detect layout switches
+  const prevLayoutRef = useRef<LayoutType>(layoutType);
+
   // Initialize textoLivre on load or layout change
   useEffect(() => {
     if (!rotulo) return;
 
-    // Não sobrescrever texto editado/restaurado manualmente.
-    if (rotulo.textoLivre !== undefined) return;
+    const layoutChanged = prevLayoutRef.current !== layoutType;
+    prevLayoutRef.current = layoutType;
+
+    // Se o layout mudou, forçar regeneração do texto para o novo layout
+    // Caso contrário, não sobrescrever texto editado/restaurado manualmente.
+    if (!layoutChanged && rotulo.textoLivre !== undefined) return;
 
     const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
     const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
@@ -724,7 +731,7 @@ const LabelTextEditor = ({
         : wrapText(generated, maxCols, Number.MAX_SAFE_INTEGER);
     }
     onTextChange(rotulo.id, generated);
-  }, [rotulo?.id, rotulo?.textoLivre, layoutType, metaInline]);
+  }, [rotulo?.id, layoutType, metaInline]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;
