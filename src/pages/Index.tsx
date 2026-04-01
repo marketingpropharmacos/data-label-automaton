@@ -198,7 +198,7 @@ const Index = () => {
     // Usar calibração do agente sem sobrescrever fonte/rotação por definição de layout
     const calibracaoPadrao = agentConfig.calibracao || {
       margem_c: 0,
-      offset_r: 0,
+      offset_r: 270,
       contraste: 14,
       fonte: 2,
       rotacao: 0,

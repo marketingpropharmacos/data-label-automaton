@@ -191,7 +191,7 @@ const LabelSettings = () => {
   const handleDiagnosticPPLA = async () => {
     setIsDiagnosticLoading(true);
     setDiagnosticResult(null);
-    const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 };
+    const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 };
     const result = await diagnosticoPPLA(agentConfig.agentUrl, agentConfig.impressora, 'AMP_CX', cal);
     setIsDiagnosticLoading(false);
     if (result.success) {
@@ -613,9 +613,9 @@ const LabelSettings = () => {
                 systemRaw={diagnosticResult?.comandos_raw}
                 capturedCommands={undefined}
                 capturedRaw={undefined}
-                currentCalibration={agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 }}
+                currentCalibration={agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 }}
                 onApplyFixes={(fixes: SuggestedFixes, selected: Record<string, boolean>) => {
-                  const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 };
+                  const cal = agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 };
                   const updated = { ...cal };
                   if (selected.contraste) updated.contraste = fixes.contraste.sugerido;
                   if (selected.fonte) updated.fonte = fixes.fonte.sugerido;
@@ -663,7 +663,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 },
                           margem_c: Number(e.target.value),
                         },
                       })}
@@ -684,7 +684,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 },
                           offset_r: Number(e.target.value),
                         },
                       })}
@@ -705,7 +705,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 },
                           contraste: Number(e.target.value),
                         },
                       })}
@@ -726,7 +726,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 },
                           fonte: Number(e.target.value),
                         },
                       })}
@@ -747,7 +747,7 @@ const LabelSettings = () => {
                       onChange={(e) => setAgentConfigState({
                         ...agentConfig,
                         calibracao: {
-                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 0, contraste: 12, fonte: 2, rotacao: 0 },
+                          ...agentConfig.calibracao || { margem_c: 0, offset_r: 270, contraste: 12, fonte: 2, rotacao: 0 },
                           rotacao: Number(e.target.value),
                         },
                       })}
