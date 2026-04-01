@@ -677,8 +677,8 @@ const LabelSettings = () => {
                     <Input
                       id="offsetR"
                       type="number"
-                      min={0}
-                      max={200}
+                      min={-500}
+                      max={500}
                       placeholder="0"
                       value={agentConfig.calibracao?.offset_r ?? 0}
                       onChange={(e) => setAgentConfigState({
@@ -690,7 +690,7 @@ const LabelSettings = () => {
                       })}
                     />
                     <p className="text-xs text-muted-foreground">
-                      Ajusta posição vertical. Corta em cima? Reduza. Corta embaixo? Aumente.
+                      Ajusta posição vertical. Texto muito abaixo? Use valor negativo para subir.
                     </p>
                   </div>
                   <div className="space-y-2">
