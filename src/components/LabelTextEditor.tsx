@@ -883,17 +883,6 @@ const LabelTextEditor = ({
           >
             <Save className="h-4 w-4" />
           </Button>
-          {/* Botão Salvar Layout Geral (padrão para todos do mesmo layout) */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 gap-1 text-xs"
-            title={`Salvar fonte, espaçamento e opções como padrão para TODAS as requisições do layout ${layoutConfig.nome}`}
-            onClick={handleSaveGeneralLayout}
-          >
-            <BookMarked className="h-4 w-4" />
-            Geral
-          </Button>
         </div>
       </div>
 
