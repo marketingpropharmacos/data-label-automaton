@@ -3468,6 +3468,7 @@ export type Database = {
           situacao: string | null
           tipo: Database["public"]["Enums"]["rv_colaborador_tipo"]
           tipo_contrato: string | null
+          usa_faixa_especial: boolean
           vale_dia_20: number | null
         }
         Insert: {
@@ -3511,6 +3512,7 @@ export type Database = {
           situacao?: string | null
           tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
           tipo_contrato?: string | null
+          usa_faixa_especial?: boolean
           vale_dia_20?: number | null
         }
         Update: {
@@ -3554,6 +3556,7 @@ export type Database = {
           situacao?: string | null
           tipo?: Database["public"]["Enums"]["rv_colaborador_tipo"]
           tipo_contrato?: string | null
+          usa_faixa_especial?: boolean
           vale_dia_20?: number | null
         }
         Relationships: []
@@ -4361,6 +4364,7 @@ export type Database = {
         | "bonus_nao_faltou_remove"
         | "zerado_admin"
         | "mkt"
+        | "ajuste"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4623,6 +4627,7 @@ export const Constants = {
         "bonus_nao_faltou_remove",
         "zerado_admin",
         "mkt",
+        "ajuste",
       ],
     },
   },
