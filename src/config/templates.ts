@@ -44,14 +44,14 @@ export const FIELD_CODES: Record<string, { label: string; dataKey: string; color
 // Templates padrão por layout (baseados no Fórmula Certa)
 export const DEFAULT_TEMPLATES: Record<LayoutType, string[]> = {
   A_PAC_PEQ: [
-    '@PPPPPPPPPPPPPPPPPPPPPPPPP REQ:@RRRRRRR',
-    'DR(A)@MMMMMMMMMMMMMMMM @CCCCCCCCCCCCCCC',
-    '                     REG:@GGGGGGGG',
-    '@XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    '@XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    '@XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    '@XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
-    '@XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    '@PPPPPPPPPPPPPPPPPPPPPPPPPP',
+    'REQ:@RRRRRRRRR',
+    'DR(A)@MMMMMMMMMMMMMMMMMMMM',
+    '@CCCCCCCCCCCCCCCCCCCCCCCCCC',
+    '           REG:@GGGGGGGGGG',
+    '@XXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    '@XXXXXXXXXXXXXXXXXXXXXXXXXXX',
+    '@XXXXXXXXXXXXXXXXXXXXXXXXXXX',
   ],
   AMP_CX: [
     '@PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP REQ:@RRRRRRRRRRRRR',
@@ -99,7 +99,7 @@ export const DEFAULT_TEMPLATES: Record<LayoutType, string[]> = {
 
 // Layout info para o editor
 export const LAYOUT_INFO: Record<LayoutType, { cols: number; rows: number; lpp: number; cpp: number }> = {
-  A_PAC_PEQ: { cols: 38, rows: 8, lpp: 8, cpp: 20 },
+  A_PAC_PEQ: { cols: 28, rows: 8, lpp: 8, cpp: 20 },
   AMP_CX: { cols: 73, rows: 8, lpp: 8, cpp: 20 },
   AMP10: { cols: 65, rows: 10, lpp: 8, cpp: 20 },
   A_PAC_GRAN: { cols: 57, rows: 8, lpp: 8, cpp: 20 },

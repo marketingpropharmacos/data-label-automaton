@@ -122,37 +122,45 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
   'D': { conselho: 'RMS' }, 'E': { conselho: 'CRBio' }, 'F': { conselho: 'CRO' },
 };
 
-// ---- A_PAC_PEQ specific generator (fixed grid) ----
+// ---- A_PAC_PEQ specific generator (compact fixed grid, distinct from GRAN) ----
 function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  const maxCols = layoutConfig.colunasMax || 38;
+  const maxCols = layoutConfig.colunasMax || 28;
+  const maxLines = layoutConfig.linhasMax || 8;
+  const lines: string[] = [];
 
-  // Line 1: PACIENTE (25 chars) + REQ:RRRRRRR (7 chars)
-  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, 25);
-  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
-  const req = `REQ:${reqNum}`;
-  const line1 = padLine(paciente, req, maxCols);
+  const pushWrapped = (value: string, lineLimit = 1) => {
+    if (!value.trim()) return;
+    wrapText(value, maxCols, lineLimit)
+      .split('\n')
+      .filter(Boolean)
+      .forEach((line) => lines.push(line.substring(0, maxCols)));
+  };
 
-  // Line 2: DR(A)MEDICO (16 chars) + CONSELHO (15 chars)
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, 16) : "";
-  const drName = medico ? `DR(A)${medico}` : "";
+  pushWrapped(cleanPatientName(rotulo.nomePaciente || "").toUpperCase(), 2);
+
+  const req = `REQ:${padReqNumber(rotulo.nrRequisicao)}-${rotulo.nrItem || '0'}`;
+  lines.push(req.substring(0, maxCols));
+
+  const medico = rotulo.nomeMedico ? `DR(A)${rotulo.nomeMedico.toUpperCase()}` : "";
+  pushWrapped(medico, 2);
+
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   const conselhoNome = tipo.conselho || 'CRM';
   const conselhoStr = rotulo.numeroCRM
-    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`
     : "";
-  const line2 = padLine(drName, conselhoStr, maxCols);
+  if (conselhoStr) {
+    lines.push(conselhoStr.substring(0, maxCols));
+  }
 
-  // Line REG: right-aligned
   const regNum = String(rotulo.numeroRegistro || "");
   const reg = regNum ? `REG:${regNum}` : "";
-  const lineReg = reg ? padLine("", reg, maxCols) : "";
+  if (reg) {
+    lines.push(padLine("", reg, maxCols));
+  }
 
-  // 3 linhas fixas — espelho exato do PPLA FC:
-  // Y=89: Paciente (X=12) + REQ (X=116)
-  // Y=78: DR(A)Médico CRF-UF-NUM (X=12)
-  // Y=67: REG (X=129)
-  return [line1, line2, lineReg].join('\n');
+  return lines.slice(0, maxLines).join('\n');
 }
 
 // ---- Clean patient name: remove leading phone numbers/digits ----
@@ -517,8 +525,8 @@ function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType):
   }
 
   // Fallback por limites físicos do layout (evita quebrar quando tipo vem legado)
-  if (layoutConfig.colunasMax === 38 && layoutConfig.linhasMax === 8) return 'A_PAC_PEQ';
-  if (layoutConfig.colunasMax === 57 && layoutConfig.linhasMax === 8) return 'A_PAC_GRAN';
+  if ((layoutConfig.colunasMax === 28 || layoutConfig.colunasMax === 38) && layoutConfig.linhasMax === 8) return 'A_PAC_PEQ';
+  if (layoutConfig.colunasMax === 57 && (layoutConfig.linhasMax === 5 || layoutConfig.linhasMax === 8)) return 'A_PAC_GRAN';
 
   return layoutConfig.tipo;
 }
