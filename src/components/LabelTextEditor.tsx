@@ -761,15 +761,7 @@ const LabelTextEditor = ({
   }, []);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    let newText = e.target.value;
-    if (maxCols) {
-      const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
-      const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'AMP_CX';
-      if (isFixedGrid) {
-        // Limita colunas por linha mas sem limite de número de linhas
-        newText = newText.split('\n').map(line => line.substring(0, maxCols)).join('\n');
-      }
-    }
+    const newText = e.target.value;
     onTextChange(rotulo.id, newText);
     setTimeout(updateCursorInfo, 0);
   };

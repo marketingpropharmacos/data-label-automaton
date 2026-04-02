@@ -360,13 +360,13 @@ def _gerar_from_texto_livre(texto_livre, y_positions, x_start, rot, font, cols, 
 
 
 def _build_label_ampcx(linhas, dims, cal):
-    """Build AMP_CX label with FC-exact setup: f250, PB, H14."""
+    """Build AMP_CX label — 109x25mm = 200 dots altura a 203 DPI."""
     contraste = cal.get('contraste', 14)
     setup_parts = [
-        "\x02f289",
+        "\x02f200",    # form length correto para 25mm (200 dots a 203 DPI)
         "\x02L",
         "\x02e",
-        "PB",
+        "PA",
         "D14",
         f"H{contraste:02d}",
     ]
@@ -504,10 +504,10 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
 
 
 def _build_label_ppla(linhas, cal, velocidade='PA'):
-    """Função base PPLA: setup FC-padrão + campos + Q0001E."""
+    """Função base PPLA: setup para etiquetas 25mm (200 dots a 203 DPI)."""
     contraste = cal.get('contraste', 14)
     setup_parts = [
-        "\x02f289",
+        "\x02f200",    # form length correto para 25mm (200 dots a 203 DPI)
         "\x02L",
         "\x02e",
         velocidade,
@@ -520,13 +520,13 @@ def _build_label_ppla(linhas, cal, velocidade='PA'):
 
 
 def _build_label_amp10(linhas, dims, cal):
-    """Build AMP10 label com setup FC exato: f250, PB, D14."""
+    """Build AMP10 label — 89x38mm = 304 dots altura a 203 DPI."""
     contraste = cal.get('contraste', 14)
     setup_parts = [
-        "\x02f250",    # form length FC exato para AMP10
+        "\x02f304",    # form length correto para 38mm (304 dots a 203 DPI)
         "\x02L",
         "\x02e",
-        "PB",          # FC usa PB para AMP10
+        "PA",
         "D14",
         f"H{contraste:02d}",
     ]
@@ -580,15 +580,16 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     font = 1   # font padrão (compatível com demais layouts)
     rot = 1
 
-    # Y levels FC exatos (step -9)
-    y_levels = [10110, 10101, 10092, 10083, 10074, 10065, 10056, 10047, 10038]
-    # X positions FC exatos
-    x_left  = 14
-    x_req   = 196
-    x_lote  = 53
-    x_fab   = 102
-    x_val   = 147
-    x_reg   = 151
+    # Y levels em dots (203 DPI) para etiqueta 89x38mm = 304 dots altura
+    # 6 linhas distribuídas de Y=280 até Y=80, passo -40 (≈5mm entre linhas)
+    y_levels = [280, 240, 200, 160, 120, 80, 60, 40, 20]
+    # X positions em dots para etiqueta 89mm = 712 dots largura
+    x_left  = 14   # ≈1.7mm da borda esquerda
+    x_req   = 550  # ≈68mm da esquerda (campo REQ no lado direito)
+    x_lote  = 80
+    x_fab   = 210
+    x_val   = 350
+    x_reg   = 520
 
     # textoLivre: cada linha do editor mapeia para um Y level
     texto_livre = rotulo.get('textoLivre', '')
