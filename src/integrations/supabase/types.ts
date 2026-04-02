@@ -3088,6 +3088,7 @@ export type Database = {
           assist_medica_empresa: number
           assist_odonto_desconto: number
           assist_odonto_empresa: number
+          base_calculo_inss: number | null
           colaborador_id: number
           comissoes: number
           competencia: string
@@ -3122,6 +3123,7 @@ export type Database = {
           terceiros: number
           total_beneficios_empresa: number
           total_descontos: number
+          total_descontos_folha: number | null
           total_encargos_patronais: number
           total_provisoes: number
           updated_at: string
@@ -3139,6 +3141,7 @@ export type Database = {
           assist_medica_empresa?: number
           assist_odonto_desconto?: number
           assist_odonto_empresa?: number
+          base_calculo_inss?: number | null
           colaborador_id: number
           comissoes?: number
           competencia: string
@@ -3173,6 +3176,7 @@ export type Database = {
           terceiros?: number
           total_beneficios_empresa?: number
           total_descontos?: number
+          total_descontos_folha?: number | null
           total_encargos_patronais?: number
           total_provisoes?: number
           updated_at?: string
@@ -3190,6 +3194,7 @@ export type Database = {
           assist_medica_empresa?: number
           assist_odonto_desconto?: number
           assist_odonto_empresa?: number
+          base_calculo_inss?: number | null
           colaborador_id?: number
           comissoes?: number
           competencia?: string
@@ -3224,6 +3229,7 @@ export type Database = {
           terceiros?: number
           total_beneficios_empresa?: number
           total_descontos?: number
+          total_descontos_folha?: number | null
           total_encargos_patronais?: number
           total_provisoes?: number
           updated_at?: string
