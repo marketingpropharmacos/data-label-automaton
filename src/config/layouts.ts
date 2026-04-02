@@ -217,34 +217,53 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migração v2: força valores corretos para A_PAC_PEQ e A_PAC_GRAN
+      const merged = {
+        ...deepClone(defaultLayouts),
+        ...parsed,
+      } as Record<LayoutType, LayoutConfig>;
+
+      // Layouts homologados: força a estrutura oficial para evitar cache legado quebrado
       let needsSave = false;
-      if (parsed.A_PAC_PEQ) {
-        const peq = parsed.A_PAC_PEQ;
-        if (peq.colunasMax !== 28 || peq.linhasMax !== 8 ||
-            peq.dimensoes?.larguraMM !== 35) {
-          peq.colunasMax = 28;
-          peq.linhasMax = 8;
-          peq.dimensoes = { larguraMM: 35, alturaMM: 25 };
+      const frozenLayouts: LayoutType[] = ['A_PAC_PEQ', 'A_PAC_GRAN'];
+
+      frozenLayouts.forEach((tipo) => {
+        const current = merged[tipo];
+        const defaults = deepClone(defaultLayouts[tipo]);
+
+        if (!current) {
+          merged[tipo] = defaults;
+          needsSave = true;
+          return;
+        }
+
+        const shouldResetStructure =
+          current.dimensoes?.larguraMM !== defaults.dimensoes.larguraMM ||
+          current.dimensoes?.alturaMM !== defaults.dimensoes.alturaMM ||
+          current.colunasMax !== defaults.colunasMax ||
+          current.linhasMax !== defaults.linhasMax ||
+          current.linhas?.length !== defaults.linhas.length;
+
+        if (shouldResetStructure) {
+          merged[tipo] = {
+            ...current,
+            tipo: defaults.tipo,
+            nome: defaults.nome,
+            dimensoes: deepClone(defaults.dimensoes),
+            colunasMax: defaults.colunasMax,
+            linhasMax: defaults.linhasMax,
+            linhas: deepClone(defaults.linhas),
+          };
           needsSave = true;
         }
-      }
-      if (parsed.A_PAC_GRAN) {
-        const gran = parsed.A_PAC_GRAN;
-        if (gran.colunasMax !== 57 || gran.linhasMax !== 5 ||
-            gran.dimensoes?.larguraMM !== 76) {
-          gran.colunasMax = 57;
-          gran.linhasMax = 5;
-          gran.dimensoes = { larguraMM: 76, alturaMM: 25 };
-          needsSave = true;
-        }
-      }
+      });
+
       if (needsSave) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        console.log('[Layouts] Migração v2: A_PAC_PEQ(35mm/28col/8lin) e A_PAC_GRAN(76mm/57col/5lin) corrigidos');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        console.log('[Layouts] Migração v3: estrutura oficial de A_PAC_PEQ/A_PAC_GRAN reaplicada');
       }
-      console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(parsed));
-      return parsed;
+
+      console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(merged));
+      return merged;
     }
   } catch (e) {
     console.error('[Layouts] Erro ao carregar layouts:', e);

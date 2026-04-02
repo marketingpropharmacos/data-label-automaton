@@ -182,8 +182,24 @@ export const getLayoutPrinterMap = (): LayoutPrinterMap => {
   try {
     const stored = localStorage.getItem(LAYOUT_PRINTER_MAP_KEY);
     const userMap = stored ? JSON.parse(stored) : {};
-    // Merge: user overrides win, defaults fill gaps
-    return { ...DEFAULT_LAYOUT_PRINTER_MAP, ...userMap };
+    const merged = { ...DEFAULT_LAYOUT_PRINTER_MAP, ...userMap };
+
+    let needsSave = false;
+    if (merged.A_PAC_PEQ === 'PEQUENO') {
+      merged.A_PAC_PEQ = DEFAULT_LAYOUT_PRINTER_MAP.A_PAC_PEQ;
+      needsSave = true;
+    }
+    if (merged.TIRZ === 'PEQUENO') {
+      merged.TIRZ = DEFAULT_LAYOUT_PRINTER_MAP.TIRZ;
+      needsSave = true;
+    }
+
+    if (needsSave) {
+      localStorage.setItem(LAYOUT_PRINTER_MAP_KEY, JSON.stringify(merged));
+      console.log('[LayoutPrinterMap] Migração: PEQUENO → AMP PEQUENA NOVA');
+    }
+
+    return merged;
   } catch {
     return { ...DEFAULT_LAYOUT_PRINTER_MAP };
   }
