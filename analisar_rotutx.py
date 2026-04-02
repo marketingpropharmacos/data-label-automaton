@@ -1,5 +1,5 @@
 """
-Analisa os ultimos 100 ROTUTX do banco Firebird (FC12300)
+Analisa os ultimos 100 ROTUTX da filial 392 (FC12300)
 e extrai padroes comuns por tipo de layout (ROTULOID).
 
 Uso: python analisar_rotutx.py
@@ -69,29 +69,41 @@ def analisar():
     conn = get_conn()
     cur = conn.cursor()
 
-    # Colunas FC12300: CDFIL, NRRQU, SERIER, DTENTR, FLAGENV, TPDEFROT,
-    #                  ROTULOID, QTLIN, QTCOL, ROTUTX, ROTUTXORI, ROTUTXMSK, TPMODELO
-    print("Buscando ultimos 100 registros com ROTUTX preenchido...")
+    print("Buscando ultimos 100 registros com ROTUTX da filial 392...")
     cur.execute("""
         SELECT FIRST 100
-            NRRQU, CDFIL, SERIER, ROTULOID, QTLIN, QTCOL, TPMODELO, ROTUTX
+            NRRQU, CDFIL, SERIER, ROTULOID, QTLIN, QTCOL, TPMODELO, DTENTR, ROTUTX
         FROM FC12300
         WHERE ROTUTX IS NOT NULL
-        ORDER BY NRRQU DESC
+          AND CDFIL = 392
+        ORDER BY DTENTR DESC, NRRQU DESC
     """)
 
     rows = cur.fetchall()
-    print(f"Encontrados: {len(rows)} registros\n")
+    print(f"Encontrados: {len(rows)} registros na filial 392\n")
+
+    if not rows:
+        print("Nenhum registro encontrado para filial 392.")
+        print("Tentando sem filtro de filial, ordenado por data...")
+        cur.execute("""
+            SELECT FIRST 20
+                NRRQU, CDFIL, SERIER, ROTULOID, QTLIN, QTCOL, TPMODELO, DTENTR, ROTUTX
+            FROM FC12300
+            WHERE ROTUTX IS NOT NULL
+            ORDER BY DTENTR DESC, NRRQU DESC
+        """)
+        rows = cur.fetchall()
+        print(f"Encontrados: {len(rows)} registros (todas filiais)\n")
 
     # Agrupa por ROTULOID
     por_layout = defaultdict(list)
-    for nrrqu, cdfil, serier, rotuloid, qtlin, qtcol, tpmodelo, rotutx_blob in rows:
+    for nrrqu, cdfil, serier, rotuloid, qtlin, qtcol, tpmodelo, dtentr, rotutx_blob in rows:
         ppla = decode_rotutx(rotutx_blob)
         if ppla:
             por_layout[str(rotuloid).strip() if rotuloid else 'NULL'].append({
                 'req': nrrqu, 'filial': cdfil, 'serie': serier,
                 'qtlin': qtlin, 'qtcol': qtcol, 'tpmodelo': tpmodelo,
-                'ppla': ppla,
+                'dtentr': dtentr, 'ppla': ppla,
             })
 
     print("=" * 60)
@@ -102,23 +114,21 @@ def analisar():
         print(f"\n{'='*60}")
         print(f"ROTULOID: '{rotuloid}'  ({len(registros)} registros)")
         r0 = registros[0]
+        print(f"  REQ={r0['req']}  FILIAL={r0['filial']}  SERIE={r0['serie']}  DATA={r0['dtentr']}")
         print(f"  QTLIN={r0['qtlin']}  QTCOL={r0['qtcol']}  TPMODELO={r0['tpmodelo']}")
         print(f"{'='*60}")
 
-        # Setup
         setup = extrair_setup(r0['ppla'])
-        print(f"  Setup (req {r0['req']}):")
+        print(f"  Setup:")
         for s in setup:
             print(f"    {repr(s)}")
 
-        # Campos do primeiro exemplo
         campos = extrair_campos(r0['ppla'])
-        print(f"\n  Campos (req {r0['req']} serie {r0['serie']}):")
+        print(f"\n  Campos:")
         for c in campos:
             print(f"    font={c['font']} wmult={c['wmult']} hmult={c['hmult']} "
                   f"y={c['y']:>7} x={c['x']:>4}  '{c['texto']}'")
 
-        # Padroes comuns entre todos os registros
         todas_fonts = set()
         todos_y = set()
         todos_x = set()
@@ -129,13 +139,12 @@ def analisar():
                 todos_x.add(c['x'])
 
         print(f"\n  Padroes em {len(registros)} registros:")
-        print(f"    Fonts:      {sorted(todas_fonts)}")
-        print(f"    Y unicos:   {sorted(todos_y)}")
-        print(f"    X unicos:   {sorted(todos_x)}")
+        print(f"    Fonts:    {sorted(todas_fonts)}")
+        print(f"    Y unicos: {sorted(todos_y)}")
+        print(f"    X unicos: {sorted(todos_x)}")
 
-        # PPLA raw
-        print(f"\n  PPLA RAW (primeiros 600 chars):")
-        print(f"    {repr(r0['ppla'][:600])}")
+        print(f"\n  PPLA RAW (primeiros 800 chars):")
+        print(f"    {repr(r0['ppla'][:800])}")
 
     conn.close()
     print("\nAnalise concluida.")
