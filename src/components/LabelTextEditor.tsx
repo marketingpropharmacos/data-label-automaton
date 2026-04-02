@@ -970,7 +970,7 @@ const LabelTextEditor = ({
           <span className="mx-1">|</span>
           <span>{dim.larguraMM}x{dim.alturaMM}mm</span>
           <span className="mx-1">|</span>
-          <span>{layoutConfig.linhas.length} linhas</span>
+          <span>{layoutConfig.linhasMax ?? layoutConfig.linhas.length} linhas</span>
         </div>
         <div className="flex items-center gap-2">
           {availablePrinters.length > 0 && (
