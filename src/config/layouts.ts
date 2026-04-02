@@ -111,7 +111,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'A_PAC_PEQ',
     nome: 'Ampola Pacote Pequeno',
     dimensoes: { larguraMM: 45, alturaMM: 25 },
-    colunasMax: 51,
+    colunasMax: 38,
     linhasMax: 4,
     linhas: [
       { id: 'linha1', campos: ['paciente'], spacing: 'normal' },
@@ -141,7 +141,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'A_PAC_GRAN',
     nome: 'Ampola Pacote Grande',
     dimensoes: { larguraMM: 76, alturaMM: 25 },
-    colunasMax: 32,
+    colunasMax: 57,
     linhasMax: 5,
     linhas: [
       { id: 'linha1', campos: ['paciente'], spacing: 'normal' },
@@ -217,6 +217,20 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      // Migração: corrige colunasMax trocados entre A_PAC_PEQ e A_PAC_GRAN
+      let needsSave = false;
+      if (parsed.A_PAC_PEQ && parsed.A_PAC_PEQ.colunasMax !== 38) {
+        parsed.A_PAC_PEQ.colunasMax = 38;
+        needsSave = true;
+      }
+      if (parsed.A_PAC_GRAN && parsed.A_PAC_GRAN.colunasMax !== 57) {
+        parsed.A_PAC_GRAN.colunasMax = 57;
+        needsSave = true;
+      }
+      if (needsSave) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        console.log('[Layouts] Migração: colunasMax A_PAC_PEQ/A_PAC_GRAN corrigidos');
+      }
       console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(parsed));
       return parsed;
     }
