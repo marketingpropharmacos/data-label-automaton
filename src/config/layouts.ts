@@ -217,19 +217,31 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Migração: corrige colunasMax trocados entre A_PAC_PEQ e A_PAC_GRAN
+      // Migração v2: força valores corretos para A_PAC_PEQ e A_PAC_GRAN
       let needsSave = false;
-      if (parsed.A_PAC_PEQ && parsed.A_PAC_PEQ.colunasMax !== 38) {
-        parsed.A_PAC_PEQ.colunasMax = 38;
-        needsSave = true;
+      if (parsed.A_PAC_PEQ) {
+        const peq = parsed.A_PAC_PEQ;
+        if (peq.colunasMax !== 28 || peq.linhasMax !== 8 ||
+            peq.dimensoes?.larguraMM !== 35) {
+          peq.colunasMax = 28;
+          peq.linhasMax = 8;
+          peq.dimensoes = { larguraMM: 35, alturaMM: 25 };
+          needsSave = true;
+        }
       }
-      if (parsed.A_PAC_GRAN && parsed.A_PAC_GRAN.colunasMax !== 57) {
-        parsed.A_PAC_GRAN.colunasMax = 57;
-        needsSave = true;
+      if (parsed.A_PAC_GRAN) {
+        const gran = parsed.A_PAC_GRAN;
+        if (gran.colunasMax !== 57 || gran.linhasMax !== 5 ||
+            gran.dimensoes?.larguraMM !== 76) {
+          gran.colunasMax = 57;
+          gran.linhasMax = 5;
+          gran.dimensoes = { larguraMM: 76, alturaMM: 25 };
+          needsSave = true;
+        }
       }
       if (needsSave) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-        console.log('[Layouts] Migração: colunasMax A_PAC_PEQ/A_PAC_GRAN corrigidos');
+        console.log('[Layouts] Migração v2: A_PAC_PEQ(35mm/28col/8lin) e A_PAC_GRAN(76mm/57col/5lin) corrigidos');
       }
       console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(parsed));
       return parsed;
