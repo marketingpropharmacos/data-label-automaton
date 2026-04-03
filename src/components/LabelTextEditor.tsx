@@ -671,6 +671,7 @@ const getStoredFontSize = (layoutTipo?: string) => {
     if (stored) return parseInt(stored, 10);
   } catch {}
   if (layoutTipo === 'A_PAC_PEQ') return 5;
+  if (layoutTipo === 'A_PAC_GRAN') return 10;
   return 14;
 };
 
@@ -934,7 +935,7 @@ const LabelTextEditor = ({
       </div>
 
       {/* Textarea */}
-      <div className="relative overflow-visible">
+      <div className="relative overflow-x-auto">
         <textarea
           ref={textareaRef}
           value={text}
@@ -947,7 +948,10 @@ const LabelTextEditor = ({
             fontSize: `${editorFontSize}px`,
             lineHeight: String(lineSpacing),
             letterSpacing: '-0.5px',
+            overflowX: 'auto',
+            whiteSpace: 'pre',
           }}
+          wrap="off"
           spellCheck={false}
           rows={Math.max(8, text.split('\n').length + 2)}
         />
