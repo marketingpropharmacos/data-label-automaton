@@ -671,6 +671,7 @@ const getStoredFontSize = (layoutTipo?: string) => {
     if (stored) return parseInt(stored, 10);
   } catch {}
   if (layoutTipo === 'A_PAC_PEQ') return 5;
+  if (layoutTipo === 'A_PAC_GRAN') return 10;
   return 14;
 };
 
