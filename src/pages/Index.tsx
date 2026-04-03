@@ -145,23 +145,17 @@ const Index = () => {
       try {
         const { data: savedRows } = await supabase
           .from('saved_rotulos')
-          .select('item_id, texto_livre, layout_tipo')
+          .select('item_id, texto_livre')
           .eq('nr_requisicao', requisitionNumber);
         
         if (savedRows && savedRows.length > 0) {
           const currentCols = layoutConfig.colunasMax || 57;
           const savedMap: Record<string, string> = {};
           savedRows.forEach(row => {
-            // Só restaurar se o layout salvo corresponde ao layout atual,
-            // ou se não tem layout_tipo salvo mas a largura do texto é compatível
-            if (row.layout_tipo === layoutType) {
+            // Só restaurar se a largura máxima das linhas é compatível com o layout atual
+            const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
+            if (Math.abs(maxLineLen - currentCols) <= 5) {
               savedMap[row.item_id] = row.texto_livre;
-            } else if (!row.layout_tipo) {
-              // Fallback: verificar se a largura máxima das linhas é compatível
-              const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.length));
-              if (Math.abs(maxLineLen - currentCols) <= 3) {
-                savedMap[row.item_id] = row.texto_livre;
-              }
             }
           });
           restoredRotulos = result.data.map(r => {
