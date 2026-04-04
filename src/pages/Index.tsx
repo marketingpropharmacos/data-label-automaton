@@ -124,7 +124,7 @@ const Index = () => {
   const handleLayoutChange = (newType: LayoutType) => {
     setLayoutType(newType);
     setSelectedLayout(newType);
-    // Limpa textoLivre de todos os rótulos para forçar regeneração com o novo layout
+    setLayoutConfig(getLayout(newType));
     setRotulos(prev => prev.map(r => ({ ...r, textoLivre: undefined })));
   };
 
