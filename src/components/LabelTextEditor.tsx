@@ -742,7 +742,7 @@ const LabelTextEditor = ({
         : wrapText(generated, maxCols, Number.MAX_SAFE_INTEGER);
     }
     onTextChange(rotulo.id, generated);
-  }, [rotulo?.id, layoutType, metaInline]);
+  }, [rotulo?.id, rotulo?.textoLivre === undefined, layoutType, metaInline]);
 
   const updateCursorInfo = useCallback(() => {
     const ta = textareaRef.current;

@@ -180,6 +180,7 @@ export type Database = {
           id: number
           period: string
           synced_at: string
+          umbrella: string
         }
         Insert: {
           checksum?: string | null
@@ -187,6 +188,7 @@ export type Database = {
           id?: never
           period: string
           synced_at?: string
+          umbrella?: string
         }
         Update: {
           checksum?: string | null
@@ -194,6 +196,7 @@ export type Database = {
           id?: never
           period?: string
           synced_at?: string
+          umbrella?: string
         }
         Relationships: []
       }
