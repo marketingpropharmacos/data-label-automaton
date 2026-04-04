@@ -125,42 +125,32 @@ const tiposPrescritores: Record<string, { conselho: string }> = {
 // ---- A_PAC_PEQ specific generator (compact fixed grid, distinct from GRAN) ----
 function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const maxCols = layoutConfig.colunasMax || 28;
-  const maxLines = layoutConfig.linhasMax || 8;
-  const lines: string[] = [];
 
-  const pushWrapped = (value: string, lineLimit = 1) => {
-    if (!value.trim()) return;
-    wrapText(value, maxCols, lineLimit)
-      .split('\n')
-      .filter(Boolean)
-      .forEach((line) => lines.push(line.substring(0, maxCols)));
-  };
+  // Line 1: PACIENTE + REQ na mesma linha (mesmo Y no PPLA: Y=188)
+  const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
+  const req = `REQ:${reqNum}`;
+  const pacienteMax = maxCols - req.length - 1;
+  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, pacienteMax);
+  const line1 = padLine(paciente, req, maxCols);
 
-  pushWrapped(cleanPatientName(rotulo.nomePaciente || "").toUpperCase(), 2);
-
-  const req = `REQ:${padReqNumber(rotulo.nrRequisicao)}-${rotulo.nrItem || '0'}`;
-  lines.push(req.substring(0, maxCols));
-
-  const medico = rotulo.nomeMedico ? `DR(A)${rotulo.nomeMedico.toUpperCase()}` : "";
-  pushWrapped(medico, 2);
-
+  // Line 2: DR(A)MEDICO + CRM na mesma linha (mesmo Y no PPLA: Y=163)
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   const conselhoNome = tipo.conselho || 'CRM';
   const conselhoStr = rotulo.numeroCRM
-    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
     : "";
-  if (conselhoStr) {
-    lines.push(conselhoStr.substring(0, maxCols));
-  }
+  const medicoMax = conselhoStr ? maxCols - 5 - conselhoStr.length - 1 : maxCols - 5;
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, Math.max(0, medicoMax)) : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  const line2 = padLine(drName, conselhoStr, maxCols);
 
+  // Line 3: REG alinhado à direita (Y=138 no PPLA)
   const regNum = String(rotulo.numeroRegistro || "");
   const reg = regNum ? `REG:${regNum}` : "";
-  if (reg) {
-    lines.push(padLine("", reg, maxCols));
-  }
+  const lineReg = reg ? padLine("", reg, maxCols) : "";
 
-  return lines.slice(0, maxLines).join('\n');
+  return [line1, line2, lineReg].filter(l => l.trim()).join('\n');
 }
 
 // ---- Clean patient name: remove leading phone numbers/digits ----
