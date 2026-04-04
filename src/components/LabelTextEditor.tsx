@@ -154,7 +154,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
   const req = `REQ:${reqNum}`;
   const pacienteMax = maxCols - req.length - 1;
-  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, pacienteMax);
+  const paciente = abbreviateName((rotulo.nomePaciente || "").toUpperCase(), pacienteMax);
   const line1 = padLine(paciente, req, maxCols);
 
   // Line 2: DR(A)MEDICO + CRM na mesma linha (mesmo Y no PPLA: Y=163)
