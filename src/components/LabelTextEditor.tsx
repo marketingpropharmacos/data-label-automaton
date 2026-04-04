@@ -43,6 +43,30 @@ function truncateText(text: string, maxCols: number, maxLines: number): string {
   return lines.map(line => line.substring(0, maxCols)).join('\n');
 }
 
+// ---- Abbreviate name utility: progressive abbreviation to fit maxLen ----
+function abbreviateName(name: string, maxLen: number): string {
+  if (name.length <= maxLen) return name;
+  const parts = name.trim().split(/\s+/).filter(p => p.length > 0);
+  if (parts.length <= 1) return name.substring(0, maxLen);
+
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const middle = parts.slice(1, -1);
+
+  const attempts = [
+    [first, ...middle.map(p => p[0] + '.'), last].join(' '),
+    first + (middle.length ? ' ' + middle.map(p => p[0] + '.').join('') : '') + last,
+    [first[0] + '.', ...middle.map(p => p[0] + '.'), last].join(' '),
+    `${first[0]}. ${last}`,
+    last.substring(0, maxLen),
+  ];
+
+  for (const attempt of attempts) {
+    if (attempt.length <= maxLen) return attempt;
+  }
+  return name.substring(0, maxLen);
+}
+
 // ---- Pad line utility: align left+right within fixed width ----
 function padLine(left: string, right: string, width: number): string {
   const space = width - left.length - right.length;
@@ -130,7 +154,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
   const req = `REQ:${reqNum}`;
   const pacienteMax = maxCols - req.length - 1;
-  const paciente = (rotulo.nomePaciente || "").toUpperCase().substring(0, pacienteMax);
+  const paciente = abbreviateName((rotulo.nomePaciente || "").toUpperCase(), pacienteMax);
   const line1 = padLine(paciente, req, maxCols);
 
   // Line 2: DR(A)MEDICO + CRM na mesma linha (mesmo Y no PPLA: Y=163)
@@ -141,7 +165,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
     ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
     : "";
   const medicoMax = conselhoStr ? maxCols - 5 - conselhoStr.length - 1 : maxCols - 5;
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, Math.max(0, medicoMax)) : "";
+  const medico = rotulo.nomeMedico ? abbreviateName(rotulo.nomeMedico.toUpperCase(), Math.max(0, medicoMax)) : "";
   const drName = medico ? `DR(A)${medico}` : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
