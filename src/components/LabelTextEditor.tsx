@@ -208,46 +208,64 @@ function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string):
   return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
 }
 
-// ---- AMP_CX specific generator (109x25mm, 73 cols x 8 lines) ----
+// ---- AMP_CX specific generator — FIXED POSITION FIELD MAP ----
+// Each line has anchored left/right zones with max widths.
+// Content never shifts other fields — overflow is truncated.
 function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  const maxCols = layoutConfig.colunasMax || 73;
-  const maxLines = layoutConfig.linhasMax || 8;
+  const W = layoutConfig.colunasMax || 73;
 
-  // Junta blocos com espaçamento compacto (1 espaço), conforme referência visual
-  const compactLine = (left: string, right: string): string => {
-    const safeLeft = (left || "").trim();
-    const safeRight = (right || "").trim();
-    if (safeLeft && safeRight) return `${safeLeft} ${safeRight}`.substring(0, maxCols);
-    return (safeLeft || safeRight).substring(0, maxCols);
+  // === Zone widths (right fields get fixed reservation) ===
+  const REQ_WIDTH = 18;          // "REQ:000000-0" = ~13, reserve 18
+  const CONSELHO_WIDTH = 20;     // "CRM.SP-123456" = ~14, reserve 20
+  const APLICACAO_WIDTH = 25;    // "APLICAÇAO:MICROAGULHAMENTO" reserve
+  const REG_WIDTH = 20;          // "REG:123456" reserve
+
+  const LEFT_L1 = W - REQ_WIDTH;       // paciente max
+  const LEFT_L2 = W - CONSELHO_WIDTH;  // dr(a)+medico max
+  const LEFT_L6 = W - APLICACAO_WIDTH; // uso max
+  const LEFT_L7 = W - REG_WIDTH;       // contem max
+
+  // === Helper: anchor left + right within fixed width ===
+  const fixedLine = (left: string, right: string, leftMax: number, rightMax: number): string => {
+    const l = (left || "").substring(0, leftMax);
+    const r = (right || "").substring(0, rightMax);
+    const gap = W - l.length - r.length;
+    if (gap <= 0) return (l + r).substring(0, W);
+    return l + ' '.repeat(gap) + r;
   };
 
-  const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
+  // === Helper: fixed 4-column meta line (pH / lote / fab / val) ===
+  const fixedMetaLine = (ph: string, lote: string, fab: string, val: string): string => {
+    // 4 zones of equal width
+    const zoneW = Math.floor(W / 4);
+    const zones = [ph, lote, fab, val];
+    return zones.map(z => (z || "").substring(0, zoneW).padEnd(zoneW)).join("").substring(0, W);
+  };
+
   const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
   const reqPadded = padReqNumber(rotulo.nrRequisicao);
   const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
+  const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
 
   const isKit = rotulo.tipoItem === 'KIT' && rotulo.componentes && rotulo.componentes.length > 0;
 
+  const lines: string[] = [];
+
+  // ── LINE 1: Paciente (left) | REQ (right) ──
+  lines.push(fixedLine(cleanName, reqStr, LEFT_L1, REQ_WIDTH));
+
+  // ── LINE 2: DR(A)+Medico (left) | Conselho (right) ──
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
+  const drName = medico ? `DR(A)${medico}` : "";
+  lines.push(fixedLine(drName, conselhoStr, LEFT_L2, CONSELHO_WIDTH));
+
+  // ── LINES 3-4: Produto (left-anchored, up to 2 lines, word-wrap) ──
   if (isKit && rotulo.componentes) {
-    const lines: string[] = [];
-
-    // Line 1: PACIENTE + REQ (compacto)
-    lines.push(compactLine(cleanName, reqStr));
-
-    // Line 2: DR(A)MEDICO + CONSELHO (compacto)
-    const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
-    const drName = medico ? `DR(A)${medico}` : "";
-    lines.push(compactLine(drName, conselhoStr));
-
-    // Component lines: NOME PH:X L:X F:XX/XX V:XX/XX (tudo na mesma linha)
-    // Filtrar componentes de embalagem (BLISTER, CAIXA MED, etc.)
-    const componentesVisiveis = rotulo.componentes.filter(
-      (comp) => {
-        const nome = comp.nome?.toUpperCase() || '';
-        return !nome.startsWith('BLISTER') && !nome.startsWith('CAIXA MED');
-      }
-    );
-    componentesVisiveis.forEach((comp) => {
+    const componentesVisiveis = rotulo.componentes.filter(comp => {
+      const nome = comp.nome?.toUpperCase() || '';
+      return !nome.startsWith('BLISTER') && !nome.startsWith('CAIXA MED');
+    });
+    componentesVisiveis.forEach(comp => {
       const nomeExibicao = rotulo.eSinonimo
         ? (comp.composicao || formatarNomeComponente(comp.nome))
         : formatarNomeComponente(comp.nome);
@@ -258,82 +276,48 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       if (comp.fabricacao) meta.push(`F:${formatarDataCurta(comp.fabricacao)}`);
       if (comp.validade) meta.push(`V:${formatarDataCurta(comp.validade)}`);
       const metaStr = meta.join(" ");
-      const maxNome = metaStr ? maxCols - metaStr.length - 1 : maxCols;
+      const maxNome = metaStr ? W - metaStr.length - 1 : W;
       const lineText = metaStr ? `${nomeExibicao.substring(0, maxNome)} ${metaStr}` : nomeExibicao;
-      lines.push(lineText.substring(0, maxCols));
+      lines.push(lineText.substring(0, W));
     });
-
-    // Usage (Posologia) + Application
-    const posologia = rotulo.posologia?.toUpperCase() || "";
-    const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
-    const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-    {
-      const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
-      lines.push(compactLine(posologiaValida, right));
-    }
-
-    // Contains + REG (CONTEM sempre visível para preenchimento manual)
-    const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM:";
-    const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-    lines.push(compactLine(contemStr, regStr));
-
-    // Não cortar linhas — Uso/Aplicação e Contem/REG devem sempre aparecer
-    return lines.join('\n');
-  }
-
-  // NON-KIT mode (Mescla or Item Único)
-  const lines: string[] = [];
-
-  // Line 1: PACIENTE + REQ (compacto)
-  lines.push(compactLine(cleanName, reqStr));
-
-  // Line 2: DR(A)MEDICO + CONSELHO (compacto)
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase().substring(0, maxCols - 10) : "";
-  const drName = medico ? `DR(A)${medico}` : "";
-  lines.push(compactLine(drName, conselhoStr));
-
-  // Line 3+: Composição/Fórmula — quebra em até 3 linhas para não perder ativos
-  const mescla = isValidComposicao(rotulo.composicao || "");
-  if (mescla) {
-    const compText = rotulo.composicao!.toUpperCase();
-    wrapText(compText, maxCols, 3).split('\n').forEach(l => lines.push(l));
   } else {
-    const f = formatarFormula(rotulo.formula);
-    if (f) wrapText(f, maxCols, 3).split('\n').forEach(l => lines.push(l));
+    const mescla = isValidComposicao(rotulo.composicao || "");
+    const produtoText = mescla
+      ? (rotulo.composicao || "").toUpperCase()
+      : formatarFormula(rotulo.formula);
+    if (produtoText) {
+      wrapText(produtoText, W, 2).split('\n').forEach(l => lines.push(l));
+    }
   }
 
-  // Line: PH + Lote + Fabricação + Validade (PH sempre visível para preenchimento manual)
-  const metaParts: string[] = [];
-  const phVal = rotulo.ph ? String(rotulo.ph).replace('.', ',') : '';
-  metaParts.push(`PH:${phVal}`);
-  const lote = rotulo.lote || "";
-  if (lote) {
-    if (lote.includes('/')) {
-      metaParts.push(`L:${lote}`);
+  // ── LINE 5: pH | Lote | Fabricação | Validade (fixed 4-zone) ──
+  const phVal = rotulo.ph ? `PH:${String(rotulo.ph).replace('.', ',')}` : 'PH:';
+  let loteStr = '';
+  if (rotulo.lote) {
+    if (rotulo.lote.includes('/')) {
+      loteStr = `L:${rotulo.lote}`;
     } else {
       const ano = formatarDataCurta(rotulo.dataFabricacao).split('/')[1] || "";
-      metaParts.push(`L:${lote}${ano ? '/' + ano : ''}`);
+      loteStr = `L:${rotulo.lote}${ano ? '/' + ano : ''}`;
     }
   }
-  if (rotulo.dataFabricacao) metaParts.push(`F:${formatarDataCurta(rotulo.dataFabricacao)}`);
-  if (rotulo.dataValidade) metaParts.push(`V:${formatarDataCurta(rotulo.dataValidade)}`);
-  if (metaParts.length > 0) lines.push(metaParts.join(" ").substring(0, maxCols));
+  const fabStr = rotulo.dataFabricacao ? `F:${formatarDataCurta(rotulo.dataFabricacao)}` : '';
+  const valStr = rotulo.dataValidade ? `V:${formatarDataCurta(rotulo.dataValidade)}` : '';
+  lines.push(fixedMetaLine(phVal, loteStr, fabStr, valStr));
 
-  // Line: Posologia + Aplicação (compacto)
+  // ── LINE 6: Uso (left) | Aplicação (right) ──
   const posologia = rotulo.posologia?.toUpperCase() || "";
-  const posologiaValida = /^\d+$/.test(posologia) ? "" : posologia;
+  const usoText = /^\d+$/.test(posologia) ? "" : posologia;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  {
-    const right = aplicacao ? `APLICAÇÃO:${aplicacao}` : "";
-    lines.push(compactLine(posologiaValida, right));
-  }
+  const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
+  lines.push(fixedLine(usoText, aplicacaoStr, LEFT_L6, APLICACAO_WIDTH));
 
-  // Line: Contém + REG
-  const contemStr = rotulo.contem?.trim() ? `CONTEM: ${rotulo.contem}` : "CONTEM:";
+  // ── LINE 7: Contém (left) | REG (right) ──
+  const contemStr = rotulo.contem?.trim() ? `CONTEM:${rotulo.contem.trim().toUpperCase()}` : "CONTEM:";
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  lines.push(compactLine(contemStr, regStr));
+  lines.push(fixedLine(contemStr, regStr, LEFT_L7, REG_WIDTH));
 
-    return lines.join('\n');
+  return lines.join('\n');
 }
 
 // ---- A_PAC_GRAN specific generator (fixed grid, same header as PEQ) ----
