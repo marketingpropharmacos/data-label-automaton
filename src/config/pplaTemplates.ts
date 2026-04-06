@@ -57,10 +57,10 @@ const PPLA_TEMPLATES: Record<LayoutType, PPLATemplate> = {
     config: [`${STX}PA`, `${STX}D11`, `${STX}H14`],
     fields: [
       { key: "cliente",       prefix: "111100000890012" },
-      { key: "req",           prefix: "111100000890172", label: "REQ:" },
+      { key: "req",           prefix: "111100000890240", label: "REQ:" },
       { key: "profissional",  prefix: "111100000780012", label: "DR(A)" },
-      { key: "crm",           prefix: "111100000780159" },
-      { key: "registro",      prefix: "111100000780223", label: "REG:" },
+      { key: "crm",           prefix: "111100000780230" },
+      { key: "registro",      prefix: "111100000780300", label: "REG:" },
     ],
     footer: `${STX}Q0001E`,
   },
