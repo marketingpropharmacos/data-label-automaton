@@ -278,30 +278,10 @@ const Index = () => {
         data: { impressos: sucessos },
       };
     } else if (agentConfig.enabled && agentUrl) {
-      // Modo Agente — gera PPLA localmente via templates estáticos e envia direto
-      let sucessos = 0;
-      let erros: string[] = [];
-
-      for (const rotulo of rotulosSelecionados) {
-        try {
-          const pplaText = gerarPPLA(layoutType, rotulo);
-          console.log(`[PPLA-Local] Layout=${layoutType}, bytes=${pplaText.length}`);
-          const sendResult = await testePplaDireto(agentUrl, impressora, pplaText);
-          if (sendResult.success) {
-            sucessos++;
-          } else {
-            erros.push(`Item ${rotulo.nrItem}: ${sendResult.error}`);
-          }
-        } catch (e) {
-          erros.push(`Item ${rotulo.nrItem}: ${e instanceof Error ? e.message : 'Erro ao gerar PPLA'}`);
-        }
-      }
-
-      result = {
-        success: erros.length === 0,
-        error: erros.length > 0 ? erros.join("; ") : undefined,
-        data: { impressos: sucessos },
-      };
+      // Modo Agente — envia textoLivre (mesmo texto do preview) para o agente renderizar
+      // Isso garante paridade WYSIWYG: o que está na tela = o que sai na impressora
+      const configComImpressora = { ...agentConfig, agentUrl, impressora, calibracao: calibracaoPadrao };
+      result = await imprimirViaAgente(configComImpressora, rotulosSelecionados, layoutType, farmaciaData);
     } else {
       // Sem URL de estação configurada
       const stationName = station?.nome || layoutStationId || 'desconhecida';
