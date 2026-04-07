@@ -709,6 +709,14 @@ const LabelTextEditor = ({
   const [lineSpacing, setLineSpacing] = useState(() => getStoredLineSpacing(layoutType));
   const [metaInline, setMetaInline] = useState(() => getStoredMetaInline(layoutType));
 
+  // ---- Dirty state & autosave ----
+  type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<Record<string, string>>({});
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const pendingActionRef = useRef<(() => void) | null>(null);
+
   const rotulo = rotulos[currentIndex];
   const maxCols = layoutConfig.colunasMax;
   const maxLines = layoutConfig.linhasMax;
@@ -716,6 +724,71 @@ const LabelTextEditor = ({
 
   const amp10Opts = isAmp10 ? { metaInline } : undefined;
   const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+
+  // Build current texts snapshot for dirty detection
+  const currentTextsSnapshot = useMemo(() => {
+    const snap: Record<string, string> = {};
+    rotulos.forEach(r => {
+      if (r.textoLivre !== undefined) snap[r.id] = r.textoLivre;
+    });
+    return snap;
+  }, [rotulos]);
+
+  const isDirty = useMemo(() => {
+    const keys = new Set([...Object.keys(currentTextsSnapshot), ...Object.keys(lastSavedSnapshot)]);
+    for (const k of keys) {
+      if (currentTextsSnapshot[k] !== lastSavedSnapshot[k]) return true;
+    }
+    return false;
+  }, [currentTextsSnapshot, lastSavedSnapshot]);
+
+  // Update save status based on dirty
+  useEffect(() => {
+    if (isDirty && saveStatus !== 'saving') {
+      setSaveStatus('dirty');
+    } else if (!isDirty && saveStatus === 'dirty') {
+      setSaveStatus('saved');
+    }
+  }, [isDirty]);
+
+  // ---- Initialize snapshot on load (mark loaded texts as "saved") ----
+  const initializedReqRef = useRef<string>('');
+  useEffect(() => {
+    const reqId = searchedRequisition || '';
+    if (reqId && reqId !== initializedReqRef.current && rotulos.length > 0) {
+      initializedReqRef.current = reqId;
+      const snap: Record<string, string> = {};
+      rotulos.forEach(r => {
+        if (r.textoLivre !== undefined) snap[r.id] = r.textoLivre;
+      });
+      setLastSavedSnapshot(snap);
+      setSaveStatus('idle');
+    }
+  }, [searchedRequisition, rotulos.length]);
+
+  // ---- Autosave with debounce ----
+  useEffect(() => {
+    if (!isDirty) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      performSave(true);
+    }, 2000);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [currentTextsSnapshot, isDirty]);
+
+  // ---- Page unload protection ----
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   // Limpa chaves de localStorage obsoletas (yOffset antigo)
   useEffect(() => {
@@ -732,8 +805,6 @@ const LabelTextEditor = ({
     const layoutChanged = prevLayoutRef.current !== layoutType;
     prevLayoutRef.current = layoutType;
 
-    // Se o layout mudou, forçar regeneração do texto para o novo layout
-    // Caso contrário, não sobrescrever texto editado/restaurado manualmente.
     if (!layoutChanged && rotulo.textoLivre !== undefined) return;
 
     const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
@@ -763,7 +834,7 @@ const LabelTextEditor = ({
         currentCol = pos - charCount + 1;
         break;
       }
-      charCount += lines[i].length + 1; // +1 for \n
+      charCount += lines[i].length + 1;
     }
     setCursorInfo({
       line: currentLine,
@@ -780,10 +851,8 @@ const LabelTextEditor = ({
   };
 
   const handleCancelar = () => {
-    // Restaura o texto gerado automaticamente (descarta edições)
     const fresh = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
     onTextChange(rotulo.id, undefined);
-    // Force regeneration by clearing then re-setting
     setTimeout(() => onTextChange(rotulo.id, fresh), 0);
   };
 
@@ -791,8 +860,45 @@ const LabelTextEditor = ({
     updateCursorInfo();
   };
 
-  const goNext = () => { if (currentIndex < rotulos.length - 1) onIndexChange(currentIndex + 1); };
-  const goPrev = () => { if (currentIndex > 0) onIndexChange(currentIndex - 1); };
+  // ---- Navigation with unsaved changes protection ----
+  const guardAction = (action: () => void) => {
+    if (isDirty) {
+      pendingActionRef.current = action;
+      setUnsavedDialogOpen(true);
+    } else {
+      action();
+    }
+  };
+
+  const goNext = () => {
+    const action = () => { if (currentIndex < rotulos.length - 1) onIndexChange(currentIndex + 1); };
+    guardAction(action);
+  };
+  const goPrev = () => {
+    const action = () => { if (currentIndex > 0) onIndexChange(currentIndex - 1); };
+    guardAction(action);
+  };
+
+  const handleDialogSaveAndContinue = async () => {
+    setUnsavedDialogOpen(false);
+    await performSave(false);
+    pendingActionRef.current?.();
+    pendingActionRef.current = null;
+  };
+
+  const handleDialogDiscard = () => {
+    setUnsavedDialogOpen(false);
+    // Reset snapshot to current to clear dirty
+    setLastSavedSnapshot({ ...currentTextsSnapshot });
+    setSaveStatus('idle');
+    pendingActionRef.current?.();
+    pendingActionRef.current = null;
+  };
+
+  const handleDialogCancel = () => {
+    setUnsavedDialogOpen(false);
+    pendingActionRef.current = null;
+  };
 
   const dim = layoutConfig.dimensoes || { larguraMM: 109, alturaMM: 25 };
 
@@ -817,17 +923,22 @@ const LabelTextEditor = ({
     localStorage.setItem(META_INLINE_KEY, String(checked));
   };
 
-  const handleSaveAllTexts = async () => {
+  // ---- Core save function ----
+  const performSave = async (isAutosave: boolean) => {
     const nrReq = searchedRequisition?.trim() || rotulos[0]?.nrRequisicao?.trim();
 
     if (!nrReq || rotulos.length === 0) {
-      toast({
-        title: "Nada para salvar",
-        description: "Busque uma requisição antes de salvar.",
-        variant: "destructive",
-      });
+      if (!isAutosave) {
+        toast({
+          title: "Nada para salvar",
+          description: "Busque uma requisição antes de salvar.",
+          variant: "destructive",
+        });
+      }
       return;
     }
+
+    setSaveStatus('saving');
 
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -841,25 +952,44 @@ const LabelTextEditor = ({
         updated_at: new Date().toISOString(),
       }));
 
-    if (upserts.length === 0) return;
+    if (upserts.length === 0) {
+      setSaveStatus('idle');
+      return;
+    }
 
     const { error } = await supabase
       .from('saved_rotulos')
       .upsert(upserts, { onConflict: 'nr_requisicao,item_id' });
 
     if (error) {
-      toast({
-        title: "Erro ao salvar",
-        description: error.message,
-        variant: "destructive",
-      });
+      setSaveStatus('error');
+      if (!isAutosave) {
+        toast({
+          title: "Erro ao salvar",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     } else {
-      toast({
-        title: "Edições salvas",
-        description: `${upserts.length} rótulo(s) salvo(s) na nuvem para req ${nrReq}.`,
+      // Update snapshot
+      const snap: Record<string, string> = {};
+      rotulos.forEach(r => {
+        if (r.textoLivre !== undefined) snap[r.id] = r.textoLivre;
       });
+      setLastSavedSnapshot(snap);
+      setSaveStatus('saved');
+      if (!isAutosave) {
+        toast({
+          title: "Edições salvas",
+          description: `${upserts.length} rótulo(s) salvo(s) na nuvem para req ${nrReq}.`,
+        });
+      }
+      // Reset to idle after 3s
+      setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 3000);
     }
   };
+
+  const handleSaveAllTexts = () => performSave(false);
 
 
   if (!rotulo) return null;
