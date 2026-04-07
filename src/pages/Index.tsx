@@ -13,8 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { getPharmacyConfig, getPrintAgentConfig, getApiConfig, getModoImpressao, setModoImpressao, ModoImpressao, getLayoutPrinter, setLayoutPrinter, getLayoutStation, setActiveStationId, getActiveStation, getPrintStations } from "@/config/api";
 import { getLayout, getSelectedLayout, setSelectedLayout, resetAllLayouts } from "@/config/layouts";
 import { buscarRequisicao } from "@/services/requisicaoService";
-import { imprimirViaAgente, imprimirViaRotutx, imprimirViaRotutxRaw, testePplaDireto } from "@/services/printAgentService";
-import { gerarPPLA } from "@/config/pplaTemplates";
+import { imprimirViaAgente, imprimirViaRotutx, imprimirViaRotutxRaw } from "@/services/printAgentService";
 import { RotuloItem, PharmacyConfig, LayoutType, LayoutConfig } from "@/types/requisicao";
 import { listarImpressoras } from "@/services/printAgentService";
 import { supabase } from "@/integrations/supabase/client";
@@ -278,30 +277,10 @@ const Index = () => {
         data: { impressos: sucessos },
       };
     } else if (agentConfig.enabled && agentUrl) {
-      // Modo Agente — gera PPLA localmente via templates estáticos e envia direto
-      let sucessos = 0;
-      let erros: string[] = [];
-
-      for (const rotulo of rotulosSelecionados) {
-        try {
-          const pplaText = gerarPPLA(layoutType, rotulo);
-          console.log(`[PPLA-Local] Layout=${layoutType}, bytes=${pplaText.length}`);
-          const sendResult = await testePplaDireto(agentUrl, impressora, pplaText);
-          if (sendResult.success) {
-            sucessos++;
-          } else {
-            erros.push(`Item ${rotulo.nrItem}: ${sendResult.error}`);
-          }
-        } catch (e) {
-          erros.push(`Item ${rotulo.nrItem}: ${e instanceof Error ? e.message : 'Erro ao gerar PPLA'}`);
-        }
-      }
-
-      result = {
-        success: erros.length === 0,
-        error: erros.length > 0 ? erros.join("; ") : undefined,
-        data: { impressos: sucessos },
-      };
+      // Modo Agente — envia textoLivre (mesmo texto do preview) para o agente renderizar
+      // Isso garante paridade WYSIWYG: o que está na tela = o que sai na impressora
+      const configComImpressora = { ...agentConfig, agentUrl, impressora, calibracao: calibracaoPadrao };
+      result = await imprimirViaAgente(configComImpressora, rotulosSelecionados, layoutType, farmaciaData);
     } else {
       // Sem URL de estação configurada
       const stationName = station?.nome || layoutStationId || 'desconhecida';
