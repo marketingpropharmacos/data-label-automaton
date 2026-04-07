@@ -65,7 +65,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'AMP_CX',
     nome: 'Ampola Caixa',
     dimensoes: { larguraMM: 109, alturaMM: 25 },
-    colunasMax: 55,
+  colunasMax: 73,
     linhasMax: 10,
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
@@ -88,7 +88,7 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
     tipo: 'AMP10',
     nome: 'Ampola 10',
     dimensoes: { larguraMM: 89, alturaMM: 38 },
-    colunasMax: 50,
+  colunasMax: 65,
     linhasMax: 10,
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },
@@ -206,7 +206,7 @@ export const fieldLabels: Record<LabelFieldId, string> = {
   registro: 'Registro',
 };
 
-const STORAGE_KEY = 'label_layouts_v2';
+const STORAGE_KEY = 'label_layouts_v4';
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj));
@@ -222,9 +222,9 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
         ...parsed,
       } as Record<LayoutType, LayoutConfig>;
 
-      // Layouts homologados: força a estrutura oficial para evitar cache legado quebrado
+      // Layouts homologados: força a estrutura oficial para TODOS os layouts
       let needsSave = false;
-      const frozenLayouts: LayoutType[] = ['A_PAC_PEQ', 'A_PAC_GRAN'];
+      const frozenLayouts: LayoutType[] = ['A_PAC_PEQ', 'A_PAC_GRAN', 'AMP_CX', 'AMP10', 'TIRZ'];
 
       frozenLayouts.forEach((tipo) => {
         const current = merged[tipo];
@@ -257,9 +257,14 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
         }
       });
 
+      // Limpar chaves legadas de versões anteriores
+      for (const oldKey of ['label_layouts_v2', 'label_layouts_v3']) {
+        localStorage.removeItem(oldKey);
+      }
+
       if (needsSave) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        console.log('[Layouts] Migração v3: estrutura oficial de A_PAC_PEQ/A_PAC_GRAN reaplicada');
+        console.log('[Layouts] Migração v4: estrutura oficial de todos os layouts reaplicada');
       }
 
       console.log('[Layouts] Carregando layouts do localStorage:', Object.keys(merged));
