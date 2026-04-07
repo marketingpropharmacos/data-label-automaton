@@ -215,13 +215,13 @@ def ppla_full_label(linhas_texto, altura_mm=25, margem_c=0, offset_r=0, contrast
 # Sem comando 'm', coordenadas em dots (203 DPI = 8 dots/mm)
 # ============================================
 def _format_y_dots(y):
-    """Formata coordenada Y em dots no padrão FC (8 dígitos).
-    Positivo: '00000089'. FC usa 8 dígitos: 1111{Y8}{X4}texto."""
+    """Formata coordenada Y em dots no padrão FC (7 dígitos).
+    Positivo: '0000089'. Padrão PPLA: 1111{Y7}{X4}texto."""
     if y >= 0:
-        return f"{y:08d}"
-    # FC formata negativo com 8 posições
+        return f"{y:07d}"
+    # FC formata negativo como '000000-9'
     neg_str = f"-{abs(y)}"
-    return neg_str.rjust(8, '0')
+    return neg_str.rjust(7, '0')
 
 
 def ppla_text_dots(rot, font, wmult, hmult, y_dots, x_dots, data):
