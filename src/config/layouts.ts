@@ -222,9 +222,9 @@ export function getLayouts(): Record<LayoutType, LayoutConfig> {
         ...parsed,
       } as Record<LayoutType, LayoutConfig>;
 
-      // Layouts homologados: força a estrutura oficial para TODOS os layouts
+      // Layouts homologados: força a estrutura oficial apenas para layouts com dimensões fixas
       let needsSave = false;
-      const frozenLayouts: LayoutType[] = ['A_PAC_PEQ', 'A_PAC_GRAN', 'AMP_CX', 'AMP10', 'TIRZ'];
+      const frozenLayouts: LayoutType[] = ['A_PAC_PEQ', 'A_PAC_GRAN'];
 
       frozenLayouts.forEach((tipo) => {
         const current = merged[tipo];
