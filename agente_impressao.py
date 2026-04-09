@@ -730,7 +730,10 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
     paciente = (rotulo.get('nomePaciente', '') or '')[:25].upper()
     nr_req = rotulo.get('nrRequisicao', '')
     nr_item = rotulo.get('nrItem', '1')
-    nome_medico = (rotulo.get('nomeMedico', '') or '').upper()[:20]
+    nome_medico_raw = (rotulo.get('nomeMedico', '') or '').upper()
+    crm = _crm_completo(rotulo)[:15]
+    # Abreviar médico: primeiro + último nome, meio vira inicial
+    nome_medico = _abbreviate_name(nome_medico_raw, 20)
     crm = _crm_completo(rotulo)[:15]
     registro = str(rotulo.get('numeroRegistro', '') or '')[:8]
 
