@@ -707,8 +707,10 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
                 if req_match:
                     MAX_PAT_CHARS = 20  # limite físico: espaço entre X=12 e X=116
                     patient_part = stripped[:req_match.start()].strip()
+                    # Truncar paciente no limite físico — barreira final contra sobreposição
+                    patient_part = patient_part[:MAX_PAT_CHARS].strip()
                     if patient_part:
-                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part[:MAX_PAT_CHARS]))
+                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part))
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_match.group(1)[:cols]))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))

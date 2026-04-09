@@ -155,6 +155,16 @@ const Index = () => {
             // Só restaurar se a largura máxima das linhas é compatível com o layout atual
             const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
             if (Math.abs(maxLineLen - currentCols) <= 5) {
+              // Validação extra para A_PAC_PEQ: verificar se paciente invade a REQ
+              if (layoutType === 'A_PAC_PEQ') {
+                const lines = row.texto_livre.split('\n');
+                const line1 = lines[0] || '';
+                const reqIdx = line1.indexOf('REQ:');
+                // Se REQ existe e o texto à esquerda excede 20 chars, descartar texto salvo
+                if (reqIdx > 0 && line1.substring(0, reqIdx).trimEnd().length > 20) {
+                  return; // não adiciona ao savedMap — será regenerado
+                }
+              }
               savedMap[row.item_id] = row.texto_livre;
             }
           });
