@@ -329,7 +329,7 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   // === Zone widths ===
   const REQ_WIDTH = 15;        // "REQ:000000-0"
   // Conselho + REG na mesma linha: "CRM-SP-123456 REG:12345"
-  const RIGHT_L2_WIDTH = 35;
+  const RIGHT_L2_WIDTH = 26;
 
   const LEFT_L1 = W - REQ_WIDTH;
   const LEFT_L2 = W - RIGHT_L2_WIDTH;
@@ -354,7 +354,9 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
     : "";
 
   const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
-  const drName = medico ? `DR(A)${medico}` : "";
+  const medicoMax = LEFT_L2 - 5; // 5 = "DR(A)" prefix
+  const medicoAbrev = medico ? abbreviateName(medico, medicoMax) : "";
+  const drName = medicoAbrev ? `DR(A)${medicoAbrev}` : "";
 
   const regNum = String(rotulo.numeroRegistro || "");
   const regStr = regNum ? `REG:${regNum}` : "";
