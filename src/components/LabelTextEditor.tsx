@@ -162,7 +162,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   // Line 1: PACIENTE + REQ na mesma linha (mesmo Y no PPLA: Y=188)
   const reqNum = `${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`.substring(0, 7);
   const req = `REQ:${reqNum}`;
-  const pacienteMax = maxCols - req.length - 1;
+  const pacienteMax = Math.min(maxCols - req.length - 1, 20); // limite físico: espaço entre X=12 e X=116
   const paciente = abbreviateName((rotulo.nomePaciente || "").toUpperCase(), pacienteMax);
   const line1 = padLine(paciente, req, maxCols);
 
