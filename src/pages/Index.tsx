@@ -155,14 +155,26 @@ const Index = () => {
             // Só restaurar se a largura máxima das linhas é compatível com o layout atual
             const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
             if (Math.abs(maxLineLen - currentCols) <= 5) {
-              // Validação extra para A_PAC_PEQ: verificar se paciente invade a REQ
+              // Validação extra para A_PAC_PEQ: verificar paciente e médico
               if (layoutType === 'A_PAC_PEQ') {
                 const lines = row.texto_livre.split('\n');
                 const line1 = lines[0] || '';
                 const reqIdx = line1.indexOf('REQ:');
-                // Se REQ existe e o texto à esquerda excede 20 chars, descartar texto salvo
+                // Se REQ existe e o texto à esquerda excede 20 chars, descartar
                 if (reqIdx > 0 && line1.substring(0, reqIdx).trimEnd().length > 20) {
-                  return; // não adiciona ao savedMap — será regenerado
+                  return;
+                }
+                // Validar linha 2 (DR(A)): se nome do médico parece truncado
+                // (termina no meio de uma palavra, sem conselho visível), descartar
+                const line2 = lines[1] || '';
+                if (line2.startsWith('DR(A)')) {
+                  const drContent = line2.substring(5).trim();
+                  // Se não tem conselho (COREN/CRM/CRF etc) E o texto ocupa toda a largura
+                  // = provavelmente está truncado em vez de abreviado
+                  const hasConselho = /[A-Z]{2,5}-[A-Z]{2}-\d+/.test(drContent);
+                  if (!hasConselho && drContent.length >= 35) {
+                    return; // forçar regeneração
+                  }
                 }
               }
               savedMap[row.item_id] = row.texto_livre;

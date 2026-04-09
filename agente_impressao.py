@@ -746,6 +746,25 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_match.group(1)[:cols]))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
+            elif stripped.startswith('DR(A)'):
+                # Linha do médico: reaplicar abreviação obrigatória (primeiro + último nome)
+                dr_content = stripped[5:].strip()
+                # Separar conselho do nome (ex: "KAROLINY ADRIANA VIEIRA COREN-SC-59418")
+                conselho_match = re.search(r'([A-Z]{2,5}-[A-Z]{2}-\d+)\s*$', dr_content)
+                conselho_str = ''
+                nome_raw = dr_content
+                if conselho_match:
+                    conselho_str = conselho_match.group(1)
+                    nome_raw = dr_content[:conselho_match.start()].strip()
+                # Calcular espaço disponível para o nome
+                max_nome = cols - 5  # desconta "DR(A)"
+                if conselho_str:
+                    max_nome = cols - 5 - len(conselho_str) - 1
+                nome_abreviado = _abbreviate_name(nome_raw, max(0, max_nome))
+                medico_final = f"DR(A){nome_abreviado}"
+                if conselho_str:
+                    medico_final = f"{medico_final} {conselho_str}"
+                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, medico_final[:cols]))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
         if not pplb_lines:

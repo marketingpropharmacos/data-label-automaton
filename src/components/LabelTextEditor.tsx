@@ -84,6 +84,40 @@ function abbreviateName(name: string, maxLen: number, forceAbbreviate: boolean =
   return firstLast.substring(0, maxLen);
 }
 
+// ---- Strict abbreviation: ALWAYS keep first + last name, abbreviate/drop middle ----
+// Unlike abbreviateName, this NEVER truncates mid-word. First and last are sacred.
+function abbreviateNameStrict(name: string, maxLen: number): string {
+  const parts = name.trim().split(/\s+/).filter(p => p.length > 0);
+  if (parts.length <= 1) return (parts[0] || '').substring(0, maxLen);
+  
+  const first = parts[0];
+  const last = parts[parts.length - 1];
+  const middle = parts.slice(1, -1);
+
+  // Try full name first
+  if (name.length <= maxLen) return name;
+
+  // Try first + middle initials (spaced) + last
+  if (middle.length > 0) {
+    const withInitials = [first, ...middle.map(p => p[0] + '.'), last].join(' ');
+    if (withInitials.length <= maxLen) return withInitials;
+
+    // Try first + middle initials (compact) + last
+    const compact = first + ' ' + middle.map(p => p[0] + '.').join('') + last;
+    if (compact.length <= maxLen) return compact;
+  }
+
+  // First + last only (drop all middle names)
+  const firstLast = first + ' ' + last;
+  if (firstLast.length <= maxLen) return firstLast;
+
+  // Last resort: still keep first + last but truncate last name to fit
+  // This should rarely happen since we have ~30 chars available
+  const available = maxLen - first.length - 1;
+  if (available > 3) return first + ' ' + last.substring(0, available);
+  return first.substring(0, maxLen);
+}
+
 // ---- Pad line utility: align left+right within fixed width ----
 function padLine(left: string, right: string, width: number): string {
   const space = width - left.length - right.length;
@@ -174,15 +208,17 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const paciente = abbreviateName((rotulo.nomePaciente || "").toUpperCase(), pacienteMax);
   const line1 = padLine(paciente, req, maxCols);
 
-  // Line 2: DR(A)MEDICO + CRM na mesma linha (mesmo Y no PPLA: Y=163)
+  // Line 2: DR(A)MEDICO + CONSELHO — obrigatório: primeiro e último nome inteiros
   const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   const conselhoNome = tipo.conselho || 'CRM';
   const conselhoStr = rotulo.numeroCRM
     ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
     : "";
+  // Espaço disponível para o nome do médico (descontando "DR(A)" e conselho)
   const medicoMax = conselhoStr ? maxCols - 5 - conselhoStr.length - 1 : maxCols - 5;
-  const medico = rotulo.nomeMedico ? abbreviateName(rotulo.nomeMedico.toUpperCase(), Math.max(0, medicoMax), true) : "";
+  // Abreviar obrigatoriamente: primeiro nome + último sobrenome inteiros, meio vira inicial ou é removido
+  const medico = rotulo.nomeMedico ? abbreviateNameStrict(rotulo.nomeMedico.toUpperCase(), Math.max(0, medicoMax)) : "";
   const drName = medico ? `DR(A)${medico}` : "";
   const line2 = padLine(drName, conselhoStr, maxCols);
 
