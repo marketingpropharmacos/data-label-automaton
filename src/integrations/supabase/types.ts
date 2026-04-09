@@ -95,6 +95,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -103,6 +104,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -111,6 +113,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -122,6 +125,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -130,6 +134,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -138,6 +143,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -150,6 +156,7 @@ export type Database = {
           id: number
           mode: string
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -159,6 +166,7 @@ export type Database = {
           id?: never
           mode?: string
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -168,6 +176,7 @@ export type Database = {
           id?: never
           mode?: string
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -179,6 +188,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           synced_at: string
           umbrella: string
         }
@@ -187,6 +197,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           synced_at?: string
           umbrella?: string
         }
@@ -195,6 +206,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           synced_at?: string
           umbrella?: string
         }
@@ -206,6 +218,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -214,6 +227,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -222,6 +236,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -272,6 +287,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -280,6 +296,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -288,6 +305,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -299,6 +317,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -307,6 +326,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -315,6 +335,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -374,6 +395,7 @@ export type Database = {
           data: Json
           id: number
           period: string
+          query_version: string | null
           store_id: number
           synced_at: string
         }
@@ -382,6 +404,7 @@ export type Database = {
           data?: Json
           id?: never
           period: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -390,6 +413,7 @@ export type Database = {
           data?: Json
           id?: never
           period?: string
+          query_version?: string | null
           store_id?: number
           synced_at?: string
         }
@@ -4014,6 +4038,136 @@ export type Database = {
           created_at?: string
           meta_percentual?: number
           trimestre?: number
+        }
+        Relationships: []
+      }
+      saldos_bancarios_alertas: {
+        Row: {
+          created_at: string
+          diferenca: number
+          id: string
+          resolvido: boolean
+          resolvido_em: string | null
+          resolvido_por: string | null
+          saldo_erp_anterior: number
+          saldo_erp_novo: number
+          saldo_validado_id: string
+        }
+        Insert: {
+          created_at?: string
+          diferenca: number
+          id?: string
+          resolvido?: boolean
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          saldo_erp_anterior: number
+          saldo_erp_novo: number
+          saldo_validado_id: string
+        }
+        Update: {
+          created_at?: string
+          diferenca?: number
+          id?: string
+          resolvido?: boolean
+          resolvido_em?: string | null
+          resolvido_por?: string | null
+          saldo_erp_anterior?: number
+          saldo_erp_novo?: number
+          saldo_validado_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saldos_bancarios_alertas_saldo_validado_id_fkey"
+            columns: ["saldo_validado_id"]
+            isOneToOne: false
+            referencedRelation: "saldos_bancarios_validados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saldos_bancarios_log: {
+        Row: {
+          alterado_em: string
+          alterado_por: string
+          id: string
+          motivo: string
+          saldo_validado_id: string
+          valor_anterior: number
+          valor_novo: number
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por: string
+          id?: string
+          motivo: string
+          saldo_validado_id: string
+          valor_anterior: number
+          valor_novo: number
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string
+          id?: string
+          motivo?: string
+          saldo_validado_id?: string
+          valor_anterior?: number
+          valor_novo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saldos_bancarios_log_saldo_validado_id_fkey"
+            columns: ["saldo_validado_id"]
+            isOneToOne: false
+            referencedRelation: "saldos_bancarios_validados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saldos_bancarios_validados: {
+        Row: {
+          conta_id: number
+          conta_nome: string | null
+          created_at: string
+          id: string
+          loja_id: number | null
+          period: string
+          saldo_erp: number
+          saldo_validado: number
+          status: string
+          tipo: string
+          updated_at: string
+          validado_em: string | null
+          validado_por: string | null
+        }
+        Insert: {
+          conta_id: number
+          conta_nome?: string | null
+          created_at?: string
+          id?: string
+          loja_id?: number | null
+          period: string
+          saldo_erp?: number
+          saldo_validado?: number
+          status?: string
+          tipo: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
+        }
+        Update: {
+          conta_id?: number
+          conta_nome?: string | null
+          created_at?: string
+          id?: string
+          loja_id?: number | null
+          period?: string
+          saldo_erp?: number
+          saldo_validado?: number
+          status?: string
+          tipo?: string
+          updated_at?: string
+          validado_em?: string | null
+          validado_por?: string | null
         }
         Relationships: []
       }
