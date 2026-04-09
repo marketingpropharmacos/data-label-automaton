@@ -1,74 +1,65 @@
 
-## Diagnóstico
+Motivo do corte no front-end hoje:
 
-Pelo print, o problema agora não é mais “qual regra usar”, e sim **onde a regra está sendo perdida**.
+1. O editor mostra primeiro o `textoLivre` salvo, não o texto recém-gerado  
+   Em `src/components/LabelTextEditor.tsx`:
+   ```ts
+   const text = rotulo?.textoLivre ?? generateText(...)
+   ```
+   Então, se já existe um `textoLivre` antigo para esse rótulo, o preview usa esse texto antigo.
 
-Hoje o projeto já tem lógica para abreviar o médico no `A_PAC_PEQ`, mas o fluxo real é WYSIWYG:
-- o `textoLivre` salvo/reutilizado continua tendo a linha antiga do `DR(A)`
-- no `A_PAC_PEQ`, o preview pode manter esse texto já salvo
-- no agente, quando chega `textoLivre`, ele imprime essa linha praticamente como veio
+2. A regra nova de abreviação está correta, mas só entra quando o texto é regenerado  
+   No `A_PAC_PEQ`, a geração atual já chama:
+   ```ts
+   abbreviateNameStrict(rotulo.nomeMedico.toUpperCase(), medicoMax)
+   ```
+   Ou seja: a lógica “primeiro nome + último sobrenome” já existe no gerador.
 
-Resultado: mesmo com a função de abreviação existente, a linha do prescritor continua aparecendo como `DR(A)KAROLINY ADRIANA VIEI...` em vez de algo no padrão obrigatório, como:
-```text
-DR(A)KAROLINY VIEIRA COREN-SC-59418
-```
-ou, se precisar reduzir mais:
-```text
-DR(A)KAROLINY A. VIEIRA COREN-SC-59418
-```
+3. O problema é que o texto salvo antigo ainda passa na validação  
+   Em `src/pages/Index.tsx`, a invalidação do `saved_rotulos` para linha `DR(A)` só descarta quando:
+   - não há conselho visível, e
+   - a linha parece truncada pelo comprimento
 
-## O que vou ajustar
+   Mas no seu caso a linha antiga continua com conselho, por exemplo:
+   ```text
+   DR(A)KAROLINY ADRIANA VIEI COREN-SC-59418
+   ```
+   Então ela ainda é considerada “válida”, mesmo estando errada visualmente.
 
-### 1. `src/components/LabelTextEditor.tsx` — forçar a linha 2 do A.PAC.PEQ
-Vou ajustar a geração do `A_PAC_PEQ` para que a linha do prescritor siga obrigatoriamente esta regra:
-- manter **primeiro nome inteiro**
-- manter **último sobrenome inteiro**
-- abreviar/remover apenas nomes do meio
-- nunca deixar o final do nome “cortado no meio”
+4. Por isso o sobrenome continua cortado no preview  
+   O frontend não está “gerando errado” agora.  
+   Ele está reaproveitando um `textoLivre` antigo já truncado, e por isso você continua vendo:
+   - `VIEI`
+   em vez de
+   - `VIEIRA`
 
-Também vou adicionar uma normalização específica para a linha 2 do `textoLivre` do `A_PAC_PEQ`, para que texto antigo/manual seja refeito nesse padrão ao abrir/editar.
+O que precisa ser ajustado:
 
-### 2. `src/pages/Index.tsx` — invalidar texto salvo antigo do DR(A)
-Hoje a restauração salva já valida a linha do paciente antes da `REQ`.  
-Vou ampliar essa validação para a linha 2:
-- se a linha `DR(A)` salva não respeitar o formato novo
-- ou se o nome do prescritor estiver truncado em vez de abreviado
-- o sistema vai **descartar esse texto salvo** e regenerar com a regra correta
+### 1. Fortalecer a invalidação do `textoLivre` antigo no `A_PAC_PEQ`
+Em `src/pages/Index.tsx`, a validação da linha 2 precisa comparar o texto salvo com a regra esperada do layout pequeno:
+- detectar quando existe `DR(A)` + conselho
+- extrair o nome salvo
+- se o nome salvo não bater com o padrão abreviado esperado para “primeiro + último”, descartar o `textoLivre`
+- isso forçará a regeneração com a lógica nova
 
-Isso evita que o sistema continue reaproveitando uma linha velha quebrada.
+### 2. Normalizar automaticamente a linha 2 ao abrir o rótulo
+Em `src/components/LabelTextEditor.tsx`, além de gerar corretamente, o ideal é:
+- quando layout for `A_PAC_PEQ`
+- e existir `textoLivre`
+- reescrever a linha `DR(A)` com a regra obrigatória antes de mostrar no textarea
 
-### 3. `agente_impressao.py` — proteção final no modo `textoLivre`
-Como o `A_PAC_PEQ` imprime em fluxo WYSIWYG, vou colocar uma barreira final no agente:
-- detectar linha com `DR(A)`
-- separar nome e conselho
-- reaplicar a abreviação obrigatória do médico antes de enviar para a impressora
+Assim o preview deixa de depender de texto salvo quebrado.
 
-Assim, mesmo se escapar algum `textoLivre` antigo, a impressão ainda sai com:
-- primeiro nome inteiro
-- último sobrenome inteiro
-- nomes do meio abreviados ou removidos
-- sem truncar o sobrenome final
-
-## Resultado esperado
-
-No layout pequeno, a linha do prescritor vai sair no padrão obrigatório:
-- primeiro nome inteiro
-- último sobrenome inteiro
-- sobrenomes do meio abreviados
-- sem cortar o final do nome
-- sem mexer no restante do layout
-
-## Arquivos envolvidos
-
-- `src/components/LabelTextEditor.tsx`
+### 3. Manter o agente como proteção final
+O agente já foi pensado para reforçar a regra, mas o problema que você está vendo agora é principalmente de preview/estado salvo no frontend.
+Então o conserto principal está em:
 - `src/pages/Index.tsx`
-- `agente_impressao.py`
+- `src/components/LabelTextEditor.tsx`
 
-## Detalhe técnico
+Resultado esperado após esse ajuste:
+- no front-end, a linha do médico não aparecerá mais com o último sobrenome cortado
+- texto salvo antigo será descartado ou corrigido automaticamente
+- o preview vai refletir a regra combinada: primeiro nome inteiro + último sobrenome inteiro
 
-A correção precisa acontecer em **3 camadas ao mesmo tempo** porque o sistema reutiliza `textoLivre`:
-1. geração nova correta
-2. descarte do texto salvo antigo
-3. proteção final no agente
-
-Se eu mexer só em uma dessas partes, o problema pode continuar aparecendo.
+Detalhe técnico importante:
+Hoje o sistema invalida muito bem a linha do paciente antes da `REQ`, mas ainda está permissivo demais para a linha do médico. Esse é o motivo real de você ainda enxergar o sobrenome cortado no front-end, mesmo depois das conversas anteriores.
