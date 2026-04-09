@@ -2,50 +2,50 @@
 
 ## Diagnóstico
 
-Analisando as duas fotos:
+**Problema central**: O agente de impressão usa `enumerate()` para iterar pelas linhas do `textoLivre`, mas pula linhas vazias com `continue` sem resetar o contador. Como o A_PAC_GRAN tem `linhasMax=5` e apenas 2 linhas com conteúdo, o editor envia 5 linhas (2 com texto + 3 vazias). O resultado:
 
-**Foto 1 (problema atual):** A etiqueta A.PAC.GRAN imprime 3+ linhas separadas verticalmente — Paciente, DR(A), REQ, Conselho e REG cada um em sua própria posição Y, criando espaçamento excessivo.
+```text
+pos_idx=0: "SUSANE ZANINI          REQ:009740-0"  → Y=89 ✓
+pos_idx=1: ""  → skip
+pos_idx=2: ""  → skip  
+pos_idx=3: ""  → skip
+pos_idx=4: "DR(A)SUSANE ZANINI   CRBM-PR-4556 REG:23993" → Y=45 ✗ (deveria ser Y=78)
+```
 
-**Foto 2 (resultado desejado):** Apenas **2 linhas**, coladas uma à outra:
-- Linha 1: `PACIENTE .......... REQ:XXXXXX-X`
-- Linha 2: `DR(A)NOME ......... CONSELHO REG XXXXX`
+A linha do médico vai para Y=45 (dots) em vez de Y=78, caindo fora da área visível da etiqueta ou ficando tão distante que parece "apagada".
 
-### Causa raiz
-
-O frontend (`generateTextPacGran`) gera **3 linhas** de textoLivre:
-1. Paciente + REQ
-2. DR(A) + Conselho
-3. REG (linha separada)
-
-O agente recebe 3 linhas e coloca cada uma em um Y diferente (89, 78, 67), criando o espaçamento visual.
-
-Além disso, o parser do agente trata "REG:" como linha exclusiva (branch `elif 'REG:'`), sem conseguir extrair REG quando está na mesma linha do médico/conselho.
+**Problema secundário**: `CRBM` (Conselho Regional de Biomedicina) está ausente da regex de conselhos no agente, impedindo a extração correta do conselho quando presente.
 
 ---
 
 ## Plano de correção
 
-### 1. Frontend — `generateTextPacGran` em `LabelTextEditor.tsx`
+### 1. Agente (`agente_impressao.py`) — Corrigir contagem de posição Y
 
-Alterar para gerar **apenas 2 linhas**:
-- **L1:** Paciente (esquerda) + REQ (direita) — sem mudança
-- **L2:** DR(A)+Nome (esquerda) + Conselho + REG (direita) — **juntar conselho e REG na mesma linha**
+Na função `gerar_ppla_a_pac_gran`, trocar o `pos_idx` do `enumerate` por um contador separado (`visible_idx`) que só incrementa para linhas não-vazias:
 
-O REG será concatenado ao conselho na zona direita: `CONSELHO REG:XXXXX`
+```python
+visible_idx = 0
+for line_text in linhas_texto:
+    stripped = line_text.strip()
+    if not stripped:
+        continue
+    y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
+    # ... parsing existente ...
+    visible_idx += 1
+```
 
-Remover a linha 3 separada de REG.
+Isso garante: Linha 1 → Y=89, Linha 2 → Y=78 (independente de quantas linhas vazias existam no meio).
 
-### 2. Agente — `gerar_ppla_a_pac_gran` em `agente_impressao.py`
+### 2. Agente (`agente_impressao.py`) — Adicionar CRBM à regex de conselhos
 
-Atualizar o parser de textoLivre para:
-- Na **linha 2** (pos_idx=1), detectar tanto conselho quanto REG na mesma string
-- Extrair `DR(A)...` para x_med, conselho para x_crm, e `REG:` para x_reg — todos no **mesmo Y**
-- Manter a lógica existente da linha 1 (Paciente + REQ) intacta
+Adicionar `CRBM` ao pattern de detecção de conselhos (linha 817):
 
-Também atualizar o bloco de geração estruturada (fallback sem textoLivre) para usar apenas 2 Y-positions, colocando REG na mesma linha Y=78 do médico.
+```python
+r'((?:CRM|CRBM|COREN|CRO|CRF|CRMV|CRN|CREFITO|CREF|CRP|CRFA)-\S+)'
+```
 
-### Arquivos alterados
+### 2 arquivos alterados
 
-- `src/components/LabelTextEditor.tsx` — função `generateTextPacGran`
-- `agente_impressao.py` — função `gerar_ppla_a_pac_gran`
+- `agente_impressao.py` — fix do `pos_idx` e adição de `CRBM` na regex
 
