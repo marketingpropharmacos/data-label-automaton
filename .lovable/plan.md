@@ -1,34 +1,66 @@
 
-
 ## Diagnóstico
 
-Na foto impressa do A.PAC.PEQ:
-- **Linha 1**: "NATHALIA VERISSIMO CARNA**REQ**:9743-0" — o nome do paciente sobrepõe o campo REQ
-- **Linha 2**: "DR(A)NATHALIA VERISSIMO CARN" — nome truncado em 28 caracteres
+O problema agora não parece ser mais “o layout” do A.PAC.PEQ em si.
 
-**Causa raiz**: O frontend gera texto com 41 colunas, mas o agente coloca o paciente em X=12 e o REQ em X=116 (coordenadas físicas fixas em dots). O espaço físico entre X=12 e X=116 só comporta ~20 caracteres — não os 30 que o frontend está permitindo. Além disso, o agente trunca campos em `cols_max=28` (config PEQUEN), cortando o nome do médico na linha 2.
+Pelo código atual:
+- o frontend já limita o **paciente** a 20 caracteres antes da `REQ`
+- o agente já imprime o **paciente** com `MAX_PAT_CHARS = 20`
+- o `cols_max` do A.PAC.PEQ já está em **41**
 
-**Problema duplo**:
-1. Paciente: frontend permite ~30 chars, mas fisicamente só cabem ~20 antes do REQ
-2. Médico: agente trunca em 28 chars, mas a linha 2 não tem campo à direita no agente (DR+CRM ficam juntos), então poderia usar mais espaço
+Então, se ainda está saindo “um em cima do outro”, a causa mais provável é outra:
 
-## Plano
+1. O sistema está **restaurando `textoLivre` salvo** da requisição no Supabase
+2. Esse `textoLivre` pode ter sido salvo **antes da correção**, com o nome inteiro invadindo a área da `REQ`
+3. Na impressão, o agente usa esse `textoLivre` já salvo e **não regenera automaticamente** o texto corrigido
 
-### 1. `agente_impressao.py` — Atualizar cols_max e adicionar limite de paciente
+Ou seja: a correção existe, mas o rótulo antigo salvo continua sendo reimpresso.
 
-Na config `PRINTER_CONFIGS['PEQUEN']` (linha 59):
-- Aumentar `cols_max` de 28 para **41** (para campos que usam a largura total, como médico na linha 2)
+## O que ajustar
 
-Na função `gerar_ppla_a_pac_peq` (linha 699-711):
-- Adicionar constante `MAX_PAT_CHARS = 20` — limite físico do paciente antes de X=116
-- Truncar `patient_part` com `[:MAX_PAT_CHARS]` em vez de `[:cols]`
+### 1. Forçar regeneração do `textoLivre` no A.PAC.PEQ quando ele estiver incompatível
+No carregamento da requisição (`src/pages/Index.tsx`), além da checagem por largura da linha, validar também:
+- se a linha 1 com `REQ:` tem texto à esquerda maior que o limite físico
+- se a linha 2 do médico ultrapassa a área segura
+- se estiver incompatível, **ignorar o texto salvo** e regenerar com a lógica nova
 
-### 2. `src/components/LabelTextEditor.tsx` — Limitar paciente no frontend
+### 2. Adicionar uma normalização específica do A.PAC.PEQ
+Em `src/components/LabelTextEditor.tsx`, criar uma rotina para:
+- reprocessar linha 1 como `PACIENTE + REQ`
+- reprocessar linha 2 como `DR(A)+MÉDICO + CONSELHO`
+- manter linha 3 com `REG`
+- aplicar sempre o limite físico real antes de salvar/imprimir
 
-Na função `generateTextPacPeq` (linha 165):
-- Calcular `pacienteMax` como `Math.min(maxCols - req.length - 1, 20)` — garante que o preview mostre o mesmo que a impressão física
-- O médico continua usando `maxCols` normalmente (sem limite extra)
+Isso garante que, mesmo se houver texto antigo ou editado manualmente, o conteúdo volte para a faixa correta sem mudar o layout.
 
-### Nenhuma alteração de layout
-Linhas, dimensões, coordenadas Y e estrutura permanecem intactos.
+### 3. Proteger a impressão no agente
+Em `agente_impressao.py`, no modo `textoLivre` do A.PAC.PEQ:
+- além do limite atual do paciente, reforçar a separação entre campo esquerdo e `REQ`
+- se a linha chegar com sobra de texto na área proibida, o agente deve recortar apenas a parte esquerda e preservar a `REQ` intacta
 
+Assim o agente vira a última barreira de segurança.
+
+## Resultado esperado
+
+Sem mexer no layout:
+- paciente não invade mais a `REQ`
+- médico continua usando a largura disponível
+- textos antigos salvos não reaparecem quebrados
+- impressão fica consistente com o preview
+
+## Arquivos envolvidos
+
+- `src/pages/Index.tsx`
+- `src/components/LabelTextEditor.tsx`
+- `agente_impressao.py`
+
+## Detalhe técnico
+
+Hoje a restauração usa este critério:
+- se o `texto_livre` salvo tiver largura parecida com a do layout atual, ele é reaproveitado
+
+Isso é insuficiente para o A.PAC.PEQ, porque um texto pode ter “41 colunas” e ainda assim estar fisicamente errado, já que:
+- a etiqueta total suporta 41 colunas
+- mas o espaço do **paciente antes da REQ** suporta só ~20 caracteres
+
+Então a próxima implementação deve validar **zona física por campo**, não só largura total da linha.
