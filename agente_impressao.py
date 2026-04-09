@@ -827,6 +827,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part[:cols]))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
+            visible_idx += 1
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_pac, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
