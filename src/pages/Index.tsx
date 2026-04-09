@@ -164,17 +164,12 @@ const Index = () => {
                 if (reqIdx > 0 && line1.substring(0, reqIdx).trimEnd().length > 20) {
                   return;
                 }
-                // Validar linha 2 (DR(A)): se nome do médico parece truncado
-                // (termina no meio de uma palavra, sem conselho visível), descartar
+                // Validar linha 2 (DR(A)): SEMPRE descartar texto salvo para A_PAC_PEQ
+                // para forçar regeneração com a regra obrigatória de abreviação
+                // (primeiro nome + último sobrenome inteiros, sem truncar)
                 const line2 = lines[1] || '';
                 if (line2.startsWith('DR(A)')) {
-                  const drContent = line2.substring(5).trim();
-                  // Se não tem conselho (COREN/CRM/CRF etc) E o texto ocupa toda a largura
-                  // = provavelmente está truncado em vez de abreviado
-                  const hasConselho = /[A-Z]{2,5}-[A-Z]{2}-\d+/.test(drContent);
-                  if (!hasConselho && drContent.length >= 35) {
-                    return; // forçar regeneração
-                  }
+                  return; // forçar regeneração com abbreviateNameStrict
                 }
               }
               savedMap[row.item_id] = row.texto_livre;

@@ -903,10 +903,25 @@ const LabelTextEditor = ({
     const layoutChanged = prevLayoutRef.current !== layoutType;
     prevLayoutRef.current = layoutType;
 
-    if (!layoutChanged && rotulo.textoLivre !== undefined) return;
-
     const resolvedLayoutTipo = resolveLayoutTipo(layoutConfig, layoutType);
     const isFixedGrid = resolvedLayoutTipo === 'A_PAC_PEQ' || resolvedLayoutTipo === 'A_PAC_GRAN' || resolvedLayoutTipo === 'AMP_CX';
+
+    // For A_PAC_PEQ with existing textoLivre: normalize DR(A) line to enforce abbreviation rules
+    if (!layoutChanged && rotulo.textoLivre !== undefined) {
+      if (resolvedLayoutTipo === 'A_PAC_PEQ') {
+        const lines = rotulo.textoLivre.split('\n');
+        if (lines[1] && lines[1].startsWith('DR(A)') && rotulo.nomeMedico) {
+          // Regenerate only line 2 with strict abbreviation
+          const freshGenerated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+          const freshLines = freshGenerated.split('\n');
+          if (freshLines[1] && lines[1] !== freshLines[1]) {
+            lines[1] = freshLines[1];
+            onTextChange(rotulo.id, lines.join('\n'));
+          }
+        }
+      }
+      return;
+    }
 
     let generated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
     if (maxCols) {
