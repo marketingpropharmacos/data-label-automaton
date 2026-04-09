@@ -56,7 +56,7 @@ PRINTER_CONFIGS = {
     'PEQUEN': {
         'largura_mm': 35, 'altura_mm': 25,
         'largura_dots': 282, 'altura_dots': 203, 'gap_dots': 24,
-        'cols_max': 28,  # 20 CPP × 1,39pol = 27,8 ≈ 28 colunas (FC real)
+        'cols_max': 41,  # FC real: 41 colunas (largura total da etiqueta)
         # Y em dots (8 LPP × 203 dots = 25 dots/linha, origem bottom-left)
         'y_positions_mm': [188, 163, 138, 113, 88, 63, 38, 13],
         'font': 1,
@@ -705,9 +705,10 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
             if 'REQ:' in stripped:
                 req_match = re.search(r'(REQ:\S+)', stripped)
                 if req_match:
+                    MAX_PAT_CHARS = 20  # limite físico: espaço entre X=12 e X=116
                     patient_part = stripped[:req_match.start()].strip()
                     if patient_part:
-                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part[:cols]))
+                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part[:MAX_PAT_CHARS]))
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_match.group(1)[:cols]))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
