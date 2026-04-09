@@ -797,6 +797,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 continue
             y = y_positions_calc[pos_idx] if pos_idx < len(y_positions_calc) else y_positions_calc[-1]
             if 'REQ:' in stripped:
+                # L1: Paciente + REQ
                 req_match = re.search(r'(REQ:\S+)', stripped)
                 if req_match:
                     patient_part = stripped[:req_match.start()].strip()
@@ -805,12 +806,24 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_match.group(1)[:cols]))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
-            elif 'REG:' in stripped:
+            elif 'DR(A)' in stripped or 'REG:' in stripped:
+                # L2: DR(A)+Medico + Conselho + REG na mesma linha
+                # Extrair REG se presente
                 reg_match = re.search(r'(REG:\S+)', stripped)
-                if reg_match:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_match.group(1)[:cols]))
-                else:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
+                reg_part = reg_match.group(1) if reg_match else None
+                remainder = stripped[:reg_match.start()].rstrip() if reg_match else stripped
+
+                # Detectar conselho (CRM-XX-NNN, COREN-XX-NNN, etc.)
+                crm_match = re.search(r'((?:CRM|COREN|CRO|CRF|CRMV|CRN|CREFITO|CREF|CRP|CRFA)-\S+)', remainder)
+                crm_part = crm_match.group(1) if crm_match else None
+                dr_part = remainder[:crm_match.start()].rstrip() if crm_match else remainder.strip()
+
+                if dr_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_med, dr_part[:cols]))
+                if crm_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_crm, crm_part[:cols]))
+                if reg_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part[:cols]))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
         if not pplb_lines:

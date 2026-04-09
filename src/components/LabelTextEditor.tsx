@@ -328,11 +328,11 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
 
   // === Zone widths ===
   const REQ_WIDTH = 15;        // "REQ:000000-0"
-  const CONSELHO_WIDTH = 20;   // "CRM-SP-123456"
-  const REG_WIDTH = 18;        // "REG:123456"
+  // Conselho + REG na mesma linha: "CRM-SP-123456 REG:12345"
+  const RIGHT_L2_WIDTH = 35;
 
   const LEFT_L1 = W - REQ_WIDTH;
-  const LEFT_L2 = W - CONSELHO_WIDTH;
+  const LEFT_L2 = W - RIGHT_L2_WIDTH;
 
   const fixedLine = (left: string, right: string, leftMax: number, rightMax: number): string => {
     const l = (left || "").substring(0, leftMax);
@@ -359,18 +359,16 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   const regNum = String(rotulo.numeroRegistro || "");
   const regStr = regNum ? `REG:${regNum}` : "";
 
+  // Combinar conselho + REG na zona direita da L2
+  const rightL2 = [conselhoStr, regStr].filter(Boolean).join(' ');
+
   const lines: string[] = [];
 
   // L1: Paciente (left) | REQ (right)
   lines.push(fixedLine(cleanName, reqStr, LEFT_L1, REQ_WIDTH));
 
-  // L2: DR(A)+Medico (left) | Conselho (right)
-  lines.push(fixedLine(drName, conselhoStr, LEFT_L2, CONSELHO_WIDTH));
-
-  // L3: REG ancorado à direita
-  if (regStr) {
-    lines.push(fixedLine("", regStr, 0, REG_WIDTH));
-  }
+  // L2: DR(A)+Medico (left) | Conselho + REG (right)
+  lines.push(fixedLine(drName, rightL2, LEFT_L2, RIGHT_L2_WIDTH));
 
   return lines.join('\n');
 }
