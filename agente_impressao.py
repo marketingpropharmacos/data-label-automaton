@@ -791,11 +791,12 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
             for i in range(1, len(y_positions_calc)):
                 y_positions_calc[i] = base_y + int(step * lsf * i)
 
-        for pos_idx, line_text in enumerate(linhas_texto):
+        visible_idx = 0
+        for line_text in linhas_texto:
             stripped = line_text.strip()
             if not stripped:
                 continue
-            y = y_positions_calc[pos_idx] if pos_idx < len(y_positions_calc) else y_positions_calc[-1]
+            y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
             if 'REQ:' in stripped:
                 # L1: Paciente + REQ
                 req_match = re.search(r'(REQ:\S+)', stripped)
@@ -814,7 +815,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 remainder = stripped[:reg_match.start()].rstrip() if reg_match else stripped
 
                 # Detectar conselho (CRM-XX-NNN, COREN-XX-NNN, etc.)
-                crm_match = re.search(r'((?:CRM|COREN|CRO|CRF|CRMV|CRN|CREFITO|CREF|CRP|CRFA)-\S+)', remainder)
+                crm_match = re.search(r'((?:CRM|CRBM|COREN|CRO|CRF|CRMV|CRN|CREFITO|CREF|CRP|CRFA)-\S+)', remainder)
                 crm_part = crm_match.group(1) if crm_match else None
                 dr_part = remainder[:crm_match.start()].rstrip() if crm_match else remainder.strip()
 
