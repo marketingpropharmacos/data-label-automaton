@@ -2,43 +2,34 @@
 
 ## Problema
 
-A linha do **paciente** no A.PAC.PEQ está usando `abbreviateName` que, quando o nome não cabe em 20 caracteres, simplesmente **descarta todos os nomes do meio**, resultando em:
-```
-ADRIANA OLIVEIRA          REQ:9750-0
-```
+A função `abbreviateNameStrict` (frontend) e `_abbreviate_name` (agente) estão gerando iniciais com **espaços entre cada inicial**: `"ADRIANA A. D. C. OLIVEIRA"`. Esses espaços extras ocupam colunas demais e causam sobreposição física na etiqueta impressa.
 
-O usuário quer ver o mesmo padrão de abreviação com iniciais:
-```
-ADRIANA A.D.C. OLIVEIRA   REQ:9750-0
-```
-
-## Causa raiz
-
-- Linha 207-208 em `LabelTextEditor.tsx`: `pacienteMax = Math.min(..., 20)` e usa `abbreviateName` (que descarta middle names)
-- Linha 734 em `agente_impressao.py`: `MAX_PAT_CHARS = 20` e faz truncamento simples
-
-O limite de 20 chars é muito apertado para caber iniciais. "ADRIANA A.D.C. OLIVEIRA" = 23 chars. Precisa subir para ~25.
+O formato correto confirmado pelo usuário na impressão real é: `"ADRIANA A.D.C. OLIVEIRA"` — iniciais juntas, com espaço apenas antes do último sobrenome.
 
 ## Ajustes
 
-### 1. `src/components/LabelTextEditor.tsx` — Paciente com abreviação estrita
-- Linha 207: aumentar limite de `20` para `25`
-- Linha 208: trocar `abbreviateName` por `abbreviateNameStrict` para o paciente
-- Resultado: iniciais dos nomes do meio são preservadas em vez de descartadas
+### 1. `src/components/LabelTextEditor.tsx` — função `abbreviateNameStrict`
 
-### 2. `agente_impressao.py` — Aumentar limite e aplicar abreviação no paciente
-- Linha 734: `MAX_PAT_CHARS = 20` → `MAX_PAT_CHARS = 25`
-- Aplicar `_abbreviate_name` no `patient_part` antes de imprimir (barreira final)
+Alterar a ordem de tentativa de abreviação:
+- **Primeiro**: tentar iniciais compactas COM espaço antes do último nome → `"ADRIANA A.D.C. OLIVEIRA"`
+- **Segundo**: se não couber, tentar sem espaço → `"ADRIANA A.D.C.OLIVEIRA"`
+- Remover a tentativa com iniciais espaçadas (`A. D. C.`)
 
-### 3. `src/pages/Index.tsx` — Invalidar textos salvos antigos
-- Ajustar a validação para descartar `textoLivre` salvo onde o paciente use o formato antigo (sem iniciais)
+Linhas 100-107: trocar a lógica para que o formato compacto `first + ' ' + initials.join('') + ' ' + last` seja a primeira tentativa.
 
-## Resultado esperado
-```
+### 2. `agente_impressao.py` — função `_abbreviate_name`
+
+Mesma mudança: linhas 137-145:
+- Primeiro tentar: `first + ' ' + ''.join(initials) + ' ' + last`
+- Segundo: sem espaço antes do last
+- Remover tentativa com iniciais espaçadas
+
+### Resultado esperado
+
+```text
 ADRIANA A.D.C. OLIVEIRA   REQ:9750-0
-DR(A)ADRIANA A.D.C.OLIVEIRA CRM-RJ-4651
-                           REG:24206
+DR(A)ADRIANA A.D.C. OLIVEIRA CRM-RJ-4651
 ```
 
-Primeiro e último nome inteiros, nomes do meio como iniciais, tanto no paciente quanto no médico.
+Iniciais juntas, espaço só antes do sobrenome final. Sem sobreposição na etiqueta.
 
