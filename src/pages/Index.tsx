@@ -155,22 +155,10 @@ const Index = () => {
             // Só restaurar se a largura máxima das linhas é compatível com o layout atual
             const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
             if (Math.abs(maxLineLen - currentCols) <= 5) {
-              // Validação extra para A_PAC_PEQ: verificar paciente e médico
+              // Validação extra para A_PAC_PEQ: SEMPRE descartar texto salvo
+              // para forçar regeneração com abbreviateNameStrict (paciente + médico)
               if (layoutType === 'A_PAC_PEQ') {
-                const lines = row.texto_livre.split('\n');
-                const line1 = lines[0] || '';
-                const reqIdx = line1.indexOf('REQ:');
-                // Se REQ existe e o texto à esquerda excede 20 chars, descartar
-                if (reqIdx > 0 && line1.substring(0, reqIdx).trimEnd().length > 20) {
-                  return;
-                }
-                // Validar linha 2 (DR(A)): SEMPRE descartar texto salvo para A_PAC_PEQ
-                // para forçar regeneração com a regra obrigatória de abreviação
-                // (primeiro nome + último sobrenome inteiros, sem truncar)
-                const line2 = lines[1] || '';
-                if (line2.startsWith('DR(A)')) {
-                  return; // forçar regeneração com abbreviateNameStrict
-                }
+                return; // forçar regeneração completa com regras de abreviação atualizadas
               }
               savedMap[row.item_id] = row.texto_livre;
             }

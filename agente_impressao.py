@@ -731,9 +731,10 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
             if 'REQ:' in stripped:
                 req_match = re.search(r'(REQ:\S+)', stripped)
                 if req_match:
-                    MAX_PAT_CHARS = 20  # limite físico: espaço entre X=12 e X=116
+                    MAX_PAT_CHARS = 25  # limite físico: espaço entre X=12 e X=116 (com iniciais)
                     patient_part = stripped[:req_match.start()].strip()
-                    # Truncar paciente no limite físico — barreira final contra sobreposição
+                    # Aplicar abreviação estrita (primeiro + iniciais + último) antes de truncar
+                    patient_part = _abbreviate_name(patient_part, MAX_PAT_CHARS)
                     patient_part = patient_part[:MAX_PAT_CHARS].strip()
                     if patient_part:
                         pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part))
