@@ -635,16 +635,16 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     font = 9   # AMP10 usa fonte estreita do FC; fonte 1 deixa o texto largo/diferente do modelo
     rot = 1
 
-    # Y levels em dots (203 DPI) para etiqueta 89x38mm = 304 dots altura
-    # 6 linhas distribuídas de Y=280 até Y=80, passo -40 (≈5mm entre linhas)
-    y_levels = [280, 240, 200, 160, 120, 80, 60, 40, 20]
-    # X positions em dots para etiqueta 89mm = 712 dots largura
-    x_left  = 14   # ≈1.7mm da borda esquerda
-    x_req   = 550  # ≈68mm da esquerda (campo REQ no lado direito)
-    x_lote  = 80
-    x_fab   = 210
-    x_val   = 350
-    x_reg   = 520
+    # Y levels do FC exato (extraídos dos prefixos do pplaTemplates.ts)
+    # FC prefix "191100101100014" → Y=110, "191100101010014" → Y=101, etc. (passo -9)
+    y_levels = [110, 101, 92, 83, 74, 65, 56, 47, 38]
+    # X positions do FC exato (extraídos dos prefixos)
+    x_left  = 14   # X=0014 do FC
+    x_req   = 196  # X=0196 do FC (REQ no lado direito)
+    x_lote  = 53   # X=0053 do FC (Lote)
+    x_fab   = 102  # X=0102 do FC (Fabricação)
+    x_val   = 147  # X=0147 do FC (Validade / Aplicação)
+    x_reg   = 151  # X=0151 do FC (REG)
 
     # textoLivre: cada linha do editor mapeia para um Y level
     texto_livre = rotulo.get('textoLivre', '')
