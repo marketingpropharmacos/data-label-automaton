@@ -376,7 +376,7 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   // === Zone widths ===
   const REQ_WIDTH = 15;        // "REQ:000000-0"
   // Conselho + REG na mesma linha: "CRM-SP-123456 REG:12345"
-  const RIGHT_L2_WIDTH = 26;
+  const RIGHT_L2_WIDTH = 32;
 
   const LEFT_L1 = W - REQ_WIDTH;
   const LEFT_L2 = W - RIGHT_L2_WIDTH;

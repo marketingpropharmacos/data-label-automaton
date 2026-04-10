@@ -882,7 +882,7 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 if right_parts:
                     right_block = ' '.join(right_parts)
                     x_right = largura_dots - (len(right_block) * CHAR_W) - 8
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_right, right_block[:cols]))
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_right, right_block))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             visible_idx += 1
