@@ -876,7 +876,10 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 if crm_part:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_crm, crm_part[:cols]))
                 if reg_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part[:cols]))
+                    # Posição dinâmica: REG após o conselho para evitar sobreposição
+                    CHAR_W = 8  # Font 1 ~8 dots por caractere
+                    x_reg_calc = x_crm + (len(crm_part) + 1) * CHAR_W if crm_part else x_reg
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg_calc, reg_part[:cols]))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             visible_idx += 1
@@ -903,7 +906,10 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     if crm:
         linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_crm, crm))
     if registro:
-        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_reg, f"REG:{registro}"))
+        # Posição dinâmica: REG após o conselho para evitar sobreposição
+        CHAR_W = 8  # Font 1 ~8 dots por caractere
+        x_reg_calc = x_crm + (len(crm) + 1) * CHAR_W if crm else x_reg
+        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_reg_calc, f"REG:{registro}"))
 
     if not linhas:
         linhas.append(ppla_text_dots(rot, font, wmult, hmult, 89, x_pac, 'SEM DADOS'))
