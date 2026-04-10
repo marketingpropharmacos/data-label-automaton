@@ -21,6 +21,42 @@ import { supabase } from "@/integrations/supabase/client";
 import logoProPharmacos from "@/assets/logo-propharmacos.png";
 import { Edit } from "lucide-react";
 
+const padReqNumber = (value: string) => value.trim().padStart(6, "0");
+
+const isAmp10SavedTextValid = (textoLivre: string, rotulo: RotuloItem): boolean => {
+  const lines = textoLivre
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length < 5 || lines.length > 10) return false;
+  if (!lines.every((line) => line.startsWith("   "))) return false;
+
+  const reqToken = `REQ:${padReqNumber(rotulo.nrRequisicao || "")}-${rotulo.nrItem || "0"}`;
+  if (!lines[0]?.includes(reqToken) || /REQ:\s*$/.test(lines[0])) return false;
+  if (!lines[1]?.includes("DR(A)")) return false;
+
+  if (rotulo.numeroCRM && !lines[1].includes(String(rotulo.numeroCRM))) return false;
+  if (rotulo.ufCRM && !lines[1].toUpperCase().includes(String(rotulo.ufCRM).toUpperCase())) return false;
+
+  const usoLine = lines.find((line) => line.includes("USO"));
+  const contemLine = lines.find((line) => line.includes("CONTEM:"));
+  if (!usoLine || !contemLine) return false;
+  if (contemLine.includes("REG:")) return false;
+
+  if (rotulo.aplicacao) {
+    const apToken = `AP:${String(rotulo.aplicacao).trim().toUpperCase()}`;
+    if (!usoLine.toUpperCase().includes(apToken)) return false;
+  }
+
+  if (rotulo.numeroRegistro) {
+    const regToken = `REG:${rotulo.numeroRegistro}`;
+    if (!usoLine.includes(regToken) || /REG:\s*$/.test(usoLine)) return false;
+  }
+
+  return true;
+};
+
 const Index = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -151,13 +187,20 @@ const Index = () => {
         if (savedRows && savedRows.length > 0) {
           const currentCols = layoutConfig.colunasMax || 57;
           const savedMap: Record<string, string> = {};
+          const rotuloById = new Map(result.data.map((rotulo) => [rotulo.id, rotulo]));
           savedRows.forEach(row => {
+            const rotulo = rotuloById.get(row.item_id);
+            if (!rotulo) return;
+
             // Só restaurar se a largura máxima das linhas é compatível com o layout atual
             const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
             if (Math.abs(maxLineLen - currentCols) <= 5) {
               // Validação extra: SEMPRE descartar texto salvo para layouts com regras de posicionamento específicas
               if (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') {
                 return; // forçar regeneração completa com regras atualizadas
+              }
+              if (layoutType === 'AMP10' && !isAmp10SavedTextValid(row.texto_livre, rotulo)) {
+                return;
               }
               savedMap[row.item_id] = row.texto_livre;
             }

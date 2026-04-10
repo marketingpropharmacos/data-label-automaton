@@ -44,6 +44,40 @@ function truncateText(text: string, maxCols: number, maxLines: number): string {
   return lines.map(line => line.substring(0, maxCols)).join('\n');
 }
 
+function isAmp10SavedTextValid(textoLivre: string, rotulo: RotuloItem): boolean {
+  const lines = textoLivre
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+
+  if (lines.length < 5 || lines.length > 10) return false;
+  if (!lines.every((line) => line.startsWith('   '))) return false;
+
+  const reqToken = `REQ:${padReqNumber(rotulo.nrRequisicao || '')}-${rotulo.nrItem || '0'}`;
+  if (!lines[0]?.includes(reqToken) || /REQ:\s*$/.test(lines[0])) return false;
+  if (!lines[1]?.includes('DR(A)')) return false;
+
+  if (rotulo.numeroCRM && !lines[1].includes(String(rotulo.numeroCRM))) return false;
+  if (rotulo.ufCRM && !lines[1].toUpperCase().includes(String(rotulo.ufCRM).toUpperCase())) return false;
+
+  const usoLine = lines.find((line) => line.includes('USO'));
+  const contemLine = lines.find((line) => line.includes('CONTEM:'));
+  if (!usoLine || !contemLine) return false;
+  if (contemLine.includes('REG:')) return false;
+
+  if (rotulo.aplicacao) {
+    const apToken = `AP:${String(rotulo.aplicacao).trim().toUpperCase()}`;
+    if (!usoLine.toUpperCase().includes(apToken)) return false;
+  }
+
+  if (rotulo.numeroRegistro) {
+    const regToken = `REG:${rotulo.numeroRegistro}`;
+    if (!usoLine.includes(regToken) || /REG:\s*$/.test(usoLine)) return false;
+  }
+
+  return true;
+}
+
 // ---- Abbreviate name to fit maxLen ----
 // Rules: never abbreviate first name, never abbreviate last name.
 // Abbreviate middle names, keeping first + last name intact.
@@ -973,6 +1007,13 @@ const LabelTextEditor = ({
             lines[1] = freshLines[1];
             onTextChange(rotulo.id, lines.join('\n'));
           }
+        }
+      }
+
+      if (resolvedLayoutTipo === 'AMP10' && !isAmp10SavedTextValid(rotulo.textoLivre, rotulo)) {
+        const freshGenerated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+        if (freshGenerated !== rotulo.textoLivre) {
+          onTextChange(rotulo.id, freshGenerated);
         }
       }
       return;
