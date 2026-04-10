@@ -74,7 +74,7 @@ PRINTER_CONFIGS = {
         'cols_max': 65,
         'y_positions_mm': [350, 310, 270, 230, 190, 150, 110, 70, 40, 20],
         'font': 9,
-        'form_length': 289,
+        'form_length': 304,
     },
     'A_PAC_GRAN': {
         'largura_mm': 76, 'altura_mm': 25,
@@ -617,7 +617,7 @@ def _compact_line(*segments):
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     """Layout AMP10 — formato FC EXATO capturado do FormulaCerta.
 
-    Setup: f250, PB, D14, H14  (FC original usa f250 + PB)
+    Setup: f304, PA, D11, H14
     Font=9, Rotation=1
 
     Coordenadas Y (passo -9):
@@ -650,7 +650,7 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
-        return _gerar_from_texto_livre(texto_livre, y_levels, x_left, rot, font, cols, dims, cal, 'dots', lsf)
+        return _gerar_from_texto_livre_dots(texto_livre, y_levels, x_left, rot, font, cols, dims, cal, _build_label_amp10, lsf)
 
     # === Geração estruturada (paridade FC) ===
     paciente   = _clean_patient_name(rotulo.get('nomePaciente', ''))
