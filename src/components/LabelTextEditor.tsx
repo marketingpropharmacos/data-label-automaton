@@ -375,11 +375,8 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
 
   // === Zone widths ===
   const REQ_WIDTH = 15;        // "REQ:000000-0"
-  // Conselho + REG na mesma linha: "CRM-SP-123456 REG:12345"
-  const RIGHT_L2_WIDTH = 32;
 
   const LEFT_L1 = W - REQ_WIDTH;
-  const LEFT_L2 = W - RIGHT_L2_WIDTH;
 
   const fixedLine = (left: string, right: string, leftMax: number, rightMax: number): string => {
     const l = (left || "").substring(0, leftMax);
@@ -400,17 +397,21 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
     ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`
     : "";
 
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
-  // A_PAC_GRAN: não abreviar — usar nome completo, truncar apenas se necessário
-  const medicoMax = LEFT_L2 - 5; // 5 = "DR(A)" prefix
-  const medicoTrunc = medico ? medico.substring(0, medicoMax) : "";
-  const drName = medicoTrunc ? `DR(A)${medicoTrunc}` : "";
-
   const regNum = String(rotulo.numeroRegistro || "");
   const regStr = regNum ? `REG:${regNum}` : "";
 
   // Combinar conselho + REG na zona direita da L2
   const rightL2 = [conselhoStr, regStr].filter(Boolean).join(' ');
+
+  // Calcular largura direita dinamicamente baseado no conteúdo real
+  const RIGHT_L2_WIDTH = Math.max(rightL2.length, 20);
+  const LEFT_L2 = W - RIGHT_L2_WIDTH;
+
+  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
+  // A_PAC_GRAN: não abreviar — usar nome completo, truncar apenas se necessário
+  const medicoMax = Math.max(LEFT_L2 - 5, 10); // 5 = "DR(A)" prefix, mín 10 chars
+  const medicoTrunc = medico ? medico.substring(0, medicoMax) : "";
+  const drName = medicoTrunc ? `DR(A)${medicoTrunc}` : "";
 
   const lines: string[] = [];
 
