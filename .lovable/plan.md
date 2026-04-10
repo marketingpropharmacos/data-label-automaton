@@ -1,58 +1,67 @@
 
-Diagnóstico:
+Problema identificado:
 
-O problema agora não é falta de espaço nem truncamento. O REQ, o CREFITO e o REG sumiram porque o `A_PAC_GRAN` passou a calcular os campos da direita usando `largura_dots = 608` como se toda essa largura fosse área segura no eixo X.
+O defeito agora não é mais “campo sumindo”. Pelo seu print, o `REQ` e o `REG` já estão voltando, mas o conselho (`CREFITO...`) está sendo reimpresso em cima do nome do prescritor. Ou seja: hoje o agente está tentando “quebrar e remontar” a Linha 2 do `A_PAC_GRAN`, e essa remontagem física está errada.
 
-Só que esse layout imprime com `rot=1`, e o mapa físico real do Fórmula Certa para ele usa uma faixa X muito menor. O próprio template-base mostra isso em `src/config/pplaTemplates.ts`:
+Diagnóstico técnico objetivo:
 
-- `REQ` em X=240
-- `CRM/CREFITO` em X=230
-- `REG` em X=300
+1. O frontend do `A_PAC_GRAN` gera 2 linhas WYSIWYG em `src/components/LabelTextEditor.tsx`
+- Linha 1: `PACIENTE + REQ`
+- Linha 2: `DR(A)+MEDICO + CONSELHO + REG`
 
-Ou seja: ao ancorar pela “borda direita total” (`608`), os campos da direita foram empurrados para fora da área imprimível. Por isso, na etiqueta física, só sobra o bloco da esquerda visível.
+2. No agente, em `agente_impressao.py`, o `textoLivre` do `A_PAC_GRAN` não está sendo impresso de forma realmente WYSIWYG
+- Ele faz parsing da linha
+- separa `DR(A)`, conselho e `REG`
+- e desenha cada pedaço em coordenadas fixas (`x_med`, `x_crm`, `x_reg`)
 
-Solução que vou aplicar:
+3. Esse parsing destrói o espaçamento real vindo do editor
+- então o nome do médico é impresso numa coordenada
+- o conselho é impresso noutra coordenada fixa
+- e os dois acabam colidindo fisicamente
 
-1. Corrigir `agente_impressao.py` no `gerar_ppla_a_pac_gran`
-- Ajustar os 2 fluxos:
-  - modo `textoLivre`
-  - modo estruturado
-- Parar de usar `largura_dots - ...` para posicionar `REQ`, `CREFITO` e `REG` no `A_PAC_GRAN`
-- Usar o mapa físico real desse layout como referência de âncoras seguras
+4. O próprio print confirma isso
+- `REQ` aparece
+- `REG` aparece
+- `CREFITO` aparece parcialmente
+- mas está literalmente por cima do nome
+- então o problema principal agora é “dupla composição da mesma linha”, não falta de área
 
-2. Voltar o bloco direito para a faixa física correta
-- Linha 1:
-  - paciente à esquerda
-  - `REQ` posicionado na zona segura da direita, compatível com o FC
-- Linha 2:
-  - `DR(A)+prescritor` à esquerda
-  - `CREFITO` e `REG` posicionados na direita dentro da faixa segura
-- Em vez de “ancorar no fim absoluto da etiqueta”, vou ancorar no “fim imprimível real” desse layout rotacionado
+Solução correta que vou aplicar:
 
-3. Separar novamente `CREFITO` e `REG` no agente
-- Em vez de tratar tudo como um único `right_block`, vou imprimir conselho e registro como comandos separados
-- Isso dá controle fino e evita desaparecer tudo de uma vez quando a âncora estiver errada
-- Se o conselho vier longo, o ajuste será nele, sem jogar o `REG` para fora da etiqueta
+1. Parar de reconstruir a Linha 2 no agente para `A_PAC_GRAN`
+- No fluxo `textoLivre` de `gerar_ppla_a_pac_gran`, o agente deve respeitar a visualização do editor
+- Em vez de extrair `crm_part` e `reg_part` e redesenhar tudo em posições separadas, ele deve imprimir a linha completa com o espaçamento exato que veio do frontend
 
-4. Manter o layout em 73 colunas no frontend
-- Não vou desfazer a padronização de 73 colunas
-- O editor pode continuar usando a largura completa
-- O ajuste será apenas na conversão para coordenadas PPLA físicas do `A_PAC_GRAN`
+2. Manter apenas a separação especial da Linha 1, se necessário
+- A Linha 1 pode continuar com tratamento especial para proteger o `REQ`
+- Mas a Linha 2 precisa virar 1 linha única WYSIWYG, sem decomposição em blocos independentes
 
-5. Blindagem para não regressar
-- Deixar explícito no código que o `A_PAC_GRAN` rotacionado não pode usar `largura_dots` como borda direita direta
-- Fixar uma faixa X segura para os campos da direita com base no mapa FC já existente
+3. Ajustar o frontend para gerar uma Linha 2 fisicamente segura
+- Em `generateTextPacGran`, vou manter a largura de 73 colunas
+- mas vou reservar uma zona fixa mínima para `conselho + REG`
+- e limitar o nome do prescritor exatamente ao espaço restante
+- assim a linha já nasce pronta, sem risco de sobreposição
+
+4. Blindar contra textos antigos/sujos
+- Atualizar `shouldRegeneratePacGranText` para invalidar textos do `A_PAC_GRAN` que tenham formatação antiga ou zona direita fora do padrão
+- Isso força regeneração limpa ao pesquisar novamente
+
+5. Validar coerência entre layout e agente
+- `src/config/layouts.ts` ainda está com `linhasMax: 5`, enquanto o gerador do `A_PAC_GRAN` trabalha como layout compacto de 2 linhas e o resolvedor aceita 5 ou 8
+- vou alinhar essa configuração para evitar comportamento legado e regressões de normalização
 
 Resultado esperado:
-- `REQ` volta a aparecer
-- `CREFITO` volta a aparecer
-- `REG` volta a aparecer
-- o nome do prescritor continua saindo completo
-- o layout continua usando as 73 colunas sem perder os campos da direita
+- nada mais escrito em cima de outras informações
+- `REQ` visível
+- `CREFITO` visível
+- `REG` visível
+- nome do prescritor ocupando todo o espaço disponível, mas sem invadir o bloco da direita
+- impressão igual ao texto exibido no editor
 
-Arquivos:
-- `agente_impressao.py` — correção principal
-- `src/config/pplaTemplates.ts` — usado como referência das coordenadas físicas corretas; só edito se eu centralizar essas âncoras
+Arquivos a ajustar:
+- `agente_impressao.py`
+- `src/components/LabelTextEditor.tsx`
+- `src/config/layouts.ts`
 
-Detalhe técnico:
-O erro veio de tratar “73 colunas de texto” como “pode usar toda a largura em dots no X”. No `A_PAC_GRAN`, por causa da rotação do PPLA, isso não vale. A correção certa é manter as 73 colunas no texto, mas mapear `REQ/CREFITO/REG` para a faixa física correta do layout.
+Detalhe técnico importante:
+A correção certa agora não é “mexer mais nas âncoras X do conselho”. Isso só troca o lugar da colisão. O erro de fundo é que o agente do `A_PAC_GRAN` está remontando uma linha que já deveria ser tratada como pronta. A solução segura é: o frontend calcula os limites, e o agente imprime a linha consolidada sem reinterpretar.
