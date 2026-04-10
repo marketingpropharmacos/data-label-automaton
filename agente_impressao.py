@@ -823,14 +823,16 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     hmult = 1
     rot = 1
 
-    # Coordenadas — REQ e CRM/REG ancorados pela borda direita da etiqueta
-    CHAR_W = 8  # Font 1 ~8 dots por caractere
-    largura_dots = dims.get('largura_dots', 608)
+    # Coordenadas físicas seguras do A_PAC_GRAN (rot=1, 76x25mm)
+    # IMPORTANTE: NÃO usar largura_dots para ancorar campos à direita neste layout!
+    # Com rot=1, a faixa X imprimível é muito menor que largura_dots.
+    # Referência: pplaTemplates.ts — coordenadas FC validadas:
+    #   REQ em X=240, CRM em X=230, REG em X=300
     x_pac = 12
     x_med = 12
-    # x_req calculado dinamicamente abaixo
-    # x_crm e x_reg calculados dinamicamente abaixo
-    x_reg_fallback = 223
+    x_req = 240      # posição fixa FC para REQ na linha 1
+    x_crm = 230      # posição fixa FC para conselho na linha 2
+    x_reg = 300       # posição fixa FC para REG na linha 2
     y_positions = [89, 78, 67, 56, 45, 34, 23, 12]
 
     texto_livre = rotulo.get('textoLivre', '')
@@ -852,19 +854,18 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 continue
             y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
             if 'REQ:' in stripped:
-                # L1: Paciente + REQ — REQ ancorado à direita
+                # L1: Paciente + REQ — REQ em posição fixa FC
                 req_match = re.search(r'(REQ:\S+)', stripped)
                 if req_match:
                     patient_part = stripped[:req_match.start()].strip()
                     req_text = req_match.group(1)
-                    x_req_calc = largura_dots - (len(req_text) * CHAR_W) - 8
                     if patient_part:
                         pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, patient_part[:cols]))
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req_calc, req_text[:cols]))
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_text))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             elif 'DR(A)' in stripped or 'REG:' in stripped:
-                # L2: DR(A)+Medico + Conselho + REG — bloco direito ancorado à direita
+                # L2: DR(A)+Medico + Conselho + REG — posições fixas FC
                 reg_match = re.search(r'(REG:\S+)', stripped)
                 reg_part = reg_match.group(1) if reg_match else None
                 remainder = stripped[:reg_match.start()].rstrip() if reg_match else stripped
@@ -877,12 +878,11 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 if dr_part:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_med, dr_part[:cols]))
                 
-                # Combinar conselho + REG como bloco único ancorado à direita
-                right_parts = [p for p in [crm_part, reg_part] if p]
-                if right_parts:
-                    right_block = ' '.join(right_parts)
-                    x_right = largura_dots - (len(right_block) * CHAR_W) - 8
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_right, right_block))
+                # Conselho e REG como comandos separados em posições fixas
+                if crm_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_crm, crm_part))
+                if reg_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             visible_idx += 1
@@ -901,24 +901,18 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
     linhas = []
 
     req_text = f"REQ:{nr_req}-{nr_item}"
-    # Ancorar REQ pela borda direita da etiqueta
-    x_req_calc = largura_dots - (len(req_text) * CHAR_W) - 8  # 8 dots de padding direito
 
-    # Y=89: Paciente (X=12) + REQ (ancorado à direita)
+    # Y=89: Paciente (X=12) + REQ (posição fixa FC X=240)
     linhas.append(ppla_text_dots(rot, font, wmult, hmult, 89, x_pac, paciente[:cols]))
-    linhas.append(ppla_text_dots(rot, font, wmult, hmult, 89, x_req_calc, req_text))
+    linhas.append(ppla_text_dots(rot, font, wmult, hmult, 89, x_req, req_text))
 
-    # Y=78: DR(A)Medico (X=12) + CRM + REG (ancorados à direita)
+    # Y=78: DR(A)Medico (X=12) + CRM (X=230) + REG (X=300) — posições fixas FC
     linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_med, f"DR(A){nom_med}"[:cols]))
     if crm:
-        reg_text = f"REG:{registro}" if registro else ""
-        right_block = f"{crm} {reg_text}".strip() if reg_text else crm
-        x_right = largura_dots - (len(right_block) * CHAR_W) - 8
-        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_right, right_block))
-    elif registro:
+        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_crm, crm))
+    if registro:
         reg_text = f"REG:{registro}"
-        x_right = largura_dots - (len(reg_text) * CHAR_W) - 8
-        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_right, reg_text))
+        linhas.append(ppla_text_dots(rot, font, wmult, hmult, 78, x_reg, reg_text))
 
     if not linhas:
         linhas.append(ppla_text_dots(rot, font, wmult, hmult, 89, x_pac, 'SEM DADOS'))
