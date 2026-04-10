@@ -97,14 +97,14 @@ function abbreviateNameStrict(name: string, maxLen: number): string {
   // Try full name first
   if (name.length <= maxLen) return name;
 
-  // Try first + middle initials (spaced) + last
+  // Try first + compact initials + space + last → "ADRIANA A.D.C. OLIVEIRA"
   if (middle.length > 0) {
-    const withInitials = [first, ...middle.map(p => p[0] + '.'), last].join(' ');
-    if (withInitials.length <= maxLen) return withInitials;
+    const compactSpaced = first + ' ' + middle.map(p => p[0] + '.').join('') + ' ' + last;
+    if (compactSpaced.length <= maxLen) return compactSpaced;
 
-    // Try first + middle initials (compact) + last
-    const compact = first + ' ' + middle.map(p => p[0] + '.').join('') + last;
-    if (compact.length <= maxLen) return compact;
+    // Try without space before last → "ADRIANA A.D.C.OLIVEIRA"
+    const compactNoSpace = first + ' ' + middle.map(p => p[0] + '.').join('') + last;
+    if (compactNoSpace.length <= maxLen) return compactNoSpace;
   }
 
   // First + last only (drop all middle names)

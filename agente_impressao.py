@@ -135,11 +135,11 @@ def _abbreviate_name(name: str, max_len: int) -> str:
     last = parts[-1]
     middle = parts[1:-1]
     if middle:
-        # Tentar com iniciais espaçadas
-        attempt = ' '.join([first] + [p[0] + '.' for p in middle] + [last])
+        # Tentar com iniciais compactas + espaço antes do último → "ADRIANA A.D.C. OLIVEIRA"
+        attempt = first + ' ' + ''.join(p[0] + '.' for p in middle) + ' ' + last
         if len(attempt) <= max_len:
             return attempt
-        # Tentar com iniciais compactas
+        # Sem espaço antes do último → "ADRIANA A.D.C.OLIVEIRA"
         attempt = first + ' ' + ''.join(p[0] + '.' for p in middle) + last
         if len(attempt) <= max_len:
             return attempt
