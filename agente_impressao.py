@@ -74,7 +74,7 @@ PRINTER_CONFIGS = {
         'cols_max': 65,
         'y_positions_mm': [350, 310, 270, 230, 190, 150, 110, 70, 40, 20],
         'font': 9,
-        'form_length': 289,
+        'form_length': 304,
     },
     'A_PAC_GRAN': {
         'largura_mm': 76, 'altura_mm': 25,
@@ -384,6 +384,36 @@ def _gerar_from_texto_livre(texto_livre, y_positions, x_start, rot, font, cols, 
     return _build_label(pplb_lines, dims, cal, modo)
 
 
+def _gerar_from_texto_livre_dots(texto_livre, y_positions_dots, x_start_dots, rot, font, cols, dims, cal, build_label_fn, line_spacing_factor=1.0):
+    """Converte textoLivre para PPLA em layouts que já usam coordenadas DOTS nativas.
+    Evita reconverter dots→mm→dots, o que altera escala/posicionamento físico do layout.
+    """
+    linhas_texto = texto_livre.split('\n')
+    pplb_lines = []
+
+    y_positions_calc = list(y_positions_dots)
+    if line_spacing_factor != 1.0 and len(y_positions_calc) >= 2:
+        base_y = y_positions_calc[0]
+        step = y_positions_calc[1] - y_positions_calc[0]
+        for i in range(1, len(y_positions_calc)):
+            y_positions_calc[i] = base_y + int(step * line_spacing_factor * i)
+
+    if len(linhas_texto) > len(y_positions_calc) and len(y_positions_calc) >= 2:
+        step = y_positions_calc[-1] - y_positions_calc[-2]
+        while len(y_positions_calc) < len(linhas_texto):
+            y_positions_calc.append(y_positions_calc[-1] + step)
+
+    for i, line_text in enumerate(linhas_texto):
+        y = y_positions_calc[i]
+        if line_text.strip():
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_start_dots, line_text[:cols]))
+
+    if not pplb_lines:
+        pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_positions_calc[0], x_start_dots, 'SEM DADOS'))
+
+    return build_label_fn(pplb_lines, dims, cal)
+
+
 def _build_label_ampcx(linhas, dims, cal):
     """Build AMP_CX label — 109x25mm. Usa mesmos parâmetros do FC (f289, D11)."""
     contraste = cal.get('contraste', 14)
@@ -587,7 +617,7 @@ def _compact_line(*segments):
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     """Layout AMP10 — formato FC EXATO capturado do FormulaCerta.
 
-    Setup: f250, PB, D14, H14  (FC original usa f250 + PB)
+    Setup: f304, PA, D11, H14
     Font=9, Rotation=1
 
     Coordenadas Y (passo -9):
@@ -620,7 +650,7 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
-        return _gerar_from_texto_livre(texto_livre, y_levels, x_left, rot, font, cols, dims, cal, 'dots', lsf)
+        return _gerar_from_texto_livre_dots(texto_livre, y_levels, x_left, rot, font, cols, dims, cal, _build_label_amp10, lsf)
 
     # === Geração estruturada (paridade FC) ===
     paciente   = _clean_patient_name(rotulo.get('nomePaciente', ''))
