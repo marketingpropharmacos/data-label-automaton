@@ -614,6 +614,146 @@ def _compact_line(*segments):
     return ' '.join(s for s in segments if s)
 
 
+def _append_amp10_field(linhas, rot, font, y, x, texto, cols):
+    texto_limpo = (texto or '').strip()
+    if texto_limpo:
+        linhas.append(ppla_text_dots(rot, font, 1, 1, y, x, texto_limpo[:cols]))
+
+
+def _render_amp10_text_line(linhas, line_text, y, rot, font, cols, x_left, x_req, x_lote, x_fab, x_val, x_reg, conselho_candidates=None):
+    """Renderiza uma linha do texto livre AMP10 reancorando campos fixos nas posições físicas do FC.
+    Isso evita depender da quantidade de espaços da string salva/editada, que não reflete a largura real
+    da fonte PPLA no hardware.
+    """
+    texto = (line_text or '').rstrip()
+    if not texto.strip():
+        return
+
+    if texto.startswith('   '):
+        texto = texto[3:]
+    else:
+        texto = texto.lstrip()
+
+    if not texto:
+        return
+
+    conselho_candidates = [c for c in (conselho_candidates or []) if c]
+
+    req_match = re.search(r'(REQ:[^\s]+)', texto)
+    if req_match:
+        _append_amp10_field(linhas, rot, font, y, x_left, texto[:req_match.start()].rstrip(), cols)
+        _append_amp10_field(linhas, rot, font, y, x_req, req_match.group(1), cols)
+        return
+
+    if texto.startswith('DR(A)'):
+        right_text = ''
+        right_index = -1
+        for candidate in conselho_candidates:
+            idx = texto.rfind(candidate)
+            if idx > 0:
+                right_index = idx
+                right_text = candidate
+                break
+        if right_index < 0:
+            conselho_match = re.search(r'([A-Z]{2,}(?:\.[A-Z]{2})?-[A-Z0-9./-]+)$', texto)
+            if conselho_match:
+                right_index = conselho_match.start()
+                right_text = conselho_match.group(1)
+
+        if right_index > 0:
+            _append_amp10_field(linhas, rot, font, y, x_left, texto[:right_index].rstrip(), cols)
+            _append_amp10_field(linhas, rot, font, y, x_req, right_text, cols)
+            return
+
+        _append_amp10_field(linhas, rot, font, y, x_left, texto, cols)
+        return
+
+    meta_patterns = {
+        'ph': re.search(r'((?:pH|PH):[^\s]+)', texto),
+        'lote': re.search(r'(L:[^\s]+)', texto),
+        'fab': re.search(r'(F:[^\s]+)', texto),
+        'val': re.search(r'(V:[^\s]+)', texto),
+    }
+    if any(meta_patterns.values()):
+        meta_positions = [m.start() for m in meta_patterns.values() if m]
+        prefixo = texto[:min(meta_positions)].rstrip() if meta_positions else ''
+        _append_amp10_field(linhas, rot, font, y, x_left, prefixo, cols)
+        if meta_patterns['ph']:
+            _append_amp10_field(linhas, rot, font, y, x_left, meta_patterns['ph'].group(1), cols)
+        if meta_patterns['lote']:
+            _append_amp10_field(linhas, rot, font, y, x_lote, meta_patterns['lote'].group(1), cols)
+        if meta_patterns['fab']:
+            _append_amp10_field(linhas, rot, font, y, x_fab, meta_patterns['fab'].group(1), cols)
+        if meta_patterns['val']:
+            _append_amp10_field(linhas, rot, font, y, x_val, meta_patterns['val'].group(1), cols)
+        return
+
+    reg_match = re.search(r'(REG:[^\s]+)$', texto)
+    texto_sem_reg = texto[:reg_match.start()].rstrip() if reg_match else texto
+    reg_text = reg_match.group(1) if reg_match else ''
+
+    ap_index = texto_sem_reg.find('AP:')
+    if ap_index < 0:
+        ap_index = texto_sem_reg.find('APLICACAO:')
+
+    if reg_text or ap_index >= 0:
+        left_text = texto_sem_reg[:ap_index].rstrip() if ap_index >= 0 else texto_sem_reg
+        ap_text = texto_sem_reg[ap_index:].strip() if ap_index >= 0 else ''
+        _append_amp10_field(linhas, rot, font, y, x_left, left_text, cols)
+        _append_amp10_field(linhas, rot, font, y, x_val, ap_text, cols)
+        _append_amp10_field(linhas, rot, font, y, x_reg, reg_text, cols)
+        return
+
+    if texto.startswith('CONTEM:'):
+        _append_amp10_field(linhas, rot, font, y, x_left, texto, cols)
+        return
+
+    _append_amp10_field(linhas, rot, font, y, x_left, texto, cols)
+
+
+def _gerar_from_texto_livre_amp10(texto_livre, y_positions_dots, rot, font, cols, dims, cal, build_label_fn, x_left, x_req, x_lote, x_fab, x_val, x_reg, conselho_candidates=None, line_spacing_factor=1.0):
+    """Converte textoLivre do AMP10 em PPLA preservando a ordem visual, mas reancorando
+    campos críticos nas coordenadas físicas reais do Fórmula Certa.
+    """
+    linhas_texto = texto_livre.split('\n')
+    pplb_lines = []
+
+    y_positions_calc = list(y_positions_dots)
+    if line_spacing_factor != 1.0 and len(y_positions_calc) >= 2:
+        base_y = y_positions_calc[0]
+        step = y_positions_calc[1] - y_positions_calc[0]
+        for i in range(1, len(y_positions_calc)):
+            y_positions_calc[i] = base_y + int(step * line_spacing_factor * i)
+
+    if len(linhas_texto) > len(y_positions_calc) and len(y_positions_calc) >= 2:
+        step = y_positions_calc[-1] - y_positions_calc[-2]
+        while len(y_positions_calc) < len(linhas_texto):
+            y_positions_calc.append(y_positions_calc[-1] + step)
+
+    for i, line_text in enumerate(linhas_texto):
+        y = y_positions_calc[i]
+        _render_amp10_text_line(
+            pplb_lines,
+            line_text,
+            y,
+            rot,
+            font,
+            cols,
+            x_left,
+            x_req,
+            x_lote,
+            x_fab,
+            x_val,
+            x_reg,
+            conselho_candidates,
+        )
+
+    if not pplb_lines:
+        pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_positions_calc[0], x_left, 'SEM DADOS'))
+
+    return build_label_fn(pplb_lines, dims, cal)
+
+
 def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     """Layout AMP10 — formato FC EXATO capturado do FormulaCerta.
 
@@ -645,19 +785,39 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
     x_fab   = 102  # X=0102 do FC (Fabricação)
     x_val   = 147  # X=0147 do FC (Validade / Aplicação)
     x_reg   = 151  # X=0151 do FC (REG)
+    conselho_fc = _format_conselho_dots(rotulo)
+    conselho_alt = _crm_completo(rotulo)
+    conselho_candidates = [c for c in [conselho_fc, conselho_alt] if c]
 
     # textoLivre: cada linha do editor mapeia para um Y level
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
         lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
-        return _gerar_from_texto_livre_dots(texto_livre, y_levels, x_left, rot, font, cols, dims, cal, _build_label_amp10, lsf)
+        return _gerar_from_texto_livre_amp10(
+            texto_livre,
+            y_levels,
+            rot,
+            font,
+            cols,
+            dims,
+            cal,
+            _build_label_amp10,
+            x_left,
+            x_req,
+            x_lote,
+            x_fab,
+            x_val,
+            x_reg,
+            conselho_candidates,
+            lsf,
+        )
 
     # === Geração estruturada (paridade FC) ===
     paciente   = _clean_patient_name(rotulo.get('nomePaciente', ''))
     nr_req     = rotulo.get('nrRequisicao', '')
     nr_item    = rotulo.get('nrItem', '0')
     nome_med   = (rotulo.get('nomeMedico', '') or '').upper()
-    conselho   = _crm_completo(rotulo)
+    conselho   = conselho_fc or conselho_alt
     comp_full  = (rotulo.get('composicao', '') or rotulo.get('formula', '') or '').upper()
     ph         = (rotulo.get('ph', '') or '').strip()
     lote       = rotulo.get('lote', '')
@@ -704,7 +864,7 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
 
     # Y=10074: Uso (X=14) | Aplicação (X=147)
     if uso:      linhas.append(ppla_text_dots(rot, font, 1, 1, y_levels[4], x_left, uso[:cols]))
-    if aplicacao: linhas.append(ppla_text_dots(rot, font, 1, 1, y_levels[4], x_val, f"APLICACAO:{aplicacao}"))
+    if aplicacao: linhas.append(ppla_text_dots(rot, font, 1, 1, y_levels[4], x_val, f"AP:{aplicacao}"))
 
     # Y=10065: Contem (X=14) | REG (X=151)
     if contem:   linhas.append(ppla_text_dots(rot, font, 1, 1, y_levels[5], x_left, f"CONTEM:{contem}"))
