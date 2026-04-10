@@ -852,38 +852,10 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
             if not stripped:
                 continue
             y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
-            if 'REQ:' in stripped:
-                # L1: Paciente + REQ — REQ em posição fixa FC segura
-                req_match = re.search(r'(REQ:\S+)', stripped)
-                if req_match:
-                    patient_part = stripped[:req_match.start()].strip()
-                    req_text = req_match.group(1)
-                    if patient_part:
-                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, patient_part[:cols]))
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_text))
-                else:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
-            elif 'DR(A)' in stripped or 'REG:' in stripped:
-                # L2: DR(A)+Medico + Conselho + REG — posições fixas FC seguras
-                reg_match = re.search(r'(REG:\S+)', stripped)
-                reg_part = reg_match.group(1) if reg_match else None
-                remainder = stripped[:reg_match.start()].rstrip() if reg_match else stripped
-
-                # Detectar conselho (CRM-XX-NNN, COREN-XX-NNN, etc.)
-                crm_match = re.search(r'((?:CRM|CRBM|COREN|CRO|CRF|CRMV|CRN|CREFITO|CREF|CRP|CRFA)-\S+)', remainder)
-                crm_part = crm_match.group(1) if crm_match else None
-                dr_part = remainder[:crm_match.start()].rstrip() if crm_match else remainder.strip()
-
-                if dr_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_med, dr_part[:cols]))
-                
-                # Conselho e REG como comandos separados em posições fixas seguras
-                if crm_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_crm, crm_part))
-                if reg_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part))
-            else:
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
+            # A_PAC_GRAN WYSIWYG: imprimir cada linha como string única, sem decomposição.
+            # O frontend já calcula espaçamentos corretos entre campos (paciente+REQ, medico+conselho+REG).
+            # Decompor e reimprimir em coordenadas fixas causa sobreposição.
+            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             visible_idx += 1
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_pac, 'SEM DADOS'))
