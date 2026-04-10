@@ -73,7 +73,7 @@ PRINTER_CONFIGS = {
         'largura_dots': 711, 'altura_dots': 305, 'gap_dots': 24,
         'cols_max': 65,
         'y_positions_mm': [350, 310, 270, 230, 190, 150, 110, 70, 40, 20],
-        'font': 1,
+        'font': 9,
         'form_length': 289,
     },
     'A_PAC_GRAN': {
@@ -602,7 +602,7 @@ def gerar_ppla_amp10(rotulo, farmacia, dims=None, calibracao=None):
         dims = PRINTER_CONFIGS['AMP10']
     cal = calibracao or {}
     cols = dims['cols_max']
-    font = 1   # font padrão (compatível com demais layouts)
+    font = 9   # AMP10 usa fonte estreita do FC; fonte 1 deixa o texto largo/diferente do modelo
     rot = 1
 
     # Y levels em dots (203 DPI) para etiqueta 89x38mm = 304 dots altura
