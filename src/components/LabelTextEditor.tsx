@@ -570,17 +570,24 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   const valStr = rotulo.dataValidade ? `V:${formatarDataCurta(rotulo.dataValidade)}` : '';
   lines.push(fixedMetaLine(phVal, loteStr, fabStr, valStr));
 
-  // ── LINE 7: Uso (left) | Aplicação (right) ──
+  // ── LINE 7: Uso (left) | AP:... (middle-right) | REG (right) ──
   const posologia = rotulo.posologia?.toUpperCase() || "";
   const usoText = /^\d+$/.test(posologia) ? "" : posologia;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
-  lines.push(fixedLine(usoText, aplicacaoStr, LEFT_USO, APLICACAO_WIDTH));
+  const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "REG:";
+  // Build 3-zone line: USO | AP:... | REG:
+  const regW = regStr.length;
+  const apW = aplicacaoStr.length;
+  const usoMax = W - regW - apW - 4; // 4 = minimum gaps
+  const usoTrimmed = usoText.substring(0, Math.max(usoMax, 0)).trimEnd();
+  const leftPart = usoTrimmed + (aplicacaoStr ? '  ' + aplicacaoStr : '');
+  const gap7 = W - leftPart.length - regW;
+  lines.push(gap7 > 0 ? leftPart + ' '.repeat(gap7) + regStr : (leftPart + '  ' + regStr).substring(0, W));
 
-  // ── LINE 8: Contém (left) | REG (right) ──
+  // ── LINE 8: Contém (full line) ──
   const contemStr = rotulo.contem?.trim() ? `CONTEM:${rotulo.contem.trim().toUpperCase()}` : "CONTEM:";
-  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  lines.push(fixedLine(contemStr, regStr, LEFT_CONTEM, REG_WIDTH));
+  lines.push(contemStr.substring(0, W));
 
   return lines.join('\n');
 }
