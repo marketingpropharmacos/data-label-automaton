@@ -79,7 +79,7 @@ PRINTER_CONFIGS = {
     'A_PAC_GRAN': {
         'largura_mm': 76, 'altura_mm': 25,
         'largura_dots': 608, 'altura_dots': 200, 'gap_dots': 24,
-        'cols_max': 57,
+        'cols_max': 73,
         'y_positions_mm': [98, 84, 70, 57, 43, 29, 15, 2],
         'font': 1,
     },

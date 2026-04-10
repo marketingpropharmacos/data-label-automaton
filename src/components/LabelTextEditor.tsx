@@ -369,9 +369,9 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
 }
 
 // ---- A_PAC_GRAN specific generator — FIXED POSITION FIELD MAP ----
-// 57 cols, 8 lines. Same anchored-zone pattern as AMP_CX.
+// 73 cols, 8 lines. Same anchored-zone pattern as AMP_CX.
 function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  const W = layoutConfig.colunasMax || 57;
+  const W = layoutConfig.colunasMax || 73;
 
   // === Zone widths ===
   const REQ_WIDTH = 15;        // "REQ:000000-0"
@@ -630,7 +630,7 @@ function resolveLayoutTipo(layoutConfig: LayoutConfig, layoutType?: LayoutType):
 
   // Fallback por limites físicos do layout (evita quebrar quando tipo vem legado)
   if ((layoutConfig.colunasMax === 28 || layoutConfig.colunasMax === 38 || layoutConfig.colunasMax === 41) && layoutConfig.linhasMax === 8) return 'A_PAC_PEQ';
-  if (layoutConfig.colunasMax === 57 && (layoutConfig.linhasMax === 5 || layoutConfig.linhasMax === 8)) return 'A_PAC_GRAN';
+  if ((layoutConfig.colunasMax === 57 || layoutConfig.colunasMax === 73) && (layoutConfig.linhasMax === 5 || layoutConfig.linhasMax === 8)) return 'A_PAC_GRAN';
 
   return layoutConfig.tipo;
 }
