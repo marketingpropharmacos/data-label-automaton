@@ -368,22 +368,21 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   return lines.join('\n');
 }
 
-// ---- A_PAC_GRAN specific generator — FIXED POSITION FIELD MAP ----
-// 73 cols, 8 lines. Same anchored-zone pattern as AMP_CX.
+// ---- A_PAC_GRAN specific generator — COMPACT SAFE MAP ----
+// 73 cols, 2 linhas. REQ/conselho/REG ficam compactados à esquerda o suficiente
+// para não cortar no físico, sem sobrepor o bloco principal.
 function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const W = layoutConfig.colunasMax || 73;
 
-  // === Zone widths ===
-  const REQ_WIDTH = 15;        // "REQ:000000-0"
+  const compactLine = (left: string, right: string, gapSize = 1): string => {
+    const r = (right || "").trim();
+    if (!r) return (left || "").substring(0, W);
 
-  const LEFT_L1 = W - REQ_WIDTH;
+    const safeGap = ' '.repeat(Math.max(gapSize, 1));
+    const leftMax = Math.max(W - r.length - safeGap.length, 0);
+    const l = (left || "").substring(0, leftMax).trimEnd();
 
-  const fixedLine = (left: string, right: string, leftMax: number, rightMax: number): string => {
-    const l = (left || "").substring(0, leftMax);
-    const r = (right || "").substring(0, rightMax);
-    const gap = W - l.length - r.length;
-    if (gap <= 0) return (l + r).substring(0, W);
-    return l + ' '.repeat(gap) + r;
+    return `${l}${safeGap}${r}`.substring(0, W);
   };
 
   const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
@@ -400,26 +399,22 @@ function generateTextPacGran(rotulo: RotuloItem, layoutConfig: LayoutConfig): st
   const regNum = String(rotulo.numeroRegistro || "");
   const regStr = regNum ? `REG:${regNum}` : "";
 
-  // Combinar conselho + REG na zona direita da L2
+  // Combinar conselho + REG de forma compacta, sem jogar o bloco para a extrema direita
   const rightL2 = [conselhoStr, regStr].filter(Boolean).join(' ');
 
-  // Calcular largura direita dinamicamente baseado no conteúdo real
-  const RIGHT_L2_WIDTH = Math.max(rightL2.length, 20);
-  const LEFT_L2 = W - RIGHT_L2_WIDTH;
-
   const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
-  // A_PAC_GRAN: não abreviar — usar nome completo, truncar apenas se necessário
-  const medicoMax = Math.max(LEFT_L2 - 5, 10); // 5 = "DR(A)" prefix, mín 10 chars
+  // A_PAC_GRAN: preservar o nome o máximo possível, mas reservar o espaço real do bloco da direita
+  const medicoMax = Math.max(W - rightL2.length - 6, 10); // 5 = "DR(A)" + 1 espaço
   const medicoTrunc = medico ? medico.substring(0, medicoMax) : "";
   const drName = medicoTrunc ? `DR(A)${medicoTrunc}` : "";
 
   const lines: string[] = [];
 
-  // L1: Paciente (left) | REQ (right)
-  lines.push(fixedLine(cleanName, reqStr, LEFT_L1, REQ_WIDTH));
+  // L1: Paciente + REQ com folga curta para não empurrar REQ para a borda física
+  lines.push(compactLine(cleanName, reqStr, 2));
 
-  // L2: DR(A)+Medico (left) | Conselho + REG (right)
-  lines.push(fixedLine(drName, rightL2, LEFT_L2, RIGHT_L2_WIDTH));
+  // L2: DR(A)+Medico + Conselho + REG de forma contínua, como no print de referência
+  lines.push(compactLine(drName, rightL2, 1));
 
   return lines.join('\n');
 }
@@ -453,6 +448,23 @@ function shouldRegeneratePacGranText(textoLivre: string, rotulo: RotuloItem): bo
     ) {
       return true;
     }
+  }
+
+  const reqIndex = line1.indexOf('REQ:');
+  if (reqIndex === -1 || reqIndex > 48) return true;
+
+  const conselhoNome = getConselhoNome(rotulo.prefixoCRM || '1');
+  const rightMarkers = [
+    'REG:',
+    `${conselhoNome}-`,
+    `${conselhoNome}.`,
+  ];
+  const rightMarkerPositions = rightMarkers
+    .map(marker => line2.indexOf(marker))
+    .filter(position => position >= 0);
+
+  if (rightMarkerPositions.length > 0 && Math.min(...rightMarkerPositions) > 48) {
+    return true;
   }
 
   // Invalidar se a linha 1 não tem 73 colunas (formatação antiga com 57)
