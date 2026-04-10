@@ -852,18 +852,19 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
                 continue
             y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
             if 'REQ:' in stripped:
-                # L1: Paciente + REQ
+                # L1: Paciente + REQ — REQ ancorado à direita
                 req_match = re.search(r'(REQ:\S+)', stripped)
                 if req_match:
                     patient_part = stripped[:req_match.start()].strip()
+                    req_text = req_match.group(1)
+                    x_req_calc = largura_dots - (len(req_text) * CHAR_W) - 8
                     if patient_part:
                         pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, patient_part[:cols]))
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_match.group(1)[:cols]))
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req_calc, req_text[:cols]))
                 else:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             elif 'DR(A)' in stripped or 'REG:' in stripped:
-                # L2: DR(A)+Medico + Conselho + REG na mesma linha
-                # Extrair REG se presente
+                # L2: DR(A)+Medico + Conselho + REG — bloco direito ancorado à direita
                 reg_match = re.search(r'(REG:\S+)', stripped)
                 reg_part = reg_match.group(1) if reg_match else None
                 remainder = stripped[:reg_match.start()].rstrip() if reg_match else stripped
@@ -875,13 +876,13 @@ def gerar_ppla_a_pac_gran(rotulo, farmacia, dims=None, calibracao=None):
 
                 if dr_part:
                     pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_med, dr_part[:cols]))
-                if crm_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_crm, crm_part[:cols]))
-                if reg_part:
-                    # Posição dinâmica: REG após o conselho para evitar sobreposição
-                    CHAR_W = 8  # Font 1 ~8 dots por caractere
-                    x_reg_calc = x_crm + (len(crm_part) + 1) * CHAR_W if crm_part else x_reg
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg_calc, reg_part[:cols]))
+                
+                # Combinar conselho + REG como bloco único ancorado à direita
+                right_parts = [p for p in [crm_part, reg_part] if p]
+                if right_parts:
+                    right_block = ' '.join(right_parts)
+                    x_right = largura_dots - (len(right_block) * CHAR_W) - 8
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_right, right_block[:cols]))
             else:
                 pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_pac, stripped[:cols]))
             visible_idx += 1
