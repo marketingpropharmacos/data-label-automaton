@@ -1,24 +1,29 @@
 
 
-# Problema: as alterações WYSIWYG não estão no agente rodando nos PCs
+# Corrigir sincronização do "Salvar" entre PCs (Daniel/Edi)
 
-## Causa raiz
+## Problema identificado
 
-O auto-update do agente busca o arquivo de `https://raw.githubusercontent.com/.../main/agente_impressao.py`. As mudanças feitas aqui no Lovable ainda não foram publicadas no branch `main` do GitHub. Por isso o `/update` respondeu "Já está na versão mais recente" — ele está comparando com a versão antiga no GitHub.
+O salvamento no Supabase funciona corretamente (a gravação via `upsert` está OK e as políticas RLS permitem leitura/escrita para qualquer usuário autenticado). O problema é que **ao carregar**, a função `isAmp10SavedTextValid` descarta o texto salvo porque a validação é extremamente rígida — ela exige tokens exatos como `REQ:`, `DR(A)`, `USO`, `CONTEM:`, `AP:`, `REG:` nas posições corretas.
 
-Evidência: o agente do Daniel retorna `"protocolo":"PPLA-mm"` no response, mas o código atualizado no repo usa modo dots.
+Quando o operador faz edições manuais (WYSIWYG), o texto editado pode não passar mais nessa validação, e o sistema regenera o texto do zero — dando a impressão de que "não salvou".
 
-## Plano de correção
+Esse problema ocorre em **dois lugares**:
+1. **`src/pages/Index.tsx`** (linha 202): ao buscar uma requisição, descarta texto salvo que falha na validação
+2. **`src/components/LabelTextEditor.tsx`** (linha 1013): ao trocar de layout, descarta texto editado que falha na validação
 
-### 1. Publicar o projeto (Publish/Deploy)
-Para que as alterações do `agente_impressao.py` cheguem ao GitHub `main`, é necessário publicar/fazer deploy do projeto. Isso sincroniza o repositório Lovable com o GitHub.
+## Solução
 
-### 2. Forçar update nos agentes
-Após a publicação, acessar a tela de Agentes no sistema e clicar para forçar o update em ambos os PCs (Daniel e Edi). O endpoint `/update` vai detectar que o hash mudou e vai baixar a versão nova automaticamente.
+Para o layout **AMP10**, remover a validação restritiva `isAmp10SavedTextValid` na **restauração de texto salvo**. Se existe texto salvo no Supabase para aquele item, ele deve ser restaurado tal como foi salvo — o operador é quem decide o conteúdo.
 
-### 3. Validar
-Após o update, o endpoint `/health` deve refletir a versão nova e a impressão WYSIWYG deve funcionar — as edições de texto no editor serão reproduzidas na etiqueta.
+### Alterações
 
-## Nenhuma alteração de código necessária
-O código WYSIWYG já está correto no repo. O problema é puramente de deploy/publicação.
+1. **`src/pages/Index.tsx`** — Remover a checagem `isAmp10SavedTextValid` no bloco de restauração (linhas 202-204). Texto salvo para AMP10 será restaurado sempre.
+
+2. **`src/components/LabelTextEditor.tsx`** — Relaxar ou remover a checagem `isAmp10SavedTextValid` na troca de layout (linha 1013) para não sobrescrever edições do usuário.
+
+### O que NÃO será alterado
+- Nenhum layout ou coordenada
+- A lógica de salvamento (upsert) permanece igual
+- A validação para `A_PAC_PEQ` e `A_PAC_GRAN` permanece (esses layouts forçam regeneração por design)
 
