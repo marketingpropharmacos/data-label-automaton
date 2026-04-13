@@ -185,29 +185,14 @@ const Index = () => {
           .eq('nr_requisicao', requisitionNumber);
         
         if (savedRows && savedRows.length > 0) {
-          const currentCols = layoutConfig.colunasMax || 57;
           const savedMap: Record<string, string> = {};
           const rotuloById = new Map(result.data.map((rotulo) => [rotulo.id, rotulo]));
           savedRows.forEach(row => {
             const rotulo = rotuloById.get(row.item_id);
             if (!rotulo) return;
 
-            // AMP10: confiança total no texto salvo (WYSIWYG — operador decide o conteúdo)
-            if (layoutType === 'AMP10') {
-              savedMap[row.item_id] = row.texto_livre;
-              return;
-            }
-
-            // Descartar texto salvo para layouts com regras de posicionamento específicas
-            if (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') {
-              return; // forçar regeneração completa com regras atualizadas
-            }
-
-            // Outros layouts: só restaurar se a largura máxima das linhas é compatível
-            const maxLineLen = Math.max(...row.texto_livre.split('\n').map((l: string) => l.trimEnd().length));
-            if (Math.abs(maxLineLen - currentCols) <= 5) {
-              savedMap[row.item_id] = row.texto_livre;
-            }
+            // Confiança total no texto salvo para todos os layouts (WYSIWYG — operador decide o conteúdo)
+            savedMap[row.item_id] = row.texto_livre;
           });
           restoredRotulos = result.data.map(r => {
             const savedText = savedMap[r.id];
@@ -215,9 +200,6 @@ const Index = () => {
           });
         }
       } catch { /* ignore */ }
-      if (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') {
-        restoredRotulos = restoredRotulos.map((rotulo) => ({ ...rotulo, textoLivre: undefined }));
-      }
 
       setRotulos(restoredRotulos);
       setCurrentIndex(0);
