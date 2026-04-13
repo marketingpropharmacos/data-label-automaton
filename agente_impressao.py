@@ -897,47 +897,13 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
 
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        import re as _re
         linhas_texto = [l for l in texto_livre.split('\n') if l.strip()]
         pplb_lines = []
-
         for idx, line_text in enumerate(linhas_texto):
             y = y_positions[idx] if idx < len(y_positions) else y_positions[-1]
             stripped = line_text.strip()
-
-            # Detectar REQ: ancorado à direita (X=116) na mesma linha
-            req_match = _re.search(r'(REQ:\S+)', stripped)
-            if req_match:
-                left_part = stripped[:req_match.start()].rstrip()
-                req_part = req_match.group(1)
-                if left_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, left_part[:25]))
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_part))
-                continue
-
-            # Detectar REG: sozinho ou ancorado à direita (X=129)
-            reg_match = _re.search(r'(REG:\S+)', stripped)
-            if reg_match:
-                left_part = stripped[:reg_match.start()].rstrip()
-                reg_part = reg_match.group(1)
-                if left_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, left_part[:cols]))
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part))
-                continue
-
-            # Detectar conselho (CRM/COREN/CRF/CNE) ancorado à direita (X=116)
-            crm_match = _re.search(r'((?:CRM|COREN|CRF|CNE)\S+)', stripped)
-            if crm_match:
-                left_part = stripped[:crm_match.start()].rstrip()
-                crm_part = crm_match.group(1)
-                if left_part:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, left_part[:25]))
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, crm_part))
-                continue
-
-            # Linha normal: imprimir literal em X=12
+            # WYSIWYG: imprimir cada linha literal em X=12, sem decomposição
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
-
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
