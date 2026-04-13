@@ -526,17 +526,15 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                 descrfrm = descrfrm.read().decode('latin-1')
             descrfrm_upper = (descrfrm or "").upper().strip()
             
-            # Se o nome NÃO contém "KIT", provavelmente é MESCLA, não KIT
-            if "KIT" not in descrfrm_upper:
-                print(f"  [DETECTA_KIT] ✗ Nome não contém 'KIT': '{descrfrm_upper[:50]}' - Tratando como NÃO-KIT")
-                return None
-            
             # =====================================================
-            # VALIDAÇÃO: Só é KIT se tiver componentes farmacêuticos reais
-            # (não apenas insumos de fabricação como ampola/selo/tampa)
+            # VALIDAÇÃO: Distingue KIT de MESCLA pelos componentes do FC05100
+            # KIT real: os componentes são PRODUTOS ACABADOS (AMP, vial) — cada um
+            #           tem própria entrada no FC05000 ou nome começa com "AMP "
+            # MESCLA:   os componentes são MATÉRIAS-PRIMAS (ingredientes brutos)
+            #           que não têm entrada no FC05000 como CDSAC
             # =====================================================
             cdfrm = kit_info["cdfrm"]
-            
+
             # Busca componentes da FC05100
             cursor.execute("""
                 SELECT k.CDPRO, p.DESCR
@@ -545,35 +543,54 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                 WHERE k.CDFRM = ?
             """, (cdfrm,))
             componentes = cursor.fetchall()
-            
-            # Conta quantos componentes são "ativos reais" (não embalagem E não é o próprio produto)
+
             ativos_reais = 0
+            componentes_sao_produtos = 0  # componentes que são produtos acabados (no FC05000)
+
             for comp in componentes:
-                cdpro_comp = comp[0]  # Código do componente
+                cdpro_comp = comp[0]
                 descr = comp[1] or ""
                 if hasattr(descr, 'read'):
                     descr = descr.read().decode('latin-1')
-                
-                # 1. Ignora embalagens
+
+                # 1. Ignora embalagens/acessórios
                 if is_embalagem_ou_obs(descr):
                     print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
                     continue
-                
+
                 # 2. Ignora se for o próprio produto (código igual)
                 if str(cdpro_comp).strip() == cdpro_str:
                     print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
                     continue
-                
+
                 ativos_reais += 1
                 print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
-            
-            # Só é KIT se tiver 2+ componentes ativos reais DIFERENTES do próprio produto
-            if ativos_reais >= 2:
-                print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO! {ativos_reais} ativos reais encontrados")
-                return kit_info
-            else:
-                print(f"  [DETECTA_KIT] ✗ Não é KIT: apenas {ativos_reais} ativo(s) real(is)")
-                return None
+
+                # Verifica se o componente é ele próprio um produto acabado (está no FC05000)
+                try:
+                    cursor.execute("SELECT FIRST 1 CDFRM FROM FC05000 WHERE CDSAC = ?", (cdpro_comp,))
+                    if cursor.fetchone():
+                        componentes_sao_produtos += 1
+                        print(f"    [DETECTA_KIT] → é produto acabado (tem FC05000)")
+                except Exception:
+                    pass
+
+            # --- Critério de KIT ---
+            # 1. Nome contém "KIT" → KIT claro
+            # 2. Componentes são produtos acabados (têm FC05000) → KIT de ampolas/vials
+            # 3. Caso contrário → MESCLA (ingredientes brutos)
+            nome_indica_kit = "KIT" in descrfrm_upper
+            componentes_indicam_kit = (componentes_sao_produtos >= 1 and ativos_reais >= 1)
+
+            if nome_indica_kit or componentes_indicam_kit:
+                if ativos_reais >= 1:
+                    print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO! (nome_kit={nome_indica_kit}, "
+                          f"comp_produtos={componentes_sao_produtos}/{ativos_reais})")
+                    return kit_info
+
+            print(f"  [DETECTA_KIT] ✗ Não é KIT: ativos={ativos_reais}, "
+                  f"comp_produtos={componentes_sao_produtos}, nome_kit={nome_indica_kit}")
+            return None
         
         # ESTRATÉGIA 2: CDSAC = CDPRO (inteiro)
         try:
@@ -589,25 +606,13 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                     "tpforma": row[3] if tem_tpforma and len(row) > 3 else ""
                 }
                 
-                # =====================================================
-                # PRÉ-VALIDAÇÃO: Só considera KIT se o nome indicar isso
-                # MESCLAS têm 2+ ativos na FC05100 mas NÃO são KITs reais
-                # =====================================================
+                # Mesmo critério da ESTRATÉGIA 1 (nome+componentes)
                 descrfrm = kit_info.get("descrfrm", "")
                 if descrfrm and hasattr(descrfrm, 'read'):
                     descrfrm = descrfrm.read().decode('latin-1')
                 descrfrm_upper = (descrfrm or "").upper().strip()
-                
-                # Se o nome NÃO contém "KIT", provavelmente é MESCLA, não KIT
-                if "KIT" not in descrfrm_upper:
-                    print(f"  [DETECTA_KIT] ✗ Nome não contém 'KIT': '{descrfrm_upper[:50]}' - Tratando como NÃO-KIT (int)")
-                    return None
-                
-                # =====================================================
-                # VALIDAÇÃO: Só é KIT se tiver componentes farmacêuticos reais
-                # =====================================================
+
                 cdfrm = kit_info["cdfrm"]
-                
                 cursor.execute("""
                     SELECT k.CDPRO, p.DESCR
                     FROM FC05100 k
@@ -615,33 +620,37 @@ def detecta_kit(cursor, cdpro, tpforma=None):
                     WHERE k.CDFRM = ?
                 """, (cdfrm,))
                 componentes = cursor.fetchall()
-                
+
                 ativos_reais = 0
+                componentes_sao_produtos = 0
                 for comp in componentes:
-                    cdpro_comp = comp[0]  # Código do componente
+                    cdpro_comp = comp[0]
                     descr = comp[1] or ""
                     if hasattr(descr, 'read'):
                         descr = descr.read().decode('latin-1')
-                    
-                    # 1. Ignora embalagens
                     if is_embalagem_ou_obs(descr):
-                        print(f"    [DETECTA_KIT] Embalagem ignorada: {descr[:50]}")
                         continue
-                    
-                    # 2. Ignora se for o próprio produto (código igual)
                     if str(cdpro_comp).strip() == cdpro_str:
-                        print(f"    [DETECTA_KIT] Próprio produto ignorado: {descr[:50]}")
                         continue
-                    
                     ativos_reais += 1
-                    print(f"    [DETECTA_KIT] Componente ativo: {descr[:50]}")
-                
-                if ativos_reais >= 2:
-                    print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO (int)! {ativos_reais} ativos reais encontrados")
+                    try:
+                        cursor.execute("SELECT FIRST 1 CDFRM FROM FC05000 WHERE CDSAC = ?", (cdpro_comp,))
+                        if cursor.fetchone():
+                            componentes_sao_produtos += 1
+                    except Exception:
+                        pass
+
+                nome_indica_kit = "KIT" in descrfrm_upper
+                componentes_indicam_kit = (componentes_sao_produtos >= 1 and ativos_reais >= 1)
+
+                if (nome_indica_kit or componentes_indicam_kit) and ativos_reais >= 1:
+                    print(f"  [DETECTA_KIT] ✓ KIT VÁLIDO (int)! ativos={ativos_reais}, "
+                          f"comp_produtos={componentes_sao_produtos}")
                     return kit_info
-                else:
-                    print(f"  [DETECTA_KIT] ✗ Não é KIT (int): apenas {ativos_reais} ativo(s) real(is)")
-                    return None
+
+                print(f"  [DETECTA_KIT] ✗ Não é KIT (int): ativos={ativos_reais}, "
+                      f"comp_produtos={componentes_sao_produtos}")
+                return None
         except ValueError:
             pass
         
