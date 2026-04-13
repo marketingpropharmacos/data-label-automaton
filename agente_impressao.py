@@ -712,8 +712,8 @@ def _render_amp10_text_line(linhas, line_text, y, rot, font, cols, x_left, x_req
 
 
 def _gerar_from_texto_livre_amp10(texto_livre, y_positions_dots, rot, font, cols, dims, cal, build_label_fn, x_left, x_req, x_lote, x_fab, x_val, x_reg, conselho_candidates=None, line_spacing_factor=1.0):
-    """Converte textoLivre do AMP10 em PPLA preservando a ordem visual, mas reancorando
-    campos críticos nas coordenadas físicas reais do Fórmula Certa.
+    """WYSIWYG: imprime cada linha do textoLivre literalmente, sem parsing/reancoragem.
+    O que o operador vê no editor é exatamente o que sai na etiqueta.
     """
     linhas_texto = texto_livre.split('\n')
     pplb_lines = []
@@ -730,23 +730,18 @@ def _gerar_from_texto_livre_amp10(texto_livre, y_positions_dots, rot, font, cols
         while len(y_positions_calc) < len(linhas_texto):
             y_positions_calc.append(y_positions_calc[-1] + step)
 
-    for i, line_text in enumerate(linhas_texto):
-        y = y_positions_calc[i]
-        _render_amp10_text_line(
-            pplb_lines,
-            line_text,
-            y,
-            rot,
-            font,
-            cols,
-            x_left,
-            x_req,
-            x_lote,
-            x_fab,
-            x_val,
-            x_reg,
-            conselho_candidates,
-        )
+    vis_idx = 0
+    for line_text in linhas_texto:
+        stripped = line_text.lstrip()
+        if not stripped:
+            continue  # pular linhas vazias sem avançar Y
+        if vis_idx >= len(y_positions_calc):
+            break
+        y = y_positions_calc[vis_idx]
+        # Strip do recuo de 3 espaços (margem do editor) — o X=14 já cuida da margem física
+        clean = line_text[3:] if line_text.startswith('   ') else line_text.lstrip()
+        pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_left, clean))
+        vis_idx += 1
 
     if not pplb_lines:
         pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_positions_calc[0], x_left, 'SEM DADOS'))
