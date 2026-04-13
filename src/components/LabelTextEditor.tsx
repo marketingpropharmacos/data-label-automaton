@@ -475,6 +475,7 @@ function shouldRegenerateAmpCxText(textoLivre: string): boolean {
 }
 
 
+function shouldRegeneratePacGranText(textoLivre: string, rotulo: RotuloItem): boolean {
   const nonEmptyLines = textoLivre
     .split('\n')
     .map(line => line.trimEnd())
