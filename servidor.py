@@ -74,6 +74,43 @@ def norm_texto(txt: str) -> str:
     txt = re.sub(r"[^A-Z0-9: /_-]+", "", txt)
     return txt.strip()
 
+def strip_acentos(txt) -> str:
+    """
+    Remove diacríticos e caracteres não-ASCII para compatibilidade com
+    impressoras térmicas (Argox/Citizen) que não entendem UTF-8/latin acentuado.
+    Ex: "APLICAÇÃO" -> "APLICACAO", "ÁCIDO" -> "ACIDO", "´" -> ""
+    """
+    if txt is None:
+        return ""
+    if not isinstance(txt, str):
+        txt = str(txt)
+    if not txt:
+        return ""
+    # 1. Decompõe via NFD e remove marcas combinantes (ã→a, ç→c, é→e …)
+    nfd = unicodedata.normalize('NFD', txt)
+    sem_diacritico = ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+    # 2. Remove qualquer caractere fora do ASCII imprimível (0x20-0x7E) e quebras de linha
+    return ''.join(c for c in sem_diacritico if 0x20 <= ord(c) <= 0x7E or c in '\n\r')
+
+def strip_acentos_rotulo(rotulo: dict) -> dict:
+    """Aplica strip_acentos em todos os campos string de texto do rótulo."""
+    campos_texto = [
+        'nomePaciente', 'nomeMedico', 'formula', 'composicao', 'aplicacao',
+        'posologia', 'observacoes', 'observacoesFicha', 'tipoUso', 'descricaoProduto',
+    ]
+    resultado = dict(rotulo)
+    for campo in campos_texto:
+        if campo in resultado and isinstance(resultado[campo], str):
+            resultado[campo] = strip_acentos(resultado[campo])
+    # Componentes de KIT
+    if 'componentes' in resultado and isinstance(resultado['componentes'], list):
+        resultado['componentes'] = [
+            {**c, 'nome': strip_acentos(c.get('nome', '')),
+                  'composicao': strip_acentos(c.get('composicao', ''))}
+            for c in resultado['componentes']
+        ]
+    return resultado
+
 # Mapeamento de TPUSO (código numérico) para texto legível
 TIPO_USO_MAP = {
     '1': 'USO INTERNO',
@@ -4485,7 +4522,10 @@ def buscar_requisicao(nr_requisicao):
         
         if not data:
             data = [{**dados_base, "nrItem": "0", "formula": "", "lote": "", "quantidade": "", "observacoes": "", "composicao": "", "aplicacao": "", "descricaoProduto": ""}]
-        
+
+        # Remove acentos de todos os campos texto — impressora térmica não suporta
+        data = [strip_acentos_rotulo(r) for r in data]
+
         return jsonify({"success": True, "data": data})
         
     except Exception as e:

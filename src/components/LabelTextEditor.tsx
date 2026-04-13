@@ -919,7 +919,8 @@ const LabelTextEditor = ({
   const isAmp10 = layoutType === 'AMP10';
 
   const amp10Opts = isAmp10 ? { metaInline } : undefined;
-  const text = rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType, amp10Opts);
+  // stripAccents garante que texto salvo no Supabase também não tenha acentos
+  const text = stripAccents(rotulo?.textoLivre ?? generateText(rotulo, layoutConfig, layoutType, amp10Opts));
 
   // Build current texts snapshot for dirty detection
   const currentTextsSnapshot = useMemo(() => {
@@ -1051,7 +1052,7 @@ const LabelTextEditor = ({
   }, []);
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value;
+    const newText = stripAccents(e.target.value);
     onTextChange(rotulo.id, newText);
     setTimeout(updateCursorInfo, 0);
   };
