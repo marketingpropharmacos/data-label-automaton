@@ -907,52 +907,15 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
             for i in range(1, len(y_positions_calc)):
                 y_positions_calc[i] = base_y + int(step * lsf * i)
 
-        for pos_idx, line_text in enumerate(linhas_texto):
+        visible_idx = 0
+        for line_text in linhas_texto:
             stripped = line_text.strip()
             if not stripped:
                 continue
-            y = y_positions_calc[pos_idx] if pos_idx < len(y_positions_calc) else y_positions_calc[-1]
-            # Linha com REQ: paciente à esquerda + REQ à direita (mesmo Y, como FC)
-            if 'REQ:' in stripped:
-                req_match = re.search(r'(REQ:\S+)', stripped)
-                if req_match:
-                    MAX_PAT_CHARS = 25  # limite físico: espaço entre X=12 e X=116 (com iniciais)
-                    patient_part = stripped[:req_match.start()].strip()
-                    # Aplicar abreviação estrita (primeiro + iniciais + último) antes de truncar
-                    patient_part = _abbreviate_name(patient_part, MAX_PAT_CHARS)
-                    patient_part = patient_part[:MAX_PAT_CHARS].strip()
-                    if patient_part:
-                        pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, patient_part))
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_match.group(1)[:cols]))
-                else:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
-            elif 'REG:' in stripped:
-                reg_match = re.search(r'(REG:\S+)', stripped)
-                if reg_match:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_match.group(1)[:cols]))
-                else:
-                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
-            elif stripped.startswith('DR(A)'):
-                # Linha do médico: reaplicar abreviação obrigatória (primeiro + último nome)
-                dr_content = stripped[5:].strip()
-                # Separar conselho do nome (ex: "KAROLINY ADRIANA VIEIRA COREN-SC-59418")
-                conselho_match = re.search(r'([A-Z]{2,5}-[A-Z]{2}-\d+)\s*$', dr_content)
-                conselho_str = ''
-                nome_raw = dr_content
-                if conselho_match:
-                    conselho_str = conselho_match.group(1)
-                    nome_raw = dr_content[:conselho_match.start()].strip()
-                # Calcular espaço disponível para o nome
-                max_nome = cols - 5  # desconta "DR(A)"
-                if conselho_str:
-                    max_nome = cols - 5 - len(conselho_str) - 1
-                nome_abreviado = _abbreviate_name(nome_raw, max(0, max_nome))
-                medico_final = f"DR(A){nome_abreviado}"
-                if conselho_str:
-                    medico_final = f"{medico_final} {conselho_str}"
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, medico_final[:cols]))
-            else:
-                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
+            y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
+            # WYSIWYG: imprimir literal, sem re-parsear/re-abreviar
+            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
+            visible_idx += 1
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
