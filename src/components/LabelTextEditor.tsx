@@ -201,6 +201,9 @@ const limparNomeProduto = (nome: string): string => {
   for (const s of sufixos) {
     if (n.endsWith(s.trimEnd())) { n = n.substring(0, n.length - s.trimEnd().length).trimEnd(); break; }
   }
+  // Remove sufixos de volume (ex: " - 2ML", " 2ML", " 5ML", " 10ML")
+  n = n.replace(/\s*-\s*\d+(?:[.,]\d+)?\s*ML\s*$/i, "").trimEnd();
+  n = n.replace(/\s+\d+(?:[.,]\d+)?\s*ML\s*$/i, "").trimEnd();
   return n;
 };
 
