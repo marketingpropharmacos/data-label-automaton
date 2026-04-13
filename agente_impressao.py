@@ -901,15 +901,29 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
         pplb_lines = []
         vis_idx = 0
         for line_text in linhas_texto:
-            if not line_text.strip():
+            raw_line = line_text.rstrip('\r')
+            if not raw_line.strip():
                 continue  # pular linhas vazias sem avançar Y
             if vis_idx >= len(y_positions):
                 break
+
             y = y_positions[vis_idx]
-            # WYSIWYG: preservar espaços iniciais (alinhamento de REG/CRM à direita)
-            clean = line_text.rstrip()
-            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, clean))
+            stripped = raw_line.lstrip()
+            leading_spaces = len(raw_line) - len(stripped)
+
+            x_line = x_paciente
+            text_to_print = raw_line.rstrip()
+
+            # No hardware Argox, espaços no início não deslocam o texto de forma confiável.
+            # Quando a linha é um REG alinhado visualmente à direita no editor,
+            # converter o recuo em âncora física real evita que ele volte para a esquerda.
+            if leading_spaces > 0 and stripped.upper().startswith('REG:'):
+                x_line = x_reg
+                text_to_print = stripped.rstrip()
+
+            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_line, text_to_print))
             vis_idx += 1
+
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
