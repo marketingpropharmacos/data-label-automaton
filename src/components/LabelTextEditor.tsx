@@ -1370,7 +1370,18 @@ const LabelTextEditor = ({
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPrintQuantity(q => Math.max(1, q - 1))}>
               <Minus className="h-3 w-3" />
             </Button>
-            <span className="text-sm font-mono w-6 text-center">{printQuantity}</span>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={printQuantity}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) setPrintQuantity(Math.max(1, Math.min(50, val)));
+                else if (e.target.value === '') setPrintQuantity(1);
+              }}
+              className="w-10 text-center text-sm font-mono bg-transparent border-none outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPrintQuantity(q => Math.min(50, q + 1))}>
               <Plus className="h-3 w-3" />
             </Button>
