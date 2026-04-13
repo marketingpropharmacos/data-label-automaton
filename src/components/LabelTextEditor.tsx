@@ -1132,7 +1132,8 @@ const LabelTextEditor = ({
         texto_livre: r.textoLivre,
         saved_by: user?.id || null,
         updated_at: new Date().toISOString(),
-      }));
+      }))
+      .map(u => ({ ...u, layout_type: layoutType }));
 
     if (upserts.length === 0) {
       setSaveStatus('idle');
@@ -1141,7 +1142,7 @@ const LabelTextEditor = ({
 
     const { error } = await supabase
       .from('saved_rotulos')
-      .upsert(upserts, { onConflict: 'nr_requisicao,item_id' });
+      .upsert(upserts as any, { onConflict: 'nr_requisicao,item_id,layout_type' });
 
     if (error) {
       setSaveStatus('error');

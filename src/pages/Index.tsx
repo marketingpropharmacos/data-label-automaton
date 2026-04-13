@@ -161,7 +161,29 @@ const Index = () => {
     setLayoutType(newType);
     setSelectedLayout(newType);
     setLayoutConfig(getLayout(newType));
-    setRotulos(prev => prev.map(r => ({ ...r, textoLivre: undefined })));
+    // Tentar restaurar textoLivre salvo para o novo layout
+    if (rotulos.length > 0 && searchedRequisition) {
+      const canonicalReq = rotulos[0]?.nrRequisicao?.trim() || searchedRequisition;
+      supabase
+        .from('saved_rotulos')
+        .select('item_id, texto_livre')
+        .eq('nr_requisicao', canonicalReq)
+        .eq('layout_type', newType)
+        .then(({ data: savedRows }) => {
+          if (savedRows && savedRows.length > 0) {
+            const savedMap: Record<string, string> = {};
+            savedRows.forEach(row => { savedMap[row.item_id] = row.texto_livre; });
+            setRotulos(prev => prev.map(r => {
+              const saved = savedMap[r.id];
+              return { ...r, textoLivre: saved ?? undefined };
+            }));
+          } else {
+            setRotulos(prev => prev.map(r => ({ ...r, textoLivre: undefined })));
+          }
+        });
+    } else {
+      setRotulos(prev => prev.map(r => ({ ...r, textoLivre: undefined })));
+    }
   };
 
   const handleLayoutEditorSave = (newLayout: LayoutConfig) => {
@@ -186,8 +208,9 @@ const Index = () => {
         console.log('[Restore] Buscando saved_rotulos para req:', canonicalReq, '(input:', requisitionNumber, ')');
         const { data: savedRows } = await supabase
           .from('saved_rotulos')
-          .select('item_id, texto_livre')
-          .eq('nr_requisicao', canonicalReq);
+          .select('item_id, texto_livre, layout_type')
+          .eq('nr_requisicao', canonicalReq)
+          .eq('layout_type', layoutType);
         
         console.log('[Restore] savedRows encontrados:', savedRows?.length || 0, savedRows?.map(r => r.item_id));
         console.log('[Restore] rotulo IDs do backend:', result.data!.map(r => r.id));
