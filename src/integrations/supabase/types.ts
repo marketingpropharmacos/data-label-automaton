@@ -4216,6 +4216,7 @@ export type Database = {
         Row: {
           id: number
           item_id: string
+          layout_type: string
           nr_requisicao: string
           saved_by: string | null
           texto_livre: string
@@ -4224,6 +4225,7 @@ export type Database = {
         Insert: {
           id?: never
           item_id: string
+          layout_type: string
           nr_requisicao: string
           saved_by?: string | null
           texto_livre: string
@@ -4232,6 +4234,7 @@ export type Database = {
         Update: {
           id?: never
           item_id?: string
+          layout_type?: string
           nr_requisicao?: string
           saved_by?: string | null
           texto_livre?: string
