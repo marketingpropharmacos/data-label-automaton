@@ -180,11 +180,14 @@ const Index = () => {
       // Restaurar edições salvas do Supabase (somente se compatível com layout atual)
       let restoredRotulos = result.data;
       try {
-        console.log('[Restore] Buscando saved_rotulos para req:', requisitionNumber);
+        // Usar o nrRequisicao canônico dos dados (não o input do usuário)
+        // para garantir que a busca salva/restaura usa o mesmo formato
+        const canonicalReq = result.data![0]?.nrRequisicao?.trim() || requisitionNumber;
+        console.log('[Restore] Buscando saved_rotulos para req:', canonicalReq, '(input:', requisitionNumber, ')');
         const { data: savedRows } = await supabase
           .from('saved_rotulos')
           .select('item_id, texto_livre')
-          .eq('nr_requisicao', requisitionNumber);
+          .eq('nr_requisicao', canonicalReq);
         
         console.log('[Restore] savedRows encontrados:', savedRows?.length || 0, savedRows?.map(r => r.item_id));
         console.log('[Restore] rotulo IDs do backend:', result.data!.map(r => r.id));

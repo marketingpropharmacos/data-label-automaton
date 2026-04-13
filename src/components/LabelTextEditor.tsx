@@ -1105,7 +1105,9 @@ const LabelTextEditor = ({
 
   // ---- Core save function ----
   const performSave = async (isAutosave: boolean) => {
-    const nrReq = searchedRequisition?.trim() || rotulos[0]?.nrRequisicao?.trim();
+    // SEMPRE usar o nrRequisicao do próprio rótulo (canônico) em vez de searchedRequisition
+    // Isso evita race condition quando o usuário troca de req antes do autosave disparar
+    const nrReq = rotulos[0]?.nrRequisicao?.trim() || searchedRequisition?.trim();
 
     if (!nrReq || rotulos.length === 0) {
       if (!isAutosave) {
