@@ -616,18 +616,18 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   const metaParts = [phVal, loteStr, fabStr, valStr].filter(Boolean);
   lines.push(indentLine(metaParts.join(' ')));
 
-  // ── USO | AP:... | REG: — compact 3-zone ──
+  // ── USO | AP:... (full line, no REG here) ──
   const posologia = rotulo.posologia?.toUpperCase() || "";
   const usoText = /^\d+$/.test(posologia) ? "" : posologia;
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
-  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "REG:";
   const leftPart = usoText + (aplicacaoStr ? '  ' + aplicacaoStr : '');
-  lines.push(compactLine(leftPart, regStr, 2));
+  lines.push(indentLine(leftPart));
 
-  // ── CONTEM (full line) ──
+  // ── CONTEM (left) | REG (right) — compact gap ──
   const contemStr = rotulo.contem?.trim() ? `CONTEM:${rotulo.contem.trim().toUpperCase()}` : "CONTEM:";
-  lines.push(indentLine(contemStr));
+  const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "REG:";
+  lines.push(compactLine(contemStr, regStr, 3));
 
   return lines.join('\n');
 }
