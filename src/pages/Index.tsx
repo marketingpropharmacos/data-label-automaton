@@ -199,9 +199,7 @@ const Index = () => {
               if (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') {
                 return; // forçar regeneração completa com regras atualizadas
               }
-              if (layoutType === 'AMP10' && !isAmp10SavedTextValid(row.texto_livre, rotulo)) {
-                return;
-              }
+              // AMP10: sempre restaurar texto salvo (WYSIWYG — operador decide o conteúdo)
               savedMap[row.item_id] = row.texto_livre;
             }
           });
