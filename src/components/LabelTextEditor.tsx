@@ -1010,12 +1010,7 @@ const LabelTextEditor = ({
         }
       }
 
-      if (resolvedLayoutTipo === 'AMP10' && !isAmp10SavedTextValid(rotulo.textoLivre, rotulo)) {
-        const freshGenerated = generateText(rotulo, layoutConfig, layoutType, amp10Opts);
-        if (freshGenerated !== rotulo.textoLivre) {
-          onTextChange(rotulo.id, freshGenerated);
-        }
-      }
+      // AMP10: não sobrescrever texto salvo — WYSIWYG, operador decide o conteúdo
       return;
     }
 
