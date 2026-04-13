@@ -297,9 +297,9 @@ def mm_to_dots(value_01mm):
 # ============================================
 def _crm_completo(rotulo):
     """Formato FC: CONSELHO-UF-NUMERO (ex: COREN-SP-826211, CRM-MG-12345)."""
-    prefixo = rotulo.get('prefixoCRM', '')
-    numero = rotulo.get('numeroCRM', '')
-    uf = rotulo.get('ufCRM', '')
+    prefixo = str(rotulo.get('prefixoCRM', '') or '').strip()
+    numero = str(rotulo.get('numeroCRM', '') or '').strip()
+    uf = str(rotulo.get('ufCRM', '') or '').strip()
     parts = [p for p in [prefixo, uf, numero] if p]
     return '-'.join(parts) if parts else ''
 
@@ -600,9 +600,9 @@ def _clean_patient_name(name):
 
 def _format_conselho_dots(rotulo):
     """Formato FC com pontos: CONSELHO.UF-NUMERO (ex: COREN.SP-1038417)."""
-    prefixo = rotulo.get('prefixoCRM', '')
-    numero = rotulo.get('numeroCRM', '')
-    uf = rotulo.get('ufCRM', '')
+    prefixo = str(rotulo.get('prefixoCRM', '') or '').strip()
+    numero = str(rotulo.get('numeroCRM', '') or '').strip()
+    uf = str(rotulo.get('ufCRM', '') or '').strip()
     if prefixo and uf and numero:
         return f"{prefixo}.{uf}-{numero}"
     parts = [p for p in [prefixo, uf, numero] if p]
