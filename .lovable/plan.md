@@ -1,29 +1,49 @@
 
 
-# Corrigir sincronização do "Salvar" entre PCs (Daniel/Edi)
+# Fix: Texto salvo não restaura nos outros PCs (AMP10)
 
-## Problema identificado
+## Causa raiz
 
-O salvamento no Supabase funciona corretamente (a gravação via `upsert` está OK e as políticas RLS permitem leitura/escrita para qualquer usuário autenticado). O problema é que **ao carregar**, a função `isAmp10SavedTextValid` descarta o texto salvo porque a validação é extremamente rígida — ela exige tokens exatos como `REQ:`, `DR(A)`, `USO`, `CONTEM:`, `AP:`, `REG:` nas posições corretas.
+O texto está sendo salvo corretamente no Supabase (confirmei nos dados — req 10106, 9859, etc. estão todos lá). O problema é que ao restaurar, existe uma validação de largura de coluna (linha 196-197 de `Index.tsx`) que descarta o texto salvo:
 
-Quando o operador faz edições manuais (WYSIWYG), o texto editado pode não passar mais nessa validação, e o sistema regenera o texto do zero — dando a impressão de que "não salvou".
+```typescript
+const maxLineLen = Math.max(...row.texto_livre.split('\n').map(...));
+if (Math.abs(maxLineLen - currentCols) <= 5) { // ← rejeita se diferença > 5
+```
 
-Esse problema ocorre em **dois lugares**:
-1. **`src/pages/Index.tsx`** (linha 202): ao buscar uma requisição, descarta texto salvo que falha na validação
-2. **`src/components/LabelTextEditor.tsx`** (linha 1013): ao trocar de layout, descarta texto editado que falha na validação
+Para AMP10, `colunasMax = 65`, mas as linhas reais do editor raramente chegam a 65 caracteres (tipicamente 40-55). A diferença ultrapassa 5, e o texto é descartado silenciosamente. O outro PC busca a requisição, o texto salvo é encontrado no banco, mas falha nessa validação e nunca chega ao editor.
 
-## Solução
+## Correção
 
-Para o layout **AMP10**, remover a validação restritiva `isAmp10SavedTextValid` na **restauração de texto salvo**. Se existe texto salvo no Supabase para aquele item, ele deve ser restaurado tal como foi salvo — o operador é quem decide o conteúdo.
+### `src/pages/Index.tsx` — Pular validação de largura para AMP10
 
-### Alterações
+No bloco de restauração (linhas 191-204), para o layout AMP10, adicionar o texto salvo ao `savedMap` diretamente, sem passar pela checagem de `maxLineLen`:
 
-1. **`src/pages/Index.tsx`** — Remover a checagem `isAmp10SavedTextValid` no bloco de restauração (linhas 202-204). Texto salvo para AMP10 será restaurado sempre.
+```typescript
+savedRows.forEach(row => {
+  const rotulo = rotuloById.get(row.item_id);
+  if (!rotulo) return;
 
-2. **`src/components/LabelTextEditor.tsx`** — Relaxar ou remover a checagem `isAmp10SavedTextValid` na troca de layout (linha 1013) para não sobrescrever edições do usuário.
+  // AMP10: confiança total no texto salvo (WYSIWYG)
+  if (layoutType === 'AMP10') {
+    savedMap[row.item_id] = row.texto_livre;
+    return;
+  }
+
+  // Outros layouts: manter validação de largura
+  if (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') return;
+  const maxLineLen = Math.max(...row.texto_livre.split('\n').map(...));
+  if (Math.abs(maxLineLen - currentCols) <= 5) {
+    savedMap[row.item_id] = row.texto_livre;
+  }
+});
+```
 
 ### O que NÃO será alterado
-- Nenhum layout ou coordenada
+- Nenhum layout, coordenada ou fonte
 - A lógica de salvamento (upsert) permanece igual
-- A validação para `A_PAC_PEQ` e `A_PAC_GRAN` permanece (esses layouts forçam regeneração por design)
+- Validação para A_PAC_PEQ e A_PAC_GRAN continua descartando (por design)
+
+### Resultado esperado
+Ao buscar a mesma requisição no PC do Daniel ou da Edi, o texto editado e salvo em outro PC será restaurado corretamente.
 
