@@ -195,6 +195,12 @@ const Index = () => {
             // Confiança total no texto salvo para todos os layouts (WYSIWYG — operador decide o conteúdo)
             savedMap[row.item_id] = row.texto_livre;
           });
+          restoredRotulos = result.data.map(r => {
+            const savedText = savedMap[r.id];
+            return savedText ? { ...r, textoLivre: savedText } : r;
+          });
+        }
+      } catch { /* ignore */ }
 
       setRotulos(restoredRotulos);
       setCurrentIndex(0);
