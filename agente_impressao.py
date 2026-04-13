@@ -897,13 +897,19 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
 
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        linhas_texto = [l for l in texto_livre.split('\n') if l.strip()]
+        linhas_texto = texto_livre.split('\n')
         pplb_lines = []
-        for idx, line_text in enumerate(linhas_texto):
-            y = y_positions[idx] if idx < len(y_positions) else y_positions[-1]
-            stripped = line_text.strip()
-            # WYSIWYG: imprimir cada linha literal em X=12, sem decomposição
-            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
+        vis_idx = 0
+        for line_text in linhas_texto:
+            if not line_text.strip():
+                continue  # pular linhas vazias sem avançar Y
+            if vis_idx >= len(y_positions):
+                break
+            y = y_positions[vis_idx]
+            # WYSIWYG: preservar espaços iniciais (alinhamento de REG/CRM à direita)
+            clean = line_text.rstrip()
+            pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, clean))
+            vis_idx += 1
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
