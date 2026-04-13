@@ -1,45 +1,32 @@
 
 
-# Corrigir erro "Erro na impressão" no AMP10
+# WYSIWYG real para AMP10 — o que você edita é o que imprime
 
-## Problema identificado
+## Problema
 
-O erro `sequence item 2: expected str instance, int found` ocorre em **`agente_impressao.py`** nas funções:
+Hoje, quando o `textoLivre` chega ao agente, a função `_render_amp10_text_line` **desmonta cada linha com regex** (procura `REQ:`, `pH:`, `L:`, `F:`, `V:`, `AP:`, `REG:`, etc.) e **força cada pedaço de volta para coordenadas X fixas** (x_left=14, x_req=196, x_lote=53…). Isso significa que qualquer edição manual — mudar espaçamento, mover um campo, adicionar texto livre — é ignorada na impressão porque o agente reconstrói a linha do zero.
 
-1. **`_crm_completo()`** (linha 303): `'-'.join(parts)` — `numeroCRM` chega como `int` (ex: `59418`) e o `join` exige strings.
-2. **`_format_conselho_dots()`** (linha 606-608): mesmo problema — usa `f"{prefixo}.{uf}-{numero}"` que funciona, mas o fallback na linha 608 com `'-'.join(parts)` também quebra.
+## Solução
 
-O frontend (`printAgentService.ts`) envia `numeroCRM` tal como vem do dado original (número), sem converter para string.
+Trocar a lógica de reancoragem por **impressão literal linha-a-linha**: cada linha do `textoLivre` é enviada como uma única string contínua na posição X=14 (margem esquerda), exatamente como o editor mostra. Os espaços que o operador colocou no editor se tornam espaços reais na etiqueta impressa.
 
-## Plano (sem mexer em layout nenhum)
+## O que será alterado
 
-### 1. Corrigir `agente_impressao.py` — forçar `str()` nos helpers de CRM
+### 1. `agente_impressao.py` — simplificar `_gerar_from_texto_livre_amp10`
 
-Em `_crm_completo()` e `_format_conselho_dots()`, converter `prefixo`, `numero` e `uf` para `str(...)` antes de usar:
+- Remover a chamada a `_render_amp10_text_line` (que faz o parsing/reancoragem)
+- Substituir por lógica direta: para cada linha visível do `textoLivre`, gerar um único comando `ppla_text_dots(rot, font, 1, 1, y, x_left, linha_completa)`
+- Manter o strip do recuo de 3 espaços da margem esquerda (que mapeia para X=14)
+- Manter a expansão dinâmica de Y e o `lineSpacingFactor`
+- Linhas vazias continuam sendo ignoradas (sem avançar Y)
 
-```python
-prefixo = str(rotulo.get('prefixoCRM', '') or '').strip()
-numero = str(rotulo.get('numeroCRM', '') or '').strip()
-uf = str(rotulo.get('ufCRM', '') or '').strip()
-```
+### 2. Nenhuma outra alteração
 
-### 2. Reforçar o frontend — converter `numeroCRM` para string no payload
+- Nenhum layout será modificado (coordenadas Y, fonte, rotação — tudo fica igual)
+- Nenhuma alteração no frontend
+- A geração estruturada (quando não há `textoLivre`) continua usando as posições fixas do FC como fallback
 
-Em `src/services/printAgentService.ts`, na função `imprimirViaAgente`, garantir:
+## Resultado esperado
 
-```typescript
-numeroCRM: String(r.numeroCRM || ''),
-prefixoCRM: String(r.prefixoCRM || ''),
-ufCRM: String(r.ufCRM || ''),
-```
-
-### O que NÃO será alterado
-
-- Nenhum layout (AMP10, AMP_CX, etc.)
-- Nenhuma coordenada, fonte ou espaçamento
-- Nenhuma lógica de formatação de texto
-
-### Resultado esperado
-
-O comando imprimir volta a funcionar sem o erro "Nenhum comando gerado", mantendo exatamente o comportamento atual de layout.
+Se você editar o texto no editor e trocar "AP:IM/EV" por "AP:IM/SC", ou adicionar um espaço, ou mudar qualquer coisa — a etiqueta impressa refletirá exatamente o que está na tela.
 
