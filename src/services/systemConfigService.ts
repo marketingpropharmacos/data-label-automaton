@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ApiConfig, PharmacyConfig } from "@/types/requisicao";
 import { PrintStation, LayoutPrinterMap } from "@/config/api";
+import { LAYOUTS_STORAGE_KEY } from "@/config/layouts";
 
 type ConfigKey =
   | "api_config"
@@ -9,7 +10,8 @@ type ConfigKey =
   | "layout_printer_map"
   | "layout_station_map"
   | "print_agent_config"
-  | "modo_impressao";
+  | "modo_impressao"
+  | "label_layouts";
 
 // ── Read ────────────────────────────────────────────────────────────
 
@@ -63,6 +65,7 @@ export const SystemConfigService = {
         layout_printer_map: "label-system-layout-printer-map",
         print_agent_config: "label-system-print-agent-config",
         modo_impressao: "label-system-modo-impressao",
+        label_layouts: LAYOUTS_STORAGE_KEY,
       };
 
       for (const row of data) {
@@ -135,6 +138,7 @@ export const SystemConfigService = {
   saveLayoutStationMap: (map: Record<string, string>) => setConfig("layout_station_map", map),
   saveModoImpressao: (modo: string) => setConfig("modo_impressao", modo),
   savePrintAgentConfig: (config: object) => setConfig("print_agent_config", config),
+  saveLabelLayouts: (layouts: object) => setConfig("label_layouts", layouts),
 
   // Read individual configs
   getApiConfig: () => getConfig<ApiConfig>("api_config"),
@@ -142,6 +146,7 @@ export const SystemConfigService = {
   getPrintStations: () => getConfig<PrintStation[]>("print_stations"),
   getLayoutPrinterMap: () => getConfig<LayoutPrinterMap>("layout_printer_map"),
   getLayoutStationMap: () => getConfig<Record<string, string>>("layout_station_map"),
+  getLabelLayouts: () => getConfig<object>("label_layouts"),
 
   // Save all current localStorage configs to Supabase (admin bulk save)
   async pushLocalStorageToSupabase(): Promise<boolean> {
@@ -153,6 +158,7 @@ export const SystemConfigService = {
         { configKey: "layout_printer_map", storageKey: "label-system-layout-printer-map" },
         { configKey: "print_agent_config", storageKey: "label-system-print-agent-config" },
         { configKey: "modo_impressao", storageKey: "label-system-modo-impressao" },
+        { configKey: "label_layouts", storageKey: LAYOUTS_STORAGE_KEY },
       ];
 
       for (const { configKey, storageKey } of keys) {

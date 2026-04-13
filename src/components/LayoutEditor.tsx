@@ -5,9 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Save, RotateCcw, GripVertical, ChevronUp, ChevronDown, Plus, Trash2, Bold, Type } from "lucide-react";
 import { LayoutConfig, LabelFieldId, FieldConfig, LineConfig, RotuloItem, PharmacyConfig, LabelConfig } from "@/types/requisicao";
-import { fieldLabels, saveLayout, resetLayout } from "@/config/layouts";
+import { fieldLabels, saveLayout, resetLayout, LAYOUTS_STORAGE_KEY } from "@/config/layouts";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SystemConfigService } from "@/services/systemConfigService";
 
 // Dimensões fixas do preview
 const PREVIEW_WIDTH = 380;
@@ -209,8 +210,12 @@ const LayoutEditor = ({
     return allFieldIds.filter(f => !usedFields.has(f));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     saveLayout(editedLayout);
+    const savedLayoutsRaw = localStorage.getItem(LAYOUTS_STORAGE_KEY);
+    if (savedLayoutsRaw) {
+      await SystemConfigService.saveLabelLayouts(JSON.parse(savedLayoutsRaw));
+    }
     onSave(editedLayout);
     toast({
       title: "Layout salvo!",

@@ -166,6 +166,7 @@ const Index = () => {
 
   const handleLayoutEditorSave = (newLayout: LayoutConfig) => {
     setLayoutConfig(newLayout);
+    setRotulos(prev => prev.map(r => ({ ...r, textoLivre: undefined })));
     setEditorOpen(false);
   };
 
