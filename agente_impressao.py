@@ -897,25 +897,37 @@ def gerar_ppla_a_pac_peq(rotulo, farmacia, dims=None, calibracao=None):
 
     texto_livre = rotulo.get('textoLivre', '')
     if texto_livre:
-        lsf = float(rotulo.get('lineSpacingFactor', 1.0) or 1.0)
-        linhas_texto = texto_livre.split('\n')
+        import re as _re
+        linhas_texto = [l for l in texto_livre.split('\n') if l.strip()]
         pplb_lines = []
-        y_positions_calc = list(y_positions)
-        if lsf != 1.0 and len(y_positions_calc) >= 2:
-            base_y = y_positions_calc[0]
-            step = y_positions_calc[1] - y_positions_calc[0]
-            for i in range(1, len(y_positions_calc)):
-                y_positions_calc[i] = base_y + int(step * lsf * i)
 
-        visible_idx = 0
-        for line_text in linhas_texto:
+        for idx, line_text in enumerate(linhas_texto):
+            y = y_positions[idx] if idx < len(y_positions) else y_positions[-1]
             stripped = line_text.strip()
-            if not stripped:
+
+            # Detectar REQ: ancorado à direita (X=116) na mesma linha
+            req_match = _re.search(r'(REQ:\S+)', stripped)
+            if req_match:
+                left_part = stripped[:req_match.start()].rstrip()
+                req_part = req_match.group(1)
+                if left_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, left_part[:25]))
+                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_req, req_part))
                 continue
-            y = y_positions_calc[visible_idx] if visible_idx < len(y_positions_calc) else y_positions_calc[-1]
-            # WYSIWYG: imprimir literal, sem re-parsear/re-abreviar
+
+            # Detectar REG: sozinho ou ancorado à direita (X=129)
+            reg_match = _re.search(r'(REG:\S+)', stripped)
+            if reg_match:
+                left_part = stripped[:reg_match.start()].rstrip()
+                reg_part = reg_match.group(1)
+                if left_part:
+                    pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, left_part[:cols]))
+                pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_reg, reg_part))
+                continue
+
+            # Linha normal (DR(A)... + conselho): imprimir literal em X=12
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y, x_paciente, stripped[:cols]))
-            visible_idx += 1
+
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, wmult, hmult, y_positions[0], x_paciente, 'SEM DADOS'))
         return _build_label_ppla(pplb_lines, cal)
