@@ -468,10 +468,16 @@ def gerar_ppla_ampcx(rotulo, farmacia, dims=None, calibracao=None):
             step = y_dots_calc[-1] - y_dots_calc[-2]
             while len(y_dots_calc) < len(linhas_texto):
                 y_dots_calc.append(y_dots_calc[-1] + step)
-        for i, line_text in enumerate(linhas_texto):
-            y = y_dots_calc[i]
-            if line_text.strip():
-                pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['left'], line_text[:cols]))
+        # WYSIWYG: vis_idx pattern (mesma lógica do AMP10) — pula linhas vazias sem desincar Y
+        vis_idx = 0
+        for line_text in linhas_texto:
+            if not line_text.strip():
+                continue
+            if vis_idx >= len(y_dots_calc):
+                break
+            y = y_dots_calc[vis_idx]
+            pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y, x_dots_map['left'], line_text.rstrip()))
+            vis_idx += 1
         if not pplb_lines:
             pplb_lines.append(ppla_text_dots(rot, font, 1, 1, y_dots_calc[0], x_dots_map['left'], 'SEM DADOS'))
         return _build_label_ampcx(pplb_lines, dims, cal)
