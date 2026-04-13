@@ -3837,21 +3837,25 @@ def buscar_requisicao(nr_requisicao):
                 """, (codigo_busca,))
                 todos_args_containing = cursor.fetchall()
                 
-                # Filtra registros que contêm o código buscado (correção: aceita sufixos)
+                # Filtra registros que correspondem ao código do produto (não substring acidental)
+                # Ex: OBSFIC9290514 (OBSFIC + CDPRO 92905 + FRFAR 14) -> válido
+                # Ex: 2929057 (código IBGE de município que contém "92905") -> rejeitado
                 todos_args = []
                 for arg in todos_args_containing:
                     argumento = arg[0].strip() if arg[0] else ""
                     # Remove prefixo OBSFIC para comparação
                     codigo_no_arg = argumento.replace("OBSFIC", "").strip()
-                    
-                    # Aceita se o código buscado está CONTIDO no argumento (não só terminando)
-                    # Ex: OBSFIC9244614 -> extrai "9244614" -> contém "92446"? -> ACEITA
-                    if (codigo_busca in codigo_no_arg or 
-                        codigo_busca_padded in codigo_no_arg or
-                        argumento.endswith(codigo_busca) or 
+
+                    # Aceita apenas se o código está no INÍCIO do argumento (sem OBSFIC)
+                    # Isso cobre OBSFIC9290514 (começa com 92905) mas rejeita 2929057 (código IBGE)
+                    if (codigo_no_arg == codigo_busca or
+                        codigo_no_arg == codigo_busca_padded or
+                        codigo_no_arg.startswith(codigo_busca) or
+                        codigo_no_arg.startswith(codigo_busca_padded) or
+                        argumento.endswith(codigo_busca) or
                         argumento.endswith(codigo_busca_padded)):
                         todos_args.append(arg)
-                        print(f"    VALIDADO: '{argumento}' (código contido em '{codigo_no_arg}')")
+                        print(f"    VALIDADO: '{argumento}' (código no início de '{codigo_no_arg}')")
                     else:
                         print(f"    REJEITADO: '{argumento}' (não corresponde ao código)")
                 print(f"  Argumentos VALIDADOS após CONTAINING: {len(todos_args)}")
@@ -3873,14 +3877,16 @@ def buscar_requisicao(nr_requisicao):
                 """, (cdpro_str,))
                 todos_args_cdpro = cursor.fetchall()
                 
-                # Valida os resultados da busca por CDPRO
+                # Valida os resultados da busca por CDPRO (mesma lógica: início, não substring)
                 for arg in todos_args_cdpro:
                     argumento = arg[0].strip() if arg[0] else ""
                     codigo_no_arg = argumento.replace("OBSFIC", "").strip()
-                    
-                    if (cdpro_str in codigo_no_arg or 
-                        cdpro_padded in codigo_no_arg or
-                        argumento.endswith(cdpro_str) or 
+
+                    if (codigo_no_arg == cdpro_str or
+                        codigo_no_arg == cdpro_padded or
+                        codigo_no_arg.startswith(cdpro_str) or
+                        codigo_no_arg.startswith(cdpro_padded) or
+                        argumento.endswith(cdpro_str) or
                         argumento.endswith(cdpro_padded)):
                         todos_args.append(arg)
                         print(f"    VALIDADO (CDPRO): '{argumento}'")
