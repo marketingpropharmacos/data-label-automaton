@@ -191,6 +191,8 @@ def is_embalagem_ou_obs(linha: str) -> bool:
         # Termos operacionais/instruções
         'CATALOGO', 'PESAGEM', 'OBSERVACAO', 'INSTRUCAO', 'INSTRUC',
         'PREGA', 'SUG.', 'SUGESTAO', 'AVISO', 'OBS:',
+        # Instruções de uso (não são ativos farmacêuticos)
+        'USO SOMENTE', 'USO EXCLUSIV', 'USO APENAS', 'USO RESTRIT',
         # Medidas de embalagem
         'MENOR 3CM', 'MENOR 4CM', 'MENOR 5CM',
         # Registro (não é ativo)
