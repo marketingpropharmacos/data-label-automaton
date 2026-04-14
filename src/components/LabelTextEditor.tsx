@@ -196,8 +196,8 @@ const limparNomeProduto = (nome: string): string => {
   for (const p of prefixos) {
     if (n.startsWith(p)) { n = n.substring(p.length); break; }
   }
-  // Remove sufixos de via de administração
-  const sufixos = [" ENDOVENOSO", " ENDOVENOSA", " ENDOVE", " ENDOV", " ENDOVEN", " IV ", " IV"];
+  // Remove sufixos de via de administração (incluindo abreviações usadas no FC)
+  const sufixos = [" ENDOVENOSO", " ENDOVENOSA", " ENDOVE", " ENDOV", " ENDOVEN", " END", " IV ", " IV"];
   for (const s of sufixos) {
     if (n.endsWith(s.trimEnd())) { n = n.substring(0, n.length - s.trimEnd().length).trimEnd(); break; }
   }
@@ -228,10 +228,11 @@ const isValidComposicao = (texto: string): boolean => {
 
 const tiposPrescritores: Record<string, { conselho: string }> = {
   '1': { conselho: 'CRM' }, '2': { conselho: 'CRO' }, '3': { conselho: 'CRMV' },
-  '4': { conselho: '' }, '5': { conselho: 'CRP' }, '6': { conselho: 'CRF' },
+  '4': { conselho: 'CRN' }, '5': { conselho: 'CRP' }, '6': { conselho: 'CRF' },
   '7': { conselho: 'CRBM' }, '8': { conselho: 'CRFA' }, '9': { conselho: 'CRN' },
   'A': { conselho: 'CREFITO' }, 'B': { conselho: 'CREFITO' }, 'C': { conselho: 'COREN' },
   'D': { conselho: 'RMS' }, 'E': { conselho: 'CRBio' }, 'F': { conselho: 'CRO' },
+  'G': { conselho: 'CRM' },
 };
 
 // ---- A_PAC_PEQ specific generator (compact fixed grid, distinct from GRAN) ----
