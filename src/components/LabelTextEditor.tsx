@@ -376,7 +376,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   lines.push(metaParts.join('  ').substring(0, W));
 
   // ── LINE 6: Uso (left) | Aplicação (right) — compact gap ──
-  const usoText = ""; // posologia removida do rótulo
+  const usoText = rotulo.tipoUso?.toUpperCase() || "";
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
   lines.push(compactLine(usoText, aplicacaoStr, 4));
@@ -615,7 +615,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   lines.push(indentLine(metaParts.join(' ')));
 
   // ── USO | AP:... (full line, no REG here) ──
-  const usoText = ""; // posologia removida do rótulo
+  const usoText = rotulo.tipoUso?.toUpperCase() || "";
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const leftPart = usoText + (aplicacaoStr ? '  ' + aplicacaoStr : '');
