@@ -347,11 +347,13 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     });
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
-    const produtoText = mescla
-      ? (rotulo.composicao || "").toUpperCase()
-      : formatarFormula(rotulo.formula);
-    if (produtoText) {
-      wrapText(produtoText, W, 2).split('\n').forEach(l => lines.push(l));
+    if (mescla) {
+      // Cada ingrediente separado por ", " vira uma linha independente
+      const partes = (rotulo.composicao || "").toUpperCase().split(', ').map(p => p.trim()).filter(Boolean);
+      partes.forEach(p => lines.push(p.substring(0, W)));
+    } else {
+      const produtoText = formatarFormula(rotulo.formula);
+      if (produtoText) wrapText(produtoText, W, 2).split('\n').forEach(l => lines.push(l));
     }
   }
 
@@ -588,7 +590,9 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
     if (mescla) {
-      wrapText(rotulo.composicao!.toUpperCase(), CW, 3).split('\n').forEach(l => lines.push(indentLine(l)));
+      // Cada ingrediente separado por ", " vira uma linha independente
+      const partes = rotulo.composicao!.toUpperCase().split(', ').map(p => p.trim()).filter(Boolean);
+      partes.forEach(p => lines.push(indentLine(p)));
     } else {
       const f = formatarFormula(rotulo.formula);
       if (f) lines.push(indentLine(f));
@@ -838,7 +842,8 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
   if (vis('paciente') && rotulo.nomePaciente) lines.push(rotulo.nomePaciente.toUpperCase());
   if (vis('requisicao')) lines.push(`REQ:${rotulo.nrRequisicao}-${rotulo.nrItem || '0'}`);
   if (mescla && vis('composicao')) {
-    lines.push(rotulo.composicao!.toUpperCase());
+    // Cada ingrediente separado por ", " vira uma linha independente
+    rotulo.composicao!.toUpperCase().split(', ').map(p => p.trim()).filter(Boolean).forEach(p => lines.push(p));
   } else if (!mescla && vis('formula')) {
     const f = formatarFormula(rotulo.formula);
     if (f) lines.push(f);
