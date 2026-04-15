@@ -241,7 +241,7 @@ const isValidComposicao = (texto: string): boolean => {
 
 const tiposPrescritores: Record<string, { conselho: string }> = {
   '1': { conselho: 'CRM' }, '2': { conselho: 'CRO' }, '3': { conselho: 'CRMV' },
-  '4': { conselho: 'CNE' }, '5': { conselho: 'CRP' }, '6': { conselho: 'CRF' },
+  '4': { conselho: 'CNE.GR' }, '5': { conselho: 'CRP' }, '6': { conselho: 'CRF' },
   '7': { conselho: 'CRBM' }, '8': { conselho: 'CRFA' }, '9': { conselho: 'CRN' },
   'A': { conselho: 'CREFITO' }, 'B': { conselho: 'CREFITO' }, 'C': { conselho: 'COREN' },
   'D': { conselho: 'RMS' }, 'E': { conselho: 'CRBio' }, 'F': { conselho: 'CRO' },
@@ -304,7 +304,8 @@ function formatConselhoFC(prefixoCRM: string, ufCRM: string, numeroCRM: string):
   if (codigo.length > 1 && !/^\d+$/.test(codigo)) {
     return `${codigo}.${ufCRM}-${numeroCRM}`;
   }
-  return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
+  const sep = tipo.conselho.includes('.') ? '-' : '.';
+  return `${tipo.conselho}${sep}${ufCRM}-${numeroCRM}`;
 }
 
 // ---- AMP_CX specific generator — FIXED POSITION FIELD MAP ----
