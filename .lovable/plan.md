@@ -1,25 +1,45 @@
 
 
-# Restaurar `tipoUso` (ex: "USO EM CONSULTORIO") nos rótulos
+# Filtrar posologia: mostrar apenas quando for tipo de uso válido
 
 ## Problema
-Ao remover a `posologia`, o `tipoUso` também foi perdido porque ambos compartilhavam a mesma variável `usoText`. O campo `tipoUso` (ex: "USO EM CONSULTORIO") deve continuar aparecendo.
+Ao trocar de `posologia` para `tipoUso`, o rótulo agora mostra "USO NASAL" (valor do campo `tipoUso` no banco), mas o correto para esse item é "USO EM CONSULTORIO" que vinha da `posologia`. A posologia pode conter tanto tipos de uso válidos quanto instruções de tratamento que devem ser ocultadas.
 
-## Alteração
+## Solução
+Usar a `posologia` como fonte, mas **filtrar**: mostrar apenas se o texto corresponder a um tipo de uso conhecido. Caso contrário, ignorar.
+
+## Alteração técnica
 
 **Arquivo**: `src/components/LabelTextEditor.tsx`
 
-Nas 2 linhas onde `usoText` foi zerado (AMP_CX linha 379 e AMP10 linha 618), restaurar usando `rotulo.tipoUso` em vez de `rotulo.posologia`:
-
+1. Criar uma lista de tipos de uso válidos (mesmos do backend `servidor.py`):
 ```typescript
-// Antes (errado — removeu tudo):
-const usoText = "";
-
-// Depois (correto — usa tipoUso, ignora posologia):
-const usoText = rotulo.tipoUso?.toUpperCase() || "";
+const TIPOS_USO_VALIDOS = [
+  'USO INTERNO', 'USO EXTERNO', 'USO EM CONSULTORIO',
+  'USO VETERINARIO', 'USO TOPICO', 'USO OFTALMICO',
+  'USO NASAL', 'USO ORAL'
+];
 ```
 
-O layout TIRZ (linha 702) e o genérico A_PAC (linha 860) já estão corretos — ambos usam `rotulo.tipoUso`.
+2. Criar função helper:
+```typescript
+function extrairTipoUso(posologia: string, tipoUso: string): string {
+  const pos = posologia?.toUpperCase().trim() || "";
+  if (TIPOS_USO_VALIDOS.includes(pos)) return pos;
+  return tipoUso?.toUpperCase() || "";
+}
+```
 
-Resultado: "USO EM CONSULTORIO" volta a aparecer; "USO SOMENTE TRATAMENTO ALOPECIA" (posologia) continua removido.
+3. Nos 4 layouts (AMP_CX ~linha 379, AMP10 ~linha 618, TIRZ ~linha 702, genérico), substituir:
+```typescript
+// De:
+const usoText = rotulo.tipoUso?.toUpperCase() || "";
+// Para:
+const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+```
+
+## Resultado
+- Posologia = "USO EM CONSULTORIO" → aparece ✓
+- Posologia = "USO SOMENTE TRATAMENTO ALOPECIA" → ignorada, cai no fallback `tipoUso` ✓
+- Posologia vazia → usa `tipoUso` ✓
 
