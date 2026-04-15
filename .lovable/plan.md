@@ -1,39 +1,47 @@
 
 
-# Adicionar ".GR" ao conselho CNE nos rótulos
+# Corrigir formatação de mesclas no AMP10
 
-## O que muda
-O conselho de enfermagem (código `4`) passará de `CNE` para `CNE.GR`, resultando em formatações como `CNE.GR-RJ-69786` em vez de `CNE-RJ-69786`.
+## Problema
+No layout AMP10, mesclas estão sendo formatadas como kits — cada ingrediente numa linha separada. Isso faz o rótulo "estourar" as linhas disponíveis e perder informações como a linha de fórmula/descrição do produto.
+
+O comportamento correto (conforme seu exemplo) é:
+- **Composição**: ingredientes fluem numa string contínua, quebrando em novas linhas apenas quando excedem a largura da coluna
+- **Fórmula + volume**: aparece após a composição (ex: `AUMENTO DA MASSA MAGRA + BCAA - 4ML`)
+
+## Causa raiz
+Linha 607-608 do `generateTextAmp10`: cada ingrediente separado por `,` é colocado numa linha independente (`partes.forEach(p => lines.push(indentLine(p)))`). Além disso, quando é mescla, a linha de fórmula é totalmente omitida.
 
 ## Alteração técnica
 
-**Arquivo**: `src/components/LabelTextEditor.tsx`
+**Arquivo**: `src/components/LabelTextEditor.tsx` — função `generateTextAmp10`, bloco mescla (linhas ~603-613)
 
-1. **Linha 244** — Alterar o mapeamento do código `'4'`:
+**De**:
 ```typescript
-// De:
-'4': { conselho: 'CNE' },
-// Para:
-'4': { conselho: 'CNE.GR' },
+const partes = rotulo.composicao!.toUpperCase().split(', ').map(p => p.trim()).filter(Boolean);
+partes.forEach(p => lines.push(indentLine(p)));
 ```
 
-2. **Linha 307** (`formatConselhoFC`) — Evitar duplo ponto quando o conselho já contém `.`:
+**Para**:
 ```typescript
-// De:
-return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
-// Para:
-const sep = tipo.conselho.includes('.') ? '-' : '.';
-return `${tipo.conselho}${sep}${ufCRM}-${numeroCRM}`;
+// Composição como texto contínuo, quebrada por largura de coluna
+const compText = rotulo.composicao!.toUpperCase();
+wrapText(compText, CW, 3).split('\n').forEach(l => lines.push(indentLine(l)));
+
+// Fórmula/descrição com volume (sem limpar sufixo ML)
+const formulaRaw = (rotulo.formula || "").toUpperCase();
+if (formulaRaw) lines.push(indentLine(formulaRaw));
 ```
 
-Isso garante:
-- CRM → `CRM.SP-12345` (sem mudança)
-- CNE.GR → `CNE.GR-RJ-69786` ✓
+Isso produz:
+```
+   L VALINA 24MG,L LEUCINA 24MG
+   ISOLEUCINA 10MG,L ORNITINA 150MG, L CARNITINA 150MG,TAURINA 10%
+   AUMENTO DA MASSA MAGRA + BCAA - 4ML
+```
 
-Os outros pontos que formatam conselho inline (A_PAC_PEQ linha 267, A_PAC_GRAN linha 430, genérico linha 793) já usam o padrão `${conselhoNome}-UF-NUMERO`, que com `CNE.GR` produz `CNE.GR-RJ-69786` automaticamente.
-
-**Arquivo**: `src/config/pplaTemplates.ts` — O `extractFields` monta o CRM de forma diferente (concatenação bruta), mas não usa o mapeamento de `tiposPrescritores`, então não precisa de alteração.
+A mesma correção será aplicada ao bloco mescla do **AMP_CX** (linhas ~364-367) para manter consistência entre layouts de ampola.
 
 ## Resultado
-Todos os layouts mostrarão `CNE.GR-RJ-69786` em vez de `CNE-RJ-69786` para prescrições do tipo enfermagem.
+Mesclas no AMP10 terão a composição fluindo naturalmente nas linhas disponíveis, seguida da descrição do produto com volume, idêntico ao padrão Formula Certa.
 
