@@ -1,45 +1,39 @@
 
 
-# Filtrar posologia: mostrar apenas quando for tipo de uso válido
+# Adicionar ".GR" ao conselho CNE nos rótulos
 
-## Problema
-Ao trocar de `posologia` para `tipoUso`, o rótulo agora mostra "USO NASAL" (valor do campo `tipoUso` no banco), mas o correto para esse item é "USO EM CONSULTORIO" que vinha da `posologia`. A posologia pode conter tanto tipos de uso válidos quanto instruções de tratamento que devem ser ocultadas.
-
-## Solução
-Usar a `posologia` como fonte, mas **filtrar**: mostrar apenas se o texto corresponder a um tipo de uso conhecido. Caso contrário, ignorar.
+## O que muda
+O conselho de enfermagem (código `4`) passará de `CNE` para `CNE.GR`, resultando em formatações como `CNE.GR-RJ-69786` em vez de `CNE-RJ-69786`.
 
 ## Alteração técnica
 
 **Arquivo**: `src/components/LabelTextEditor.tsx`
 
-1. Criar uma lista de tipos de uso válidos (mesmos do backend `servidor.py`):
-```typescript
-const TIPOS_USO_VALIDOS = [
-  'USO INTERNO', 'USO EXTERNO', 'USO EM CONSULTORIO',
-  'USO VETERINARIO', 'USO TOPICO', 'USO OFTALMICO',
-  'USO NASAL', 'USO ORAL'
-];
-```
-
-2. Criar função helper:
-```typescript
-function extrairTipoUso(posologia: string, tipoUso: string): string {
-  const pos = posologia?.toUpperCase().trim() || "";
-  if (TIPOS_USO_VALIDOS.includes(pos)) return pos;
-  return tipoUso?.toUpperCase() || "";
-}
-```
-
-3. Nos 4 layouts (AMP_CX ~linha 379, AMP10 ~linha 618, TIRZ ~linha 702, genérico), substituir:
+1. **Linha 244** — Alterar o mapeamento do código `'4'`:
 ```typescript
 // De:
-const usoText = rotulo.tipoUso?.toUpperCase() || "";
+'4': { conselho: 'CNE' },
 // Para:
-const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+'4': { conselho: 'CNE.GR' },
 ```
 
+2. **Linha 307** (`formatConselhoFC`) — Evitar duplo ponto quando o conselho já contém `.`:
+```typescript
+// De:
+return `${tipo.conselho}.${ufCRM}-${numeroCRM}`;
+// Para:
+const sep = tipo.conselho.includes('.') ? '-' : '.';
+return `${tipo.conselho}${sep}${ufCRM}-${numeroCRM}`;
+```
+
+Isso garante:
+- CRM → `CRM.SP-12345` (sem mudança)
+- CNE.GR → `CNE.GR-RJ-69786` ✓
+
+Os outros pontos que formatam conselho inline (A_PAC_PEQ linha 267, A_PAC_GRAN linha 430, genérico linha 793) já usam o padrão `${conselhoNome}-UF-NUMERO`, que com `CNE.GR` produz `CNE.GR-RJ-69786` automaticamente.
+
+**Arquivo**: `src/config/pplaTemplates.ts` — O `extractFields` monta o CRM de forma diferente (concatenação bruta), mas não usa o mapeamento de `tiposPrescritores`, então não precisa de alteração.
+
 ## Resultado
-- Posologia = "USO EM CONSULTORIO" → aparece ✓
-- Posologia = "USO SOMENTE TRATAMENTO ALOPECIA" → ignorada, cai no fallback `tipoUso` ✓
-- Posologia vazia → usa `tipoUso` ✓
+Todos os layouts mostrarão `CNE.GR-RJ-69786` em vez de `CNE-RJ-69786` para prescrições do tipo enfermagem.
 
