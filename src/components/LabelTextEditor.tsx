@@ -8,6 +8,19 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
 
+// ---- Tipos de uso válidos (mesmos do backend servidor.py) ----
+const TIPOS_USO_VALIDOS = [
+  'USO INTERNO', 'USO EXTERNO', 'USO EM CONSULTORIO',
+  'USO VETERINARIO', 'USO TOPICO', 'USO OFTALMICO',
+  'USO NASAL', 'USO ORAL'
+];
+
+function extrairTipoUso(posologia: string | undefined, tipoUso: string | undefined): string {
+  const pos = posologia?.toUpperCase().trim() || "";
+  if (TIPOS_USO_VALIDOS.includes(pos)) return pos;
+  return tipoUso?.toUpperCase() || "";
+}
+
 // ---- Word-wrap utility ----
 function wrapText(text: string, maxCols: number, maxLines: number): string {
   const inputLines = text.split('\n');
@@ -376,7 +389,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   lines.push(metaParts.join('  ').substring(0, W));
 
   // ── LINE 6: Uso (left) | Aplicação (right) — compact gap ──
-  const usoText = rotulo.tipoUso?.toUpperCase() || "";
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
   lines.push(compactLine(usoText, aplicacaoStr, 4));
@@ -615,7 +628,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   lines.push(indentLine(metaParts.join(' ')));
 
   // ── USO | AP:... (full line, no REG here) ──
-  const usoText = rotulo.tipoUso?.toUpperCase() || "";
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const leftPart = usoText + (aplicacaoStr ? '  ' + aplicacaoStr : '');
@@ -699,7 +712,7 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   // ── LINE 6: Uso (left) | Aplicação (right) ──
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
-  const usoText = rotulo.tipoUso?.toUpperCase() || "";
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
   lines.push(fixedLine(usoText, aplicacaoStr, LEFT_USO, APLICACAO_WIDTH));
 
   // ── LINE 7: Contém (left) | REG (right) ──
@@ -857,7 +870,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (vis('contem') && rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
     if (infoLine.length > 0) lines.push(infoLine.join('  '));
   }
-  if (vis('tipoUso')) { const t = rotulo.tipoUso?.toUpperCase(); if (t && !/^\d+$/.test(t)) lines.push(t); }
+  if (vis('tipoUso')) { const t = extrairTipoUso(rotulo.posologia, rotulo.tipoUso); if (t && !/^\d+$/.test(t)) lines.push(t); }
   // posologia removida do rótulo
   if (vis('observacoes')) {
     const obs = rotulo.observacoes?.replace(/APLIC(?:AÇÃO|ACAO)?[:\s]+[^\n,;]+[,;\s]*/gi, "").trim();
