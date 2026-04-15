@@ -362,9 +362,12 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
     if (mescla) {
-      // Cada ingrediente separado por ", " vira uma linha independente
-      const partes = (rotulo.composicao || "").toUpperCase().split(', ').map(p => p.trim()).filter(Boolean);
-      partes.forEach(p => lines.push(p.substring(0, W)));
+      // Composição como texto contínuo, quebrada por largura de coluna
+      const compText = (rotulo.composicao || "").toUpperCase();
+      wrapText(compText, W, 2).split('\n').forEach(l => lines.push(l));
+      // Fórmula/descrição com volume
+      const formulaRaw = (rotulo.formula || "").toUpperCase();
+      if (formulaRaw) lines.push(formulaRaw.substring(0, W));
     } else {
       const produtoText = formatarFormula(rotulo.formula);
       if (produtoText) wrapText(produtoText, W, 2).split('\n').forEach(l => lines.push(l));
@@ -603,9 +606,12 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
     if (mescla) {
-      // Cada ingrediente separado por ", " vira uma linha independente
-      const partes = rotulo.composicao!.toUpperCase().split(', ').map(p => p.trim()).filter(Boolean);
-      partes.forEach(p => lines.push(indentLine(p)));
+      // Composição como texto contínuo, quebrada por largura de coluna
+      const compText = rotulo.composicao!.toUpperCase();
+      wrapText(compText, CW, 3).split('\n').forEach(l => lines.push(indentLine(l)));
+      // Fórmula/descrição com volume
+      const formulaRaw = (rotulo.formula || "").toUpperCase();
+      if (formulaRaw) lines.push(indentLine(formulaRaw));
     } else {
       const f = formatarFormula(rotulo.formula);
       if (f) lines.push(indentLine(f));
