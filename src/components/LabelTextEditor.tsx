@@ -649,43 +649,41 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   return lines.join('\n');
 }
 
-// ---- TIRZ specific generator — COMPACT LEFT-ALIGNED ----
-// 73 cols, 8 lines. Uses compactLine like AMP_CX for tight spacing.
+// ---- TIRZ specific generator — same physical format as A_PAC_PEQ (35x25mm, 41 cols) ----
+// Uses padLine and abbreviateNameStrict from PEQ, but includes extra product info.
 function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
-  const W = layoutConfig.colunasMax || 73;
+  const maxCols = layoutConfig.colunasMax || 41;
 
-  const compactLine = (left: string, right: string, gapSize = 4): string => {
-    const r = (right || "").trim();
-    if (!r) return (left || "").substring(0, W);
-    const maxLeft = W - r.length - gapSize;
-    const l = (left || "").substring(0, Math.max(0, maxLeft));
-    return (l + ' '.repeat(gapSize) + r).substring(0, W);
-  };
+  // ── LINE 1: Paciente + REQ (same as A_PAC_PEQ) ──
+  const reqNum = `${padReqNumber(rotulo.nrRequisicao)}-${rotulo.nrItem || '0'}`;
+  const req = `REQ:${reqNum}`;
+  const pacienteMax = maxCols - req.length - 1;
+  const paciente = abbreviateNameStrict(cleanPatientName(rotulo.nomePaciente || "").toUpperCase(), pacienteMax);
+  const line1 = padLine(paciente, req, maxCols);
 
-  const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
-  const reqPadded = padReqNumber(rotulo.nrRequisicao);
-  const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
-  const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
-
-  const lines: string[] = [];
-
-  // ── LINE 1: Paciente (left) | REQ (right) — compact gap ──
-  lines.push(compactLine(cleanName, reqStr, 4));
-
-  // ── LINE 2: DR(A)+Medico (left) | Conselho (right) — compact gap ──
-  const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
+  // ── LINE 2: DR(A)+Medico + Conselho (same as A_PAC_PEQ) ──
+  const codigo = (rotulo.prefixoCRM || '1').toUpperCase().trim();
+  const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
+  const conselhoNome = tipo.conselho || 'CRM';
+  const conselhoStr = rotulo.numeroCRM
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
+    : "";
+  const medicoMax = conselhoStr ? maxCols - 5 - conselhoStr.length - 1 : maxCols - 5;
+  const medico = rotulo.nomeMedico ? abbreviateNameStrict(rotulo.nomeMedico.toUpperCase(), Math.max(0, medicoMax)) : "";
   const drName = medico ? `DR(A)${medico}` : "";
-  lines.push(compactLine(drName, conselhoStr, 3));
+  const line2 = padLine(drName, conselhoStr, maxCols);
 
-  // ── LINE 3+: Fórmula/Produto + Posologia (wrapping) ──
+  const lines: string[] = [line1, line2];
+
+  // ── LINES 3+: Produto + Posologia (wrap at 41 cols) ──
   const produto = formatarFormula(rotulo.formula) || "";
   const posologia = rotulo.posologia?.toUpperCase().trim() || "";
   const produtoCompleto = posologia ? `${produto}   ${posologia}` : produto;
   if (produtoCompleto) {
-    wrapText(produtoCompleto, W, 0).split('\n').forEach(l => lines.push(l.substring(0, W)));
+    wrapText(produtoCompleto, maxCols, 0).split('\n').forEach(l => lines.push(l.substring(0, maxCols)));
   }
 
-  // ── LINE meta: pH | Lote | Fabricação | Validade — compact join ──
+  // ── LINE meta: pH | Lote | Fab | Val ──
   const phVal = rotulo.ph ? `PH:${String(rotulo.ph).replace('.', ',')}` : 'PH:';
   let loteStr = '';
   if (rotulo.lote) {
@@ -699,18 +697,19 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const fabStr = rotulo.dataFabricacao ? `F:${formatarDataCurta(rotulo.dataFabricacao)}` : '';
   const valStr = rotulo.dataValidade ? `V:${formatarDataCurta(rotulo.dataValidade)}` : '';
   const metaParts = [phVal, loteStr, fabStr, valStr].filter(Boolean);
-  lines.push(metaParts.join(' ').substring(0, W));
+  lines.push(metaParts.join(' ').substring(0, maxCols));
 
-  // ── LINE uso: Uso (left) | AP:xxx (right) — compact gap ──
+  // ── LINE uso + AP ──
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
-  lines.push(compactLine(usoText, aplicacaoStr, 3));
+  const usoLine = aplicacaoStr ? padLine(usoText, aplicacaoStr, maxCols) : usoText;
+  lines.push(usoLine.substring(0, maxCols));
 
-  // ── LINE contem: Contém (left) | REG (right) — compact gap ──
+  // ── LINE contem + REG ──
   const contemStr = rotulo.contem?.trim() ? `CONTEM:${rotulo.contem.trim().toUpperCase()}` : "CONTEM:";
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  lines.push(compactLine(contemStr, regStr, 3));
+  lines.push(padLine(contemStr, regStr, maxCols).substring(0, maxCols));
 
   return lines.join('\n');
 }
@@ -882,7 +881,7 @@ const getStoredFontSize = (layoutTipo?: string) => {
     const stored = localStorage.getItem(FONT_SIZE_KEY);
     if (stored) return parseInt(stored, 10);
   } catch {}
-  if (layoutTipo === 'A_PAC_PEQ') return 5;
+  if (layoutTipo === 'A_PAC_PEQ' || layoutTipo === 'TIRZ') return 5;
   if (layoutTipo === 'A_PAC_GRAN') return 10;
   return 14;
 };
