@@ -190,7 +190,7 @@ export const DEFAULT_DEFINITIONS: Record<LayoutType, PrinterDefinition> = {
     caracterPadrao: 20,
     medidas: {
       unidade: 'pol',
-      largura: 4.29,
+      largura: 1.39,
       altura: 1,
       margemSuperior: 0,
       margemEsquerda: 0,
@@ -203,7 +203,7 @@ export const DEFAULT_DEFINITIONS: Record<LayoutType, PrinterDefinition> = {
     },
     impressaoLocal: 'LPT1',
     impressaoRede: '',
-    fonte: 2,
+    fonte: 1,
     rotacaoFonte: 0,
     marcaImpressora: '',
     permitirImpressaoSemComponentes: false,

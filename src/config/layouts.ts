@@ -168,8 +168,8 @@ export const defaultLayouts: Record<LayoutType, LayoutConfig> = {
   TIRZ: {
     tipo: 'TIRZ',
     nome: 'Tirzepatida',
-    dimensoes: { larguraMM: 109, alturaMM: 25 },
-    colunasMax: 73,
+    dimensoes: { larguraMM: 35, alturaMM: 25 },
+    colunasMax: 41,
     linhasMax: 8,
     linhas: [
       { id: 'linha1', campos: ['paciente', 'requisicao'], spacing: 'normal' },

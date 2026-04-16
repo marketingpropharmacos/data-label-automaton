@@ -308,7 +308,7 @@ const Index = () => {
     let result;
 
     // A_PAC_PEQ usa sempre Agente (textoLivre WYSIWYG não funciona em ROTUTX)
-    const effectiveModo = (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN') ? 'agente' : modoImpressao;
+    const effectiveModo = (layoutType === 'A_PAC_PEQ' || layoutType === 'A_PAC_GRAN' || layoutType === 'TIRZ') ? 'agente' : modoImpressao;
 
     // Modo ROTUTX: usar bytes do Fórmula Certa direto
     if (effectiveModo === 'rotutx' && agentConfig.enabled && agentUrl) {
