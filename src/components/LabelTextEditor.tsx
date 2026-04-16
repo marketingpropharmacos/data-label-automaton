@@ -649,51 +649,33 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   return lines.join('\n');
 }
 
-// ---- TIRZ specific generator — FIXED POSITION FIELD MAP ----
-// 73 cols, 8 lines. Same anchored-zone pattern as AMP_CX.
+// ---- TIRZ specific generator — COMPACT LEFT-ALIGNED ----
+// 73 cols, 8 lines. Uses compactLine like AMP_CX for tight spacing.
 function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): string {
   const W = layoutConfig.colunasMax || 73;
 
-  // === Zone widths ===
-  const REQ_WIDTH = 18;
-  const CONSELHO_WIDTH = 20;
-  const APLICACAO_WIDTH = 25;
-  const REG_WIDTH = 20;
-
-  const LEFT_L1 = W - REQ_WIDTH;
-  const LEFT_L2 = W - CONSELHO_WIDTH;
-  const LEFT_USO = W - APLICACAO_WIDTH;
-  const LEFT_CONTEM = W - REG_WIDTH;
-
-  const fixedLine = (left: string, right: string, leftMax: number, rightMax: number): string => {
-    const l = (left || "").substring(0, leftMax);
-    const r = (right || "").substring(0, rightMax);
-    const gap = W - l.length - r.length;
-    if (gap <= 0) return (l + r).substring(0, W);
-    return l + ' '.repeat(gap) + r;
-  };
-
-  const fixedMetaLine = (ph: string, lote: string, fab: string, val: string): string => {
-    const zoneW = Math.floor(W / 4);
-    const zones = [ph, lote, fab, val];
-    return zones.map(z => (z || "").substring(0, zoneW).padEnd(zoneW)).join("").substring(0, W);
+  const compactLine = (left: string, right: string, gapSize = 4): string => {
+    const r = (right || "").trim();
+    if (!r) return (left || "").substring(0, W);
+    const maxLeft = W - r.length - gapSize;
+    const l = (left || "").substring(0, Math.max(0, maxLeft));
+    return (l + ' '.repeat(gapSize) + r).substring(0, W);
   };
 
   const cleanName = cleanPatientName(rotulo.nomePaciente || "").toUpperCase();
   const reqPadded = padReqNumber(rotulo.nrRequisicao);
   const reqStr = `REQ:${reqPadded}-${rotulo.nrItem || '0'}`;
-
   const conselhoStr = formatConselhoFC(rotulo.prefixoCRM, rotulo.ufCRM, rotulo.numeroCRM);
 
   const lines: string[] = [];
 
-  // ── LINE 1: Paciente (left) | REQ (right) ──
-  lines.push(fixedLine(cleanName, reqStr, LEFT_L1, REQ_WIDTH));
+  // ── LINE 1: Paciente (left) | REQ (right) — compact gap ──
+  lines.push(compactLine(cleanName, reqStr, 4));
 
-  // ── LINE 2: DR(A)+Medico (left) | Conselho (right) ──
+  // ── LINE 2: DR(A)+Medico (left) | Conselho (right) — compact gap ──
   const medico = rotulo.nomeMedico ? rotulo.nomeMedico.toUpperCase() : "";
   const drName = medico ? `DR(A)${medico}` : "";
-  lines.push(fixedLine(drName, conselhoStr, LEFT_L2, CONSELHO_WIDTH));
+  lines.push(compactLine(drName, conselhoStr, 3));
 
   // ── LINE 3+: Fórmula/Produto + Posologia (wrapping) ──
   const produto = formatarFormula(rotulo.formula) || "";
@@ -703,7 +685,7 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
     wrapText(produtoCompleto, W, 0).split('\n').forEach(l => lines.push(l.substring(0, W)));
   }
 
-  // ── LINE 5: pH | Lote | Fabricação | Validade (fixed 4-zone) ──
+  // ── LINE meta: pH | Lote | Fabricação | Validade — compact join ──
   const phVal = rotulo.ph ? `PH:${String(rotulo.ph).replace('.', ',')}` : 'PH:';
   let loteStr = '';
   if (rotulo.lote) {
@@ -716,18 +698,19 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   }
   const fabStr = rotulo.dataFabricacao ? `F:${formatarDataCurta(rotulo.dataFabricacao)}` : '';
   const valStr = rotulo.dataValidade ? `V:${formatarDataCurta(rotulo.dataValidade)}` : '';
-  lines.push(fixedMetaLine(phVal, loteStr, fabStr, valStr));
+  const metaParts = [phVal, loteStr, fabStr, valStr].filter(Boolean);
+  lines.push(metaParts.join(' ').substring(0, W));
 
-  // ── LINE 6: Uso (left) | Aplicação (right) ──
+  // ── LINE uso: Uso (left) | AP:xxx (right) — compact gap ──
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
-  const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
+  const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
-  lines.push(fixedLine(usoText, aplicacaoStr, LEFT_USO, APLICACAO_WIDTH));
+  lines.push(compactLine(usoText, aplicacaoStr, 3));
 
-  // ── LINE 7: Contém (left) | REG (right) ──
+  // ── LINE contem: Contém (left) | REG (right) — compact gap ──
   const contemStr = rotulo.contem?.trim() ? `CONTEM:${rotulo.contem.trim().toUpperCase()}` : "CONTEM:";
   const regStr = rotulo.numeroRegistro ? `REG:${rotulo.numeroRegistro}` : "";
-  lines.push(fixedLine(contemStr, regStr, LEFT_CONTEM, REG_WIDTH));
+  lines.push(compactLine(contemStr, regStr, 3));
 
   return lines.join('\n');
 }
@@ -1149,7 +1132,8 @@ const LabelTextEditor = ({
 
   const handleLineSpacingChange = (delta: number) => {
     setLineSpacing(prev => {
-      const next = Math.max(1.0, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
+      const minSpacing = layoutType === 'TIRZ' ? 0.7 : 1.0;
+      const next = Math.max(minSpacing, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
       localStorage.setItem(LINE_SPACING_KEY, String(next));
       return next;
     });
