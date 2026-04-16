@@ -1132,7 +1132,7 @@ const LabelTextEditor = ({
 
   const handleLineSpacingChange = (delta: number) => {
     setLineSpacing(prev => {
-      const minSpacing = resolvedLayoutType === 'TIRZ' ? 0.7 : 1.0;
+      const minSpacing = layoutType === 'TIRZ' ? 0.7 : 1.0;
       const next = Math.max(minSpacing, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
       localStorage.setItem(LINE_SPACING_KEY, String(next));
       return next;
