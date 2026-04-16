@@ -695,11 +695,13 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   const drName = medico ? `DR(A)${medico}` : "";
   lines.push(fixedLine(drName, conselhoStr, LEFT_L2, CONSELHO_WIDTH));
 
-  // ── LINE 3: Fórmula/Produto (full width, 1 line) ──
-  const f = formatarFormula(rotulo.formula);
-  if (f) lines.push(f.substring(0, W));
-
-  // ── LINE 4: Posologia removida do rótulo ──
+  // ── LINE 3+: Fórmula/Produto + Posologia (wrapping) ──
+  const produto = formatarFormula(rotulo.formula) || "";
+  const posologia = rotulo.posologia?.toUpperCase().trim() || "";
+  const produtoCompleto = posologia ? `${produto}   ${posologia}` : produto;
+  if (produtoCompleto) {
+    wrapText(produtoCompleto, W, 0).split('\n').forEach(l => lines.push(l.substring(0, W)));
+  }
 
   // ── LINE 5: pH | Lote | Fabricação | Validade (fixed 4-zone) ──
   const phVal = rotulo.ph ? `PH:${String(rotulo.ph).replace('.', ',')}` : 'PH:';
@@ -907,6 +909,7 @@ const getStoredLineSpacing = (layoutTipo?: string): number => {
     const stored = localStorage.getItem(LINE_SPACING_KEY);
     if (stored) return parseFloat(stored);
   } catch {}
+  if (layoutTipo === 'TIRZ') return 0.85;
   return 1.4;
 };
 
