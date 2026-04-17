@@ -86,17 +86,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Buscar sessão inicial
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
 
       if (initialSession?.user) {
-        fetchUserRole(initialSession.user.id);
-        // Sync configs on initial load too
-        SystemConfigService.syncToLocalStorage();
+        await fetchUserRole(initialSession.user.id);
+        await SystemConfigService.syncToLocalStorage();
       } else {
-        setIsLoading(false);
+        setRole(null);
+        setRoles([]);
       }
+
+      setIsLoading(false);
     });
 
     return () => {
