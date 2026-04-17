@@ -1193,14 +1193,23 @@ const LabelTextEditor = ({
         hint: (error as any).hint,
       });
       if (!isAutosave) {
-        const isRlsError = (error as any).code === '42501' || /row-level security/i.test(error.message);
-        toast({
-          title: isRlsError ? "Sem permissão para salvar" : "Erro ao salvar",
-          description: isRlsError
-            ? "Sua conta não tem permissão para salvar rótulos. Avise o admin para liberar a role."
-            : error.message,
-          variant: "destructive",
-        });
+        const code = (error as any).code;
+        const isRlsError = code === '42501' || /row-level security/i.test(error.message);
+        const isConflictError = code === '23505' || /duplicate key|unique constraint/i.test(error.message);
+        const isMissingConstraint = code === '42P10' || /no unique|on conflict/i.test(error.message);
+        let title = "Erro ao salvar";
+        let description = error.message;
+        if (isRlsError) {
+          title = "Sem permissão para salvar";
+          description = "Sua conta não tem permissão para salvar rótulos. Avise o admin para liberar a role.";
+        } else if (isMissingConstraint) {
+          title = "Erro de configuração do banco";
+          description = "A chave única (nr_requisicao, item_id, layout_type) não existe na tabela. Avise o suporte técnico.";
+        } else if (isConflictError) {
+          title = "Conflito ao salvar";
+          description = "Já existe um registro para este item neste layout. Recarregue a página e tente novamente.";
+        }
+        toast({ title, description, variant: "destructive" });
       }
     } else {
       // Update snapshot
