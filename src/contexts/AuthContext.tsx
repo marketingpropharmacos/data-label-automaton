@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const list = (data ?? []).map((r: any) => r.role as AppRole);
+      console.log("[AuthContext] userId:", userId, "roles carregadas:", list);
       setRoles(list);
 
       // Prioriza admin se existir; caso contrário pega a primeira role; fallback operador
