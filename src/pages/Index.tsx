@@ -72,7 +72,7 @@ const Index = () => {
   const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
   const [modoImpressao, setModoImpressaoState] = useState<ModoImpressao>(getModoImpressao());
   const { toast } = useToast();
-  const { isAdmin, signOut, user } = useAuth();
+  const { isAdmin, role, roles, signOut, user } = useAuth();
 
   const handleModoChange = (checked: boolean) => {
     const modo: ModoImpressao = checked ? 'rotutx' : 'agente';

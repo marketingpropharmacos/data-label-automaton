@@ -66,14 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(currentSession?.user ?? null);
 
         if (currentSession?.user) {
-          // Usar setTimeout para evitar deadlock com Supabase
+          // Evita liberar a UI antes de carregar as roles
           setTimeout(async () => {
             await fetchUserRole(currentSession.user.id);
-            // Sincronizar configs do Supabase → localStorage
             await SystemConfigService.syncToLocalStorage();
+            setIsLoading(false);
           }, 0);
+          return;
         } else {
           setRole(null);
+          setRoles([]);
         }
 
         if (event === "SIGNED_OUT") {
@@ -86,17 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     // Buscar sessão inicial
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
 
       if (initialSession?.user) {
-        fetchUserRole(initialSession.user.id);
-        // Sync configs on initial load too
-        SystemConfigService.syncToLocalStorage();
+        await fetchUserRole(initialSession.user.id);
+        await SystemConfigService.syncToLocalStorage();
       } else {
-        setIsLoading(false);
+        setRole(null);
+        setRoles([]);
       }
+
+      setIsLoading(false);
     });
 
     return () => {
