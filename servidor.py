@@ -219,12 +219,47 @@ def is_embalagem_ou_obs(linha: str) -> bool:
     return False
 
 
+def is_observacao_manuseio(linha: str) -> bool:
+    """
+    Retorna True se a linha for uma observação de manuseio/conservação
+    (NÃO é ativo). Ex: "MANTER EM GELADEIRA", "AGITAR ANTES DE USAR",
+    "USO TÓPICO", "0,05%" (percentual isolado sem nome).
+    """
+    if not linha or not linha.strip():
+        return False
+    txt = linha.strip().upper()
+    # Normaliza acentos
+    txt_norm = ''.join(
+        c for c in unicodedata.normalize('NFD', txt)
+        if unicodedata.category(c) != 'Mn'
+    )
+    GATILHOS = [
+        'MANTER', 'GELADEIRA', 'REFRIGERAR', 'REFRIGERADO', 'AGITAR',
+        'USO TOPICO', 'USO ORAL', 'USO EXTERNO', 'USO INTERNO',
+        'CONSERVAR', 'ABRIGO DA LUZ', 'AO ABRIGO', 'TEMPERATURA AMBIENTE',
+        'VIA ORAL', 'BANHO MARIA', 'NAO CONGELAR', 'PROTEGER DA LUZ',
+        'APOS ABERTO', 'AGITE ANTES', 'HOMOGENEIZAR', 'DILUIR',
+    ]
+    for g in GATILHOS:
+        if g in txt_norm:
+            return True
+    # Percentual/dose isolado sem nome de ativo (ex: "0,05%", "5MG", "10 ML")
+    # Critério: <=10 chars E sem letras alfabéticas suficientes para nome
+    so_dose = re.sub(r'[\d\s,.\-/%]', '', txt_norm)
+    so_dose = re.sub(r'\b(MG|ML|MCG|UI|IU|G)\b', '', so_dose).strip()
+    if len(so_dose) < 3 and len(txt_norm) <= 12:
+        return True
+    return False
+
+
 def is_ativo_mescla(linha: str) -> bool:
     """
     Retorna True se a linha parece ser um ativo real de mescla.
-    Critérios: NÃO é embalagem E tem características de ativo.
+    Critérios: NÃO é embalagem, NÃO é observação de manuseio E tem características de ativo.
     """
     if is_embalagem_ou_obs(linha):
+        return False
+    if is_observacao_manuseio(linha):
         return False
     
     linha_upper = linha.upper().strip()

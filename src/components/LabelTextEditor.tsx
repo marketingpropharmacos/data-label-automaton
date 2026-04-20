@@ -411,10 +411,12 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     });
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
-    if (mescla) {
-      // Mescla: imprime apenas os ativos (composição). O nome reduzido (formula) é interno do FC e não sai no rótulo.
-      const compTextRaw = (rotulo.composicao || "").toUpperCase();
-      const compText = removeNomeReduzidoDaComposicao(compTextRaw, rotulo.formula);
+    const compTextRaw = (rotulo.composicao || "").toUpperCase();
+    const compText = removeNomeReduzidoDaComposicao(compTextRaw, rotulo.formula);
+    // Falsa-mescla: composição sem dose (MG/ML/G/%/UI/MCG) → trata como produto único
+    const temDose = /\b(MG|ML|MCG|UI|IU)\b|%|\bG\/ML\b/.test(compText);
+    if (mescla && temDose) {
+      // Mescla real: imprime apenas os ativos (composição).
       wrapText(compText, W, 2).split('\n').forEach(l => lines.push(l));
     } else {
       const produtoText = formatarFormula(rotulo.formula);
@@ -653,10 +655,12 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
     });
   } else {
     const mescla = isValidComposicao(rotulo.composicao || "");
-    if (mescla) {
-      // Mescla: imprime apenas os ativos (composição). O nome reduzido (formula) é interno do FC e não sai no rótulo.
-      const compTextRaw = rotulo.composicao!.toUpperCase();
-      const compText = removeNomeReduzidoDaComposicao(compTextRaw, rotulo.formula);
+    const compTextRaw = (rotulo.composicao || "").toUpperCase();
+    const compText = removeNomeReduzidoDaComposicao(compTextRaw, rotulo.formula);
+    // Falsa-mescla: composição sem dose (MG/ML/G/%/UI/MCG) → trata como produto único
+    const temDose = /\b(MG|ML|MCG|UI|IU)\b|%|\bG\/ML\b/.test(compText);
+    if (mescla && temDose) {
+      // Mescla real: imprime apenas os ativos (composição).
       wrapText(compText, CW, 3).split('\n').forEach(l => lines.push(indentLine(l)));
     } else {
       const f = formatarFormula(rotulo.formula);
