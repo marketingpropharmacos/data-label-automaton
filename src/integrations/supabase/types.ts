@@ -3380,26 +3380,35 @@ export type Database = {
       raw_alpha_cmv_diario: {
         Row: {
           competencia: string
-          created_at: string
           fonte: string
           id: number
           loja_id: number
+          qtd_itens: number
+          qtd_vendas: number
+          synced_at: string
+          tipo: string
           valor_cmv: number
         }
         Insert: {
           competencia: string
-          created_at?: string
           fonte?: string
           id?: number
           loja_id: number
-          valor_cmv: number
+          qtd_itens?: number
+          qtd_vendas?: number
+          synced_at?: string
+          tipo: string
+          valor_cmv?: number
         }
         Update: {
           competencia?: string
-          created_at?: string
           fonte?: string
           id?: number
           loja_id?: number
+          qtd_itens?: number
+          qtd_vendas?: number
+          synced_at?: string
+          tipo?: string
           valor_cmv?: number
         }
         Relationships: []
@@ -3611,33 +3620,33 @@ export type Database = {
       raw_alpha_vendas: {
         Row: {
           competencia: string
-          created_at: string | null
-          data_emissao: string | null
+          fonte: string
           id: number
           loja_id: number
-          numero_documento: string | null
-          settlement_method: string | null
-          valor_total: number | null
+          qtd_vendas: number
+          settlement_method: string
+          synced_at: string
+          valor_total: number
         }
         Insert: {
           competencia: string
-          created_at?: string | null
-          data_emissao?: string | null
+          fonte?: string
           id?: number
           loja_id: number
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: number | null
+          qtd_vendas?: number
+          settlement_method: string
+          synced_at?: string
+          valor_total?: number
         }
         Update: {
           competencia?: string
-          created_at?: string | null
-          data_emissao?: string | null
+          fonte?: string
           id?: number
           loja_id?: number
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: number | null
+          qtd_vendas?: number
+          settlement_method?: string
+          synced_at?: string
+          valor_total?: number
         }
         Relationships: []
       }
@@ -3659,6 +3668,75 @@ export type Database = {
           created_at?: string
           id?: number
           source?: string
+        }
+        Relationships: []
+      }
+      rh_profiles: {
+        Row: {
+          cpf: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rh_user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["rh_app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["rh_app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["rh_app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rh_user_unidades: {
+        Row: {
+          created_at: string
+          id: string
+          unidade: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          unidade: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          unidade?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -3686,6 +3764,30 @@ export type Database = {
           module?: string
           role?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      rv_checklist_fechamento: {
+        Row: {
+          checked: boolean
+          checked_at: string
+          checked_by: string | null
+          competencia: string
+          item_id: string
+        }
+        Insert: {
+          checked?: boolean
+          checked_at?: string
+          checked_by?: string | null
+          competencia: string
+          item_id: string
+        }
+        Update: {
+          checked?: boolean
+          checked_at?: string
+          checked_by?: string | null
+          competencia?: string
+          item_id?: string
         }
         Relationships: []
       }
@@ -4242,6 +4344,86 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_health_status: {
+        Row: {
+          checked_at: string
+          dataset_name: string
+          hours_since_last_load: number | null
+          last_data_loaded_at: string | null
+          rows_count: number | null
+          severity: string
+        }
+        Insert: {
+          checked_at?: string
+          dataset_name: string
+          hours_since_last_load?: number | null
+          last_data_loaded_at?: string | null
+          rows_count?: number | null
+          severity?: string
+        }
+        Update: {
+          checked_at?: string
+          dataset_name?: string
+          hours_since_last_load?: number | null
+          last_data_loaded_at?: string | null
+          rows_count?: number | null
+          severity?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_health_status_dataset_name_fkey"
+            columns: ["dataset_name"]
+            isOneToOne: true
+            referencedRelation: "sync_registry"
+            referencedColumns: ["dataset_name"]
+          },
+        ]
+      }
+      sync_registry: {
+        Row: {
+          category: string
+          created_at: string
+          dataset_name: string
+          display_name: string
+          expected_frequency_hours: number
+          freshness_column: string
+          is_active: boolean
+          notes: string | null
+          sync_function: string | null
+          table_name: string
+          tolerance_hours: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          dataset_name: string
+          display_name: string
+          expected_frequency_hours: number
+          freshness_column: string
+          is_active?: boolean
+          notes?: string | null
+          sync_function?: string | null
+          table_name: string
+          tolerance_hours: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          dataset_name?: string
+          display_name?: string
+          expected_frequency_hours?: number
+          freshness_column?: string
+          is_active?: boolean
+          notes?: string | null
+          sync_function?: string | null
+          table_name?: string
+          tolerance_hours?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       system_config: {
         Row: {
           key: string
@@ -4517,89 +4699,6 @@ export type Database = {
         }
         Relationships: []
       }
-      v_raw_alpha_vendas_validas: {
-        Row: {
-          competencia: string | null
-          created_at: string | null
-          data_emissao: string | null
-          id: number | null
-          loja_id: number | null
-          numero_documento: string | null
-          settlement_method: string | null
-          valor_total: number | null
-        }
-        Insert: {
-          competencia?: string | null
-          created_at?: string | null
-          data_emissao?: string | null
-          id?: number | null
-          loja_id?: number | null
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: number | null
-        }
-        Update: {
-          competencia?: string | null
-          created_at?: string | null
-          data_emissao?: string | null
-          id?: number | null
-          loja_id?: number | null
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: number | null
-        }
-        Relationships: []
-      }
-      v_vendas_documentos: {
-        Row: {
-          data_emissao: string | null
-          id_loja: number | null
-          id_venda: string | null
-          numero_documento: string | null
-          settlement_method: string | null
-          valor_total: number | null
-        }
-        Insert: {
-          data_emissao?: string | null
-          id_loja?: never
-          id_venda?: never
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: never
-        }
-        Update: {
-          data_emissao?: string | null
-          id_loja?: never
-          id_venda?: never
-          numero_documento?: string | null
-          settlement_method?: string | null
-          valor_total?: never
-        }
-        Relationships: []
-      }
-      v_vendas_itens_origem: {
-        Row: {
-          caminho_classificacao: string | null
-          cfop: string | null
-          chave_acesso: string | null
-          competencia: string | null
-          data_emissao: string | null
-          descricao_produto: string | null
-          dfe_id: string | null
-          id_embalagem: number | null
-          id_loja: number | null
-          id_venda_item: string | null
-          item_id: string | null
-          numero_documento: string | null
-          quantidade: number | null
-          tipo_documento: string | null
-          tipo_produto: string | null
-          valor_bruto: number | null
-          valor_liquido: number | null
-          valor_total: number | null
-        }
-        Relationships: []
-      }
       vw_compare_dre_dfc_diario: {
         Row: {
           competencia: string | null
@@ -4618,16 +4717,6 @@ export type Database = {
           loja_id: number | null
           valor_gerencial: number | null
           valor_oficial: number | null
-        }
-        Relationships: []
-      }
-      vw_dre_diaria_simplificada: {
-        Row: {
-          cmv: number | null
-          competencia: string | null
-          loja_id: number | null
-          lucro_bruto: number | null
-          receita_bruta: number | null
         }
         Relationships: []
       }
@@ -4764,6 +4853,15 @@ export type Database = {
         Args: { prefix: string; seq_name: string }
         Returns: string
       }
+      rh_get_user_unidades: { Args: { _user_id: string }; Returns: string[] }
+      rh_has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["rh_app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      rh_is_member: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role:
@@ -4870,6 +4968,7 @@ export type Database = {
         | "completed"
         | "failed"
       lb_user_role: "admin" | "manager" | "member" | "viewer" | "guest"
+      rh_app_role: "admin" | "viewer"
       rv_colaborador_tipo:
         | "vendas"
         | "laboratorio"
@@ -4880,6 +4979,7 @@ export type Database = {
         | "central"
         | "supervisao"
         | "estagiario"
+        | "socio"
       rv_componente_manual:
         | "orcamentista"
         | "revitalize"
@@ -5133,6 +5233,7 @@ export const Constants = {
         "failed",
       ],
       lb_user_role: ["admin", "manager", "member", "viewer", "guest"],
+      rh_app_role: ["admin", "viewer"],
       rv_colaborador_tipo: [
         "vendas",
         "laboratorio",
@@ -5143,6 +5244,7 @@ export const Constants = {
         "central",
         "supervisao",
         "estagiario",
+        "socio",
       ],
       rv_componente_manual: [
         "orcamentista",
