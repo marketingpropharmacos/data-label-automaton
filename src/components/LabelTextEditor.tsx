@@ -7,6 +7,7 @@ import { RotuloItem, PharmacyConfig, LayoutConfig, LayoutType } from "@/types/re
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import UnsavedChangesDialog from "@/components/UnsavedChangesDialog";
+import RequisitionItemSelector from "@/components/RequisitionItemSelector";
 
 // ---- Tipos de uso válidos (mesmos do backend servidor.py) ----
 const TIPOS_USO_VALIDOS = [
@@ -1229,8 +1230,21 @@ const LabelTextEditor = ({
 
   if (!rotulo) return null;
 
+  const savedIds = new Set(Object.keys(lastSavedSnapshot));
+  const handleSelectBar = (idx: number) => {
+    if (idx === currentIndex) return;
+    guardAction(() => onIndexChange(idx));
+  };
+
   return (
-    <div className="w-full max-w-2xl mx-auto border border-border rounded-lg bg-card overflow-hidden">
+    <>
+      <RequisitionItemSelector
+        rotulos={rotulos}
+        currentIndex={currentIndex}
+        onSelect={handleSelectBar}
+        savedIds={savedIds}
+      />
+      <div className="w-full max-w-2xl mx-auto border border-border rounded-lg bg-card overflow-hidden">
       {/* Header */}
       <div className="bg-muted/50 border-b border-border px-4 py-2 flex items-center justify-between">
         <div>
