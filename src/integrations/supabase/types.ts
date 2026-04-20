@@ -3698,6 +3698,157 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_promocoes_arquivos: {
+        Row: {
+          file_hash: string
+          file_name: string
+          id: string
+          imported_at: string
+          imported_by: string | null
+        }
+        Insert: {
+          file_hash: string
+          file_name: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+        }
+        Update: {
+          file_hash?: string
+          file_name?: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+        }
+        Relationships: []
+      }
+      rh_promocoes_colaboradores: {
+        Row: {
+          arquivo_id: string | null
+          cargo_atual: string | null
+          cnpj_atual: string | null
+          created_at: string
+          data_registro: string | null
+          empresa_atual: string | null
+          id: string
+          nome: string
+          nome_normalizado: string
+          primeiro_salario: number | null
+          setor_atual: string | null
+          ultimo_salario: number | null
+          updated_at: string
+        }
+        Insert: {
+          arquivo_id?: string | null
+          cargo_atual?: string | null
+          cnpj_atual?: string | null
+          created_at?: string
+          data_registro?: string | null
+          empresa_atual?: string | null
+          id?: string
+          nome: string
+          nome_normalizado: string
+          primeiro_salario?: number | null
+          setor_atual?: string | null
+          ultimo_salario?: number | null
+          updated_at?: string
+        }
+        Update: {
+          arquivo_id?: string | null
+          cargo_atual?: string | null
+          cnpj_atual?: string | null
+          created_at?: string
+          data_registro?: string | null
+          empresa_atual?: string | null
+          id?: string
+          nome?: string
+          nome_normalizado?: string
+          primeiro_salario?: number | null
+          setor_atual?: string | null
+          ultimo_salario?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_promocoes_colaboradores_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: false
+            referencedRelation: "rh_promocoes_arquivos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_promocoes_historico: {
+        Row: {
+          cargo: string | null
+          cnpj: string | null
+          colaborador_id: string
+          created_at: string
+          data: string
+          empresa: string | null
+          gratificacao: number | null
+          id: string
+          salario: number | null
+          setor: string | null
+        }
+        Insert: {
+          cargo?: string | null
+          cnpj?: string | null
+          colaborador_id: string
+          created_at?: string
+          data: string
+          empresa?: string | null
+          gratificacao?: number | null
+          id?: string
+          salario?: number | null
+          setor?: string | null
+        }
+        Update: {
+          cargo?: string | null
+          cnpj?: string | null
+          colaborador_id?: string
+          created_at?: string
+          data?: string
+          empresa?: string | null
+          gratificacao?: number | null
+          id?: string
+          salario?: number | null
+          setor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_promocoes_historico_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_promocoes_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_reconhecidos_manuais: {
+        Row: {
+          id: string
+          marcado_em: string
+          marcado_por: string | null
+          nome: string
+          nome_normalizado: string
+        }
+        Insert: {
+          id?: string
+          marcado_em?: string
+          marcado_por?: string | null
+          nome: string
+          nome_normalizado: string
+        }
+        Update: {
+          id?: string
+          marcado_em?: string
+          marcado_por?: string | null
+          nome?: string
+          nome_normalizado?: string
+        }
+        Relationships: []
+      }
       rh_user_roles: {
         Row: {
           created_at: string
