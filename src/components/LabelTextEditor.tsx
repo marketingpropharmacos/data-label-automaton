@@ -1451,6 +1451,7 @@ const LabelTextEditor = ({
         onCancel={handleDialogCancel}
       />
     </div>
+    </>
   );
 };
 
