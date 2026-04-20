@@ -1,54 +1,58 @@
 
 
-# Diagnóstico — DUTASTERIDA duplicada no AMP_CX (Req 10436-4)
+# Diagnóstico — Nome da mescla aparecendo abaixo dos ativos
 
 ## Causa raiz
-No editor AMP_CX (`LabelTextEditor.tsx`, linhas 606–618), quando o item tem `composicao` preenchida o código:
-1. Imprime a `composicao` linha a linha (linha 611)
-2. **Em seguida**, imprime também a `formula` (linha 614)
+Nos layouts **AMP_CX** (`generateTextAmpCaixa`, linha 622) e **AMP10** (`generateTextAmp10`, linha 374), quando o item é uma **mescla** o código:
+1. Imprime os ativos (composição). ✓
+2. Imprime também a `formula` se for diferente da composição.
 
-Isso foi pensado para **mesclas** (ex.: "BAICALINA 5MG, BIOTINA 10MG" + nome reduzido do produto). Mas para **produto único**, o backend devolve os dois campos com o mesmo conteúdo:
-- `composicao` = `DUTASTERIDA 0,1%` (extraído de FC03300/CDICP 00001-00002)
-- `formula` = `DUTASTERIDA 0,1%` (extraído de FC03000.DESCRPRD)
+O problema do passo 2: em mesclas, `rotulo.formula` é o **nome reduzido da mescla** que vem da tabela `FC03000.DESCRPRD` — ex.:
+- Req `10436-7` → `M. DIM. QUEDA E PREV. FIOS`
+- Req `10436-8` → `ALOPECIA MASCULINA/FEMININ`
+- Req `10474-0` → `LAC CORPORAL (SUG 3) 10ML`
 
-Resultado: a mesma linha sai duas vezes.
+Esse nome reduzido **não deve sair no rótulo** — é só a "etiqueta interna" da mescla no FC. O usuário quer ver apenas os ativos (composição).
 
-O **mesmo bug existe no AMP10** (linhas 367–370). O AMP_CX salvo no Supabase para `10436-4-816` está correto (uma linha só) — a duplicação aparece no preview ao vivo quando o editor regenera o texto sem usar o salvo.
+A correção anterior (deduplicação) resolveu o caso do **produto único** (DUTASTERIDA), mas não tocou nesse caso porque os textos são genuinamente diferentes.
+
+## Como diferenciar "mescla" de "produto único"
+Já existe a função `isValidComposicao(composicao)` no arquivo, que retorna `true` quando a composição tem múltiplos ativos / formato de mescla. Hoje ela é usada só para escolher entre o ramo `mescla` e o ramo `produto único`.
+
+A regra correta passa a ser:
+- **Mescla** (`isValidComposicao === true`) → imprime **só a composição**, **nunca** a formula.
+- **Produto único** (`isValidComposicao === false`) → imprime a formula (comportamento atual já preservado pelo `else`).
+
+A deduplicação `composicao vs formula` deixa de ser necessária — o ramo "mescla" simplesmente não imprime mais a formula.
 
 ## Correção proposta
 
-Aplicar **deduplicação simples** nas duas funções (`generateTextAmpCaixa` e `generateTextAmp10`):
+### Em `generateTextAmpCaixa` (AMP_CX, linhas 611–622)
+Remover o bloco que imprime `formulaRaw` dentro do ramo `if (mescla)`. Resultado: mesclas mostram só os ativos (composição quebrada em linhas).
 
-- Comparar `composicao` e `formula` normalizados (uppercase, sem acento, sem espaços extras, sem `%` nem vírgula extra).
-- Se forem iguais → imprimir só **uma vez** (composição, omite formula).
-- Se a `composicao` já contiver a `formula` como substring → omite formula.
-- Se forem diferentes → manter o comportamento atual (mescla real continua imprimindo as duas).
+### Em `generateTextAmp10` (AMP10, linhas 363–374)
+Mesma remoção dentro do `if (mescla)`.
 
-Pseudocódigo:
+Pseudocódigo final do ramo mescla:
 ```ts
-const norm = (s: string) => s.toUpperCase().replace(/\s+/g, ' ').trim();
-const compNorm = norm(rotulo.composicao);
-const formNorm = norm(rotulo.formula);
-const formulaJaEstaNaComposicao = compNorm === formNorm || compNorm.includes(formNorm);
-if (formulaRaw && !formulaJaEstaNaComposicao) {
-  lines.push(indentLine(formulaRaw));
+if (mescla) {
+  const compText = (rotulo.composicao || "").toUpperCase();
+  wrapText(compText, CW, 3).split('\n').forEach(l => lines.push(indentLine(l)));
+  // Não imprime mais o nome reduzido da mescla
 }
 ```
 
-## Arquivos afetados
-- `src/components/LabelTextEditor.tsx` — único arquivo, dois pontos:
-  - `generateTextAmp10` (linhas 363–375)
-  - `generateTextAmpCaixa` (linhas 606–619)
-
 ## O que NÃO muda
-- Backend (`servidor.py`) — continua devolvendo os dois campos como hoje (aditividade preservada).
-- Layouts A_PAC_PEQ, A_PAC_GRAN, TIRZ — não usam essa lógica de "composicao + formula", não regridem.
-- Mesclas reais (ex: req 10436-7 "PROHAIRIN 3%, CAPIXYL 2%, ...") — continuam mostrando todos os ativos + nome reduzido se forem distintos.
-- Textos já salvos no Supabase — intocados.
+- **Produto único** (DUTASTERIDA, etc.) — continua imprimindo a formula no ramo `else`. Sem regressão.
+- **Kits** — ramo separado (`if (isKit)`), intocado.
+- **Backend (`servidor.py`)** — continua devolvendo `composicao` e `formula`. Aditividade preservada.
+- **Layouts A_PAC_PEQ, A_PAC_GRAN, TIRZ** — não usam essa lógica composicao/formula. Não regridem.
+- **Textos salvos no Supabase** — intocados.
 
 ## Validação
-1. Req `10436-4` (DUTASTERIDA 0,1% — produto único) → deve sair **uma linha** só.
-2. Req `10436-7` (mescla PROHAIRIN/CAPIXYL/D-PANTENOL) → continua mostrando todos os ativos.
-3. Req `10436-8` (mescla D PANTENOL + BIOTINA + IGF + ...) → continua igual.
-4. Mesma checagem no layout AMP10 com um produto único.
+1. Req `10436-7` (mescla PROHAIRIN/CAPIXYL/D-PANTENOL/COPPER) → some o `M. DIM. QUEDA E PREV. FIOS`. Restam só os ativos.
+2. Req `10436-8` (mescla D PANTENOL/BIOTINA/IGF/BFGF/COPPER/KGF) → some o `ALOPECIA MASCULINA/FEMININ`.
+3. Req `10474-0` (mescla ELASTINA/ÁCIDO ALFA LIPOICO/etc.) → some o `LAC CORPORAL (SUG 3) 10ML`.
+4. Req `10436-4` (DUTASTERIDA — produto único) → continua mostrando uma linha só (DUTASTERIDA 0,1%).
+5. Mesma checagem no layout AMP10.
 
