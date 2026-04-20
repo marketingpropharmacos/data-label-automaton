@@ -3671,6 +3671,280 @@ export type Database = {
         }
         Relationships: []
       }
+      rh_arquivos_importados: {
+        Row: {
+          file_hash: string
+          file_name: string
+          id: string
+          imported_at: string
+          imported_by: string | null
+          modulo: string
+        }
+        Insert: {
+          file_hash: string
+          file_name: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          modulo: string
+        }
+        Update: {
+          file_hash?: string
+          file_name?: string
+          id?: string
+          imported_at?: string
+          imported_by?: string | null
+          modulo?: string
+        }
+        Relationships: []
+      }
+      rh_atestados: {
+        Row: {
+          arquivo_id: string | null
+          cid: string | null
+          colaborador_id: string
+          created_at: string
+          data: string
+          descricao_cid: string | null
+          dias: number
+          id: string
+          tipo: string | null
+          unidade: string | null
+        }
+        Insert: {
+          arquivo_id?: string | null
+          cid?: string | null
+          colaborador_id: string
+          created_at?: string
+          data: string
+          descricao_cid?: string | null
+          dias?: number
+          id?: string
+          tipo?: string | null
+          unidade?: string | null
+        }
+        Update: {
+          arquivo_id?: string | null
+          cid?: string | null
+          colaborador_id?: string
+          created_at?: string
+          data?: string
+          descricao_cid?: string | null
+          dias?: number
+          id?: string
+          tipo?: string | null
+          unidade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_atestados_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: false
+            referencedRelation: "rh_arquivos_importados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_atestados_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_colaborador_overrides: {
+        Row: {
+          cargo: string | null
+          nome: string
+          nome_normalizado: string
+          unidade: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cargo?: string | null
+          nome: string
+          nome_normalizado: string
+          unidade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cargo?: string | null
+          nome?: string
+          nome_normalizado?: string
+          unidade?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      rh_colaboradores: {
+        Row: {
+          ativo: boolean
+          cargo: string | null
+          cnpj: string | null
+          created_at: string
+          data_admissao: string | null
+          departamento: string | null
+          filial: string | null
+          id: string
+          legacy_id: string | null
+          local_registro: string | null
+          nome: string
+          nome_normalizado: string
+          unidade: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cargo?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_admissao?: string | null
+          departamento?: string | null
+          filial?: string | null
+          id?: string
+          legacy_id?: string | null
+          local_registro?: string | null
+          nome: string
+          nome_normalizado: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cargo?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_admissao?: string | null
+          departamento?: string | null
+          filial?: string | null
+          id?: string
+          legacy_id?: string | null
+          local_registro?: string | null
+          nome?: string
+          nome_normalizado?: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rh_custos_rescisao: {
+        Row: {
+          causa_afastamento: string | null
+          colaborador_id: string | null
+          cpf: string | null
+          data_admissao: string | null
+          data_afastamento: string | null
+          file_hash: string
+          file_name: string | null
+          id: string
+          legacy_id: string | null
+          match_status: string
+          nome: string
+          nome_normalizado: string
+          remuneracao: number | null
+          total_bruto: number
+          total_deducoes: number
+          unidade: string | null
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+          valor_liquido: number
+        }
+        Insert: {
+          causa_afastamento?: string | null
+          colaborador_id?: string | null
+          cpf?: string | null
+          data_admissao?: string | null
+          data_afastamento?: string | null
+          file_hash: string
+          file_name?: string | null
+          id?: string
+          legacy_id?: string | null
+          match_status?: string
+          nome: string
+          nome_normalizado: string
+          remuneracao?: number | null
+          total_bruto?: number
+          total_deducoes?: number
+          unidade?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          valor_liquido?: number
+        }
+        Update: {
+          causa_afastamento?: string | null
+          colaborador_id?: string | null
+          cpf?: string | null
+          data_admissao?: string | null
+          data_afastamento?: string | null
+          file_hash?: string
+          file_name?: string | null
+          id?: string
+          legacy_id?: string | null
+          match_status?: string
+          nome?: string
+          nome_normalizado?: string
+          remuneracao?: number | null
+          total_bruto?: number
+          total_deducoes?: number
+          unidade?: string | null
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+          valor_liquido?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_custos_rescisao_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_custos_rescisao_verbas: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          descricao: string
+          id: string
+          rescisao_id: string
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          rescisao_id: string
+          tipo: string
+          valor?: number
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          rescisao_id?: string
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_custos_rescisao_verbas_rescisao_id_fkey"
+            columns: ["rescisao_id"]
+            isOneToOne: false
+            referencedRelation: "rh_custos_rescisao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rh_profiles: {
         Row: {
           cpf: string | null
@@ -3846,6 +4120,170 @@ export type Database = {
           marcado_por?: string | null
           nome?: string
           nome_normalizado?: string
+        }
+        Relationships: []
+      }
+      rh_registros_ponto: {
+        Row: {
+          ajuste_manual_ponto: boolean
+          arquivo_id: string | null
+          atestado_dia: boolean
+          atestado_horas_min: number
+          atraso_min: number
+          colaborador_id: string
+          created_at: string
+          data: string
+          entrada_prevista: string | null
+          falta: boolean
+          fonte_atraso: string | null
+          hora_extra_min: number
+          id: string
+          ponto_aberto: boolean
+          primeiro_ponto: string | null
+          status: string | null
+          unidade: string | null
+        }
+        Insert: {
+          ajuste_manual_ponto?: boolean
+          arquivo_id?: string | null
+          atestado_dia?: boolean
+          atestado_horas_min?: number
+          atraso_min?: number
+          colaborador_id: string
+          created_at?: string
+          data: string
+          entrada_prevista?: string | null
+          falta?: boolean
+          fonte_atraso?: string | null
+          hora_extra_min?: number
+          id?: string
+          ponto_aberto?: boolean
+          primeiro_ponto?: string | null
+          status?: string | null
+          unidade?: string | null
+        }
+        Update: {
+          ajuste_manual_ponto?: boolean
+          arquivo_id?: string | null
+          atestado_dia?: boolean
+          atestado_horas_min?: number
+          atraso_min?: number
+          colaborador_id?: string
+          created_at?: string
+          data?: string
+          entrada_prevista?: string | null
+          falta?: boolean
+          fonte_atraso?: string | null
+          hora_extra_min?: number
+          id?: string
+          ponto_aberto?: boolean
+          primeiro_ponto?: string | null
+          status?: string | null
+          unidade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_registros_ponto_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: false
+            referencedRelation: "rh_arquivos_importados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_registros_ponto_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_rotatividade_colaboradores: {
+        Row: {
+          arquivo_id: string | null
+          cargo: string | null
+          cnpj: string | null
+          created_at: string
+          data_admissao: string
+          data_desligamento: string | null
+          departamento: string | null
+          id: string
+          legacy_id: string | null
+          local_registro: string | null
+          motivo_desligamento: string | null
+          nome: string
+          nome_normalizado: string
+          unidade: string | null
+          updated_at: string
+        }
+        Insert: {
+          arquivo_id?: string | null
+          cargo?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_admissao: string
+          data_desligamento?: string | null
+          departamento?: string | null
+          id?: string
+          legacy_id?: string | null
+          local_registro?: string | null
+          motivo_desligamento?: string | null
+          nome: string
+          nome_normalizado: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Update: {
+          arquivo_id?: string | null
+          cargo?: string | null
+          cnpj?: string | null
+          created_at?: string
+          data_admissao?: string
+          data_desligamento?: string | null
+          departamento?: string | null
+          id?: string
+          legacy_id?: string | null
+          local_registro?: string | null
+          motivo_desligamento?: string | null
+          nome?: string
+          nome_normalizado?: string
+          unidade?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_rotatividade_colaboradores_arquivo_id_fkey"
+            columns: ["arquivo_id"]
+            isOneToOne: false
+            referencedRelation: "rh_arquivos_importados"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_rotatividade_enriquecimento: {
+        Row: {
+          cargo: string | null
+          cnpj: string | null
+          local_registro: string | null
+          nome_normalizado: string
+          setor: string | null
+          updated_at: string
+        }
+        Insert: {
+          cargo?: string | null
+          cnpj?: string | null
+          local_registro?: string | null
+          nome_normalizado: string
+          setor?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cargo?: string | null
+          cnpj?: string | null
+          local_registro?: string | null
+          nome_normalizado?: string
+          setor?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5013,6 +5451,7 @@ export type Database = {
         Returns: boolean
       }
       rh_is_member: { Args: { _user_id: string }; Returns: boolean }
+      rh_normalize_name: { Args: { p_name: string }; Returns: string }
     }
     Enums: {
       app_role:
