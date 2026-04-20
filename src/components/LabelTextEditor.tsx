@@ -413,7 +413,8 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
     const mescla = isValidComposicao(rotulo.composicao || "");
     if (mescla) {
       // Mescla: imprime apenas os ativos (composição). O nome reduzido (formula) é interno do FC e não sai no rótulo.
-      const compText = (rotulo.composicao || "").toUpperCase();
+      const compTextRaw = (rotulo.composicao || "").toUpperCase();
+      const compText = removeNomeReduzidoDaComposicao(compTextRaw, rotulo.formula);
       wrapText(compText, W, 2).split('\n').forEach(l => lines.push(l));
     } else {
       const produtoText = formatarFormula(rotulo.formula);
