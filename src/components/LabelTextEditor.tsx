@@ -1230,6 +1230,12 @@ const LabelTextEditor = ({
 
   if (!rotulo) return null;
 
+  const savedIds = new Set(Object.keys(lastSavedSnapshot));
+  const handleSelectBar = (idx: number) => {
+    if (idx === currentIndex) return;
+    guardAction(() => onIndexChange(idx));
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto border border-border rounded-lg bg-card overflow-hidden">
       {/* Header */}
