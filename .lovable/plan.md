@@ -1,69 +1,82 @@
 
 
-# Navegação direta entre barras/itens da requisição
+# Diagnóstico — "005% - MANTER EM GELADEIRA" no lugar de "LATANOPROSTA" (Req 010236-4)
 
-## Contexto atual
-Hoje, ao pesquisar uma requisição (ex: `10436`), o sistema retorna todas as fórmulas/barras daquele pedido (ex: `10436-1`, `10436-2`, `10436-3`, …) e o usuário navega **uma a uma** via setas "próximo/anterior". Não há atalho para pular direto para uma barra específica (ex: ir do item 1 para o item 7 sem passar pelos intermediários).
+## O que está acontecendo
 
-## Solução proposta: Seletor de Barras (lista clicável)
+O texto salvo no Supabase para o item `10236-4` (layout AMP_CX) tem literalmente isso na linha da composição:
 
-Adicionar um **seletor visual de barras** no topo do editor de rótulos, mostrando todos os itens da requisição de uma vez. O usuário clica no item desejado e o editor salta direto para ele.
-
-### Visual (no topo do editor, acima dos botões de navegação existentes)
-```text
-Requisição 10436  —  8 barras
-
-[1: DUTASTERIDA 0,1%]  [2: FINASTERIDA 1MG]  [3: MINOXIDIL 5%]  
-[4: BIOTINA 10MG]      [5: M.DIM.QUEDA]      [6: ALOPECIA MASC]  
-[7: LAC CORPORAL]      [8: CAPIXYL 2%]
-
-               ▲ item atual destacado (borda/cor primária)
+```
+005% - MANTER EM GELADEIRA
 ```
 
-Cada "chip" mostra:
-- **Número da barra** (`nrItem` — 1, 2, 3…)
-- **Nome curto do produto** (primeiro ativo da composição ou `formula` truncado em ~20 chars)
-- **Destaque visual** no item atualmente em edição (borda colorida / fundo primary)
-- **Indicador de edição salva** (bolinha verde se já tem `saved_rotulo` no Supabase para aquele item)
+Não há "LATANOPROSTA" em lugar nenhum do texto. Comparei com os outros itens da mesma requisição — todos saíram corretos (DUTASTERIDA 0,1%, MINOXIDIL 0,5%, FINASTERIDE 0,05%, etc.). Só o `-4` veio errado.
 
-### Interação
-- **Clique no chip** → salta direto para aquele item no editor.
-- **Se houver alterações não salvas** no item atual → abre o `UnsavedChangesDialog` já existente antes de trocar.
-- **Setas ← → / Home End** no teclado também funcionam para navegar entre chips (acessibilidade).
-- **Scroll horizontal** se houver muitos itens (ex: 20+ barras), sem quebrar o layout.
+## Causa raiz
 
-## Alterações técnicas
+O backend (`servidor.py`) monta o campo `composicao` em duas etapas:
 
-### Arquivo único: `src/pages/Index.tsx` (ou onde está o editor principal)
-Investigar primeiro para confirmar, mas pela estrutura do projeto o estado `currentIndex` + array de `rotulos` já existe. A mudança é:
+1. **FC99999** (ativos da fórmula) → preenche `composicao` com os ativos reais (ex: "LATANOPROSTA 0,05%").
+2. **FC03300 / OBSFIC** (observações do item) → adiciona texto extra na composição via `composicao = composicao + " | " + obs_texto` (linha 4477 de `servidor.py`).
 
-1. **Novo componente** `src/components/RequisitionItemSelector.tsx`:
-   - Props: `rotulos: RotuloItem[]`, `currentIndex: number`, `onSelect: (index: number) => void`, `savedMap: Record<string, boolean>` (qual item já tem texto salvo).
-   - Renderiza chips horizontais com Tailwind (`flex flex-wrap gap-2` ou `flex overflow-x-auto`).
-   - Usa `Button` variant `outline`/`default` do shadcn.
+No item `10236-4` aconteceu o caso patológico:
 
-2. **Integração em `Index.tsx`**:
-   - Renderizar `<RequisitionItemSelector>` acima do editor.
-   - Ligar `onSelect` ao mesmo handler que hoje as setas "próximo/anterior" usam, aproveitando a proteção do `UnsavedChangesDialog`.
-   - Calcular `savedMap` consultando o Supabase (ou reusar o estado que já faz isso para mostrar o badge "Salvo").
+- **FC99999 não retornou nada** para esse item (ou retornou só algo descartado pelo filtro `is_ativo_mescla`/`is_repeticao_produto`) → `composicao` ficou **vazia**.
+- **FC03300 tinha duas observações cadastradas** no FC para esse item: `"0,05%"` e `"MANTER EM GELADEIRA"`.
+- Como `composicao` estava vazia, o código entra no `else` da linha 4478: `composicao = obs_texto` → vira literalmente `"0,05% | MANTER EM GELADEIRA"`.
+- Pior: o item foi marcado como `e_mescla = True` (linha 4480) — mas não é mescla nenhuma, é produto único com observações.
+- A `formula` (nome do produto) **se perdeu** porque o frontend, no ramo `if (mescla)`, imprime só `composicao` e ignora `formula`.
 
-### O que NÃO muda
-- Backend (`servidor.py`) — nenhuma alteração, os dados já vêm todos na mesma resposta.
-- Lógica de geração de texto (`LabelTextEditor.tsx`) — intocada.
-- Persistência no Supabase — intocada.
-- Setas "próximo/anterior" atuais — continuam funcionando lado a lado com os chips.
-- Fluxo de impressão — intocado.
+Resultado no rótulo: a observação "0,05% - MANTER EM GELADEIRA" tomou o lugar do nome do ativo. O nome real do produto (`LATANOPROSTA`) ficou só no `formula` / `descricaoProduto`, mas não foi impresso porque o item foi tratado como mescla.
+
+## Por que só o `-4` deu problema
+
+Os outros itens da req tinham **ativos válidos no FC99999** ou **sem observações no FC03300** — então a composição ficou correta ou ficou vazia (caindo no ramo "produto único" e imprimindo a `formula` corretamente).
+
+O `-4` é o único onde:
+- FC99999 não devolveu o ativo principal.
+- FC03300 tinha observações de manuseio (que **não são ativos**).
+- O merge mecânico transformou observação em "composição falsa" e marcou como mescla.
+
+## Correção proposta
+
+Duas camadas de defesa, **estritamente aditivas** (preservam o que já funciona):
+
+### 1. Backend (`servidor.py`, função que monta o rótulo final por item — bloco linhas ~4469–4492)
+
+Antes de aceitar `obs_texto` do FC03300 como "ativo", validar se realmente parece ativo. Critério: a observação só vira parte da `composicao` se **pelo menos uma** das partes tiver sinal de ativo (dose `MG`/`ML`/`%`/`UI`/`MCG` **acompanhada de um nome com mais de 3 letras**). Casos como `"0,05%"` puro, `"MANTER EM GELADEIRA"`, `"AGITAR ANTES DE USAR"`, `"USO TÓPICO"` são reconhecidos como **observações de manuseio** e:
+- **Não entram** em `composicao`.
+- **Não marcam** o item como `e_mescla`.
+
+Adicionar uma função auxiliar `is_observacao_manuseio(texto)` com lista de gatilhos conhecidos: `MANTER`, `GELADEIRA`, `REFRIGERAR`, `AGITAR`, `USO TÓPICO`, `USO ORAL`, `CONSERVAR`, `ABRIGO DA LUZ`, `AO ABRIGO`, `TEMPERATURA`, `VIA ORAL`, `BANHO MARIA`, etc. Se a observação cair nessa lista (ou for só um percentual/dose isolado sem nome), descarta.
+
+Resultado para o `10236-4`: `composicao` fica vazia → cai no ramo "produto único" → imprime `formula` = `LATANOPROSTA 0,05%` (ou o nome correto vindo do FC).
+
+### 2. Frontend (`src/components/LabelTextEditor.tsx`, funções `generateTextAmp10` e `generateTextAmpCaixa` — ramo `if (mescla)`)
+
+Cinto e suspensório: se a `composicao` (após o `removeNomeReduzidoDaComposicao`) **não contiver nenhum sinal de dose** (`MG|ML|G|%|UI|MCG`), tratar como **falsa mescla** e cair no ramo "produto único" (imprimir `formula`). Isso protege contra qualquer dado legado já salvo no Supabase ou novos casos patológicos que escapem do backend.
+
+### 3. Limpeza do registro já salvo
+
+O texto de `10236-4` no Supabase está com o conteúdo errado (a fix nova só vale para gerações futuras). Após o fix:
+- Apagar a linha `saved_rotulos` onde `nr_requisicao='10236' AND item_id LIKE '10236-4-%'` (todos os layouts).
+- Próxima abertura da req regenera o rótulo corretamente.
+
+## O que NÃO muda
+
+- Mesclas reais (req `10436-7`, `10436-8`, `10474-0` etc.) — continuam mostrando todos os ativos. A nova checagem só descarta observações de manuseio sem dose.
+- Produtos únicos normais (DUTASTERIDA, MINOXIDIL, etc.) — caminho idêntico ao atual.
+- Kits — ramo separado, intocado.
+- Layouts A_PAC_PEQ, A_PAC_GRAN, TIRZ — não usam essa lógica composicao/formula.
+- `servidor.py` — alteração estritamente aditiva (nova função + 2 linhas de filtro), sem remover comportamento existente.
+- Outros textos já salvos no Supabase — preservados (política de "confiança total" mantida).
 
 ## Validação
-1. Pesquisar req `10436` (8 barras) → aparecem 8 chips numerados.
-2. Clicar no chip "7" → editor salta direto para o item 7, sem passar por 2,3,4,5,6.
-3. Item atual fica destacado (borda primary).
-4. Editar item 3, clicar no chip 5 sem salvar → abre `UnsavedChangesDialog` (salvar/descartar/cancelar).
-5. Chips de itens já salvos no Supabase mostram bolinha verde.
-6. Requisição com 1 item só → seletor esconde (não faz sentido).
-7. Requisição com 20+ itens → scroll horizontal funciona.
 
-## Extensão futura (fora deste plano, só anotando)
-- Busca textual dentro do seletor ("filtrar por nome do ativo").
-- Atalhos numéricos (apertar `1`–`9` no teclado para saltar).
+1. Req `010236-4` → após apagar o `saved_rotulos` antigo, deve reaparecer com `LATANOPROSTA 0,05%` (ou nome real do FC), sem o "MANTER EM GELADEIRA".
+2. Req `010236-2` (DUTASTERIDA) → continua com `DUTASTERIDA 0,1%`.
+3. Req `10436-7` (mescla real PROHAIRIN/CAPIXYL/D-PANTENOL) → continua mostrando todos os ativos.
+4. Req `010236-7` (mescla VIT A/D/E/K2 com doses em UI/MCG) → continua mostrando todas as vitaminas.
+5. Verificar logs do backend: o `-4` deve mostrar `[FC03300] descartado: observação de manuseio "MANTER EM GELADEIRA"`.
+6. Mesma checagem nos layouts AMP10 e AMP_CX.
 
