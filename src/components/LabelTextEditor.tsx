@@ -1237,7 +1237,14 @@ const LabelTextEditor = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto border border-border rounded-lg bg-card overflow-hidden">
+    <>
+      <RequisitionItemSelector
+        rotulos={rotulos}
+        currentIndex={currentIndex}
+        onSelect={handleSelectBar}
+        savedIds={savedIds}
+      />
+      <div className="w-full max-w-2xl mx-auto border border-border rounded-lg bg-card overflow-hidden">
       {/* Header */}
       <div className="bg-muted/50 border-b border-border px-4 py-2 flex items-center justify-between">
         <div>
