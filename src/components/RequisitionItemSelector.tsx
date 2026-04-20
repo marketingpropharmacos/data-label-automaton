@@ -66,7 +66,10 @@ const RequisitionItemSelector = ({
                 <span>#{itemNumber}</span>
                 {saved && (
                   <CheckCircle2
-                    className="h-3 w-3 text-emerald-500"
+                    className={cn(
+                      "h-3 w-3",
+                      isActive ? "text-primary-foreground" : "text-primary",
+                    )}
                     aria-label="Texto salvo"
                   />
                 )}
