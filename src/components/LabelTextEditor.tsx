@@ -365,9 +365,13 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
       // Composição como texto contínuo, quebrada por largura de coluna
       const compText = (rotulo.composicao || "").toUpperCase();
       wrapText(compText, W, 2).split('\n').forEach(l => lines.push(l));
-      // Fórmula/descrição com volume
+      // Fórmula/descrição com volume — só imprime se diferente da composição (evita duplicação em produto único)
       const formulaRaw = (rotulo.formula || "").toUpperCase();
-      if (formulaRaw) lines.push(formulaRaw.substring(0, W));
+      const norm = (s: string) => s.toUpperCase().replace(/[%,]/g, '').replace(/\s+/g, ' ').trim();
+      const compNorm = norm(rotulo.composicao || "");
+      const formNorm = norm(rotulo.formula || "");
+      const formulaJaEstaNaComposicao = !!formNorm && (compNorm === formNorm || compNorm.includes(formNorm));
+      if (formulaRaw && !formulaJaEstaNaComposicao) lines.push(formulaRaw.substring(0, W));
     } else {
       const produtoText = formatarFormula(rotulo.formula);
       if (produtoText) wrapText(produtoText, W, 2).split('\n').forEach(l => lines.push(l));
