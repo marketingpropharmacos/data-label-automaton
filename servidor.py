@@ -252,10 +252,17 @@ def is_observacao_manuseio(linha: str) -> bool:
     return False
 
 
-def is_ativo_mescla(linha: str) -> bool:
+def is_ativo_mescla(linha: str, exigir_dose: bool = False) -> bool:
     """
     Retorna True se a linha parece ser um ativo real de mescla.
     Critérios: NÃO é embalagem, NÃO é observação de manuseio E tem características de ativo.
+
+    Args:
+        linha: texto a avaliar
+        exigir_dose: se True, exige indicador de dose (MG/ML/%/UI/MCG) para aceitar.
+                     Use True quando a linha vem do FC03300 (observações livres do FC),
+                     onde nomes de fórmulas/referências cruzadas costumam aparecer
+                     sem dose e devem ser descartados.
     """
     if is_embalagem_ou_obs(linha):
         return False
@@ -268,15 +275,28 @@ def is_ativo_mescla(linha: str) -> bool:
     if len(linha_upper) < 3:
         return False
     
-    # Indicadores positivos de que É um ativo
-    INDICADORES_ATIVO = ['MG', 'ML', '%', 'UI', 'IU', 'MCG', 'G/ML', 'MG/ML']
+    # Indicadores positivos de que É um ativo (dose/concentração)
+    # Usa word boundaries para evitar falsos positivos (ex: "ME" dentro de "PODOLOGIA - ME").
+    # %, MG/ML e G/ML são checados como substring porque são inequívocos.
+    import re as _re_dose
+    tem_dose = bool(
+        '%' in linha_upper
+        or 'MG/ML' in linha_upper
+        or 'G/ML' in linha_upper
+        or _re_dose.search(r'\b(MG|ML|MCG|UI|IU)\b', linha_upper)
+    )
     
-    # Se contém indicador de concentração, provavelmente é ativo
-    for indicador in INDICADORES_ATIVO:
-        if indicador in linha_upper:
-            return True
+    if tem_dose:
+        return True
     
-    # Se não é embalagem e tem tamanho razoável, considera como potencial ativo
+    # Sem dose: depende da origem.
+    # FC03300 (exigir_dose=True): rejeita. Linhas como "ESTRIAS BRANCAS CHANELL"
+    # ou nomes de fórmulas/referências cruzadas não são ativos reais.
+    if exigir_dose:
+        return False
+    
+    # FC99999/outras fontes confiáveis (exigir_dose=False): mantém comportamento legado
+    # (aceita texto >=5 chars como potencial ativo, p/ não regredir mesclas existentes).
     if len(linha_upper) >= 5:
         return True
     
@@ -4486,9 +4506,12 @@ def buscar_requisicao(nr_requisicao):
                 
                 # =====================================================
                 # 4. VALIDA SE É ATIVO REAL usando is_ativo_mescla()
+                # exigir_dose=True: descarta nomes de fórmulas/
+                # referências cruzadas no FC03300 sem indicador de dose
+                # (ex: "ESTRIAS BRANCAS CHANELL", "FORMULA REVITALIZE").
                 # =====================================================
-                if not is_ativo_mescla(texto_limpo):
-                    print(f"      -> IGNORADO (não é ativo de mescla)")
+                if not is_ativo_mescla(texto_limpo, exigir_dose=True):
+                    print(f"      -> IGNORADO (não é ativo de mescla — sem dose)")
                     continue
                 
                 # Chegou até aqui = é ativo real válido
