@@ -3347,6 +3347,320 @@ export type Database = {
           },
         ]
       }
+      pv_audit_events: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          details: Json
+          entity_id: string | null
+          entity_table: string
+          id: string
+          project_key: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          entity_id?: string | null
+          entity_table: string
+          id?: string
+          project_key?: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          details?: Json
+          entity_id?: string | null
+          entity_table?: string
+          id?: string
+          project_key?: string
+        }
+        Relationships: []
+      }
+      pv_customers: {
+        Row: {
+          address: Json
+          created_at: string
+          created_by: string
+          document_number: string | null
+          email: string | null
+          id: string
+          metadata: Json
+          name: string
+          notes: string | null
+          phone: string | null
+          project_key: string
+          updated_at: string
+        }
+        Insert: {
+          address?: Json
+          created_at?: string
+          created_by: string
+          document_number?: string | null
+          email?: string | null
+          id?: string
+          metadata?: Json
+          name: string
+          notes?: string | null
+          phone?: string | null
+          project_key?: string
+          updated_at?: string
+        }
+        Update: {
+          address?: Json
+          created_at?: string
+          created_by?: string
+          document_number?: string | null
+          email?: string | null
+          id?: string
+          metadata?: Json
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          project_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pv_order_items: {
+        Row: {
+          created_at: string
+          discount: number
+          id: string
+          notes: string | null
+          order_id: string
+          product_id: string | null
+          product_snapshot: Json
+          project_key: string
+          quantity: number
+          subtotal: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discount?: number
+          id?: string
+          notes?: string | null
+          order_id: string
+          product_id?: string | null
+          product_snapshot?: Json
+          project_key?: string
+          quantity?: number
+          subtotal?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discount?: number
+          id?: string
+          notes?: string | null
+          order_id?: string
+          product_id?: string | null
+          product_snapshot?: Json
+          project_key?: string
+          quantity?: number
+          subtotal?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pv_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "pv_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pv_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "pv_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pv_orders: {
+        Row: {
+          channel: string
+          created_at: string
+          created_by: string
+          customer_id: string | null
+          discount_total: number
+          id: string
+          metadata: Json
+          notes: string | null
+          origin: string | null
+          project_key: string
+          status: Database["public"]["Enums"]["pv_order_status"]
+          subtotal: number
+          total: number
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          channel?: string
+          created_at?: string
+          created_by: string
+          customer_id?: string | null
+          discount_total?: number
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          origin?: string | null
+          project_key?: string
+          status?: Database["public"]["Enums"]["pv_order_status"]
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          created_by?: string
+          customer_id?: string | null
+          discount_total?: number
+          id?: string
+          metadata?: Json
+          notes?: string | null
+          origin?: string | null
+          project_key?: string
+          status?: Database["public"]["Enums"]["pv_order_status"]
+          subtotal?: number
+          total?: number
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pv_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "pv_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pv_products: {
+        Row: {
+          active: boolean
+          category: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          laboratory: string | null
+          metadata: Json
+          name: string
+          price: number
+          project_key: string
+          sku: string
+          stock_quantity: number
+          updated_at: string
+          usage_rules: Json
+        }
+        Insert: {
+          active?: boolean
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          laboratory?: string | null
+          metadata?: Json
+          name: string
+          price?: number
+          project_key?: string
+          sku: string
+          stock_quantity?: number
+          updated_at?: string
+          usage_rules?: Json
+        }
+        Update: {
+          active?: boolean
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          laboratory?: string | null
+          metadata?: Json
+          name?: string
+          price?: number
+          project_key?: string
+          sku?: string
+          stock_quantity?: number
+          updated_at?: string
+          usage_rules?: Json
+        }
+        Relationships: []
+      }
+      pv_project_registry: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json
+          project_key: string
+          project_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          project_key?: string
+          project_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json
+          project_key?: string
+          project_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pv_user_roles: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          project_key: string
+          role: Database["public"]["Enums"]["pv_app_role"]
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          project_key?: string
+          role: Database["public"]["Enums"]["pv_app_role"]
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          project_key?: string
+          role?: Database["public"]["Enums"]["pv_app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       rateio_empreendimento_criterios: {
         Row: {
           ano: number
@@ -5487,6 +5801,14 @@ export type Database = {
         Args: { prefix: string; seq_name: string }
         Returns: string
       }
+      pv_can_manage_all: { Args: { _user_id: string }; Returns: boolean }
+      pv_has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["pv_app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       rh_get_user_unidades: { Args: { _user_id: string }; Returns: string[] }
       rh_has_role: {
         Args: {
@@ -5603,6 +5925,13 @@ export type Database = {
         | "completed"
         | "failed"
       lb_user_role: "admin" | "manager" | "member" | "viewer" | "guest"
+      pv_app_role: "admin" | "operacao" | "vendas" | "consulta"
+      pv_order_status:
+        | "rascunho"
+        | "orcamento"
+        | "aprovado"
+        | "faturado"
+        | "cancelado"
       rh_app_role: "admin" | "viewer"
       rv_colaborador_tipo:
         | "vendas"
@@ -5868,6 +6197,14 @@ export const Constants = {
         "failed",
       ],
       lb_user_role: ["admin", "manager", "member", "viewer", "guest"],
+      pv_app_role: ["admin", "operacao", "vendas", "consulta"],
+      pv_order_status: [
+        "rascunho",
+        "orcamento",
+        "aprovado",
+        "faturado",
+        "cancelado",
+      ],
       rh_app_role: ["admin", "viewer"],
       rv_colaborador_tipo: [
         "vendas",
