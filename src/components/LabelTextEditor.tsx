@@ -266,22 +266,31 @@ const removeNomeReduzidoDaComposicao = (composicao: string, formula?: string): s
     .split(/[\s,/]+/)
     .filter(t => t.length > 3 && !/^\d+(MG|ML|G|%)?$/i.test(t));
 
+  // Regex para detectar dose válida em um ativo (MG, ML, MCG, UI, IU, %, G/ML)
+  const TEM_DOSE = /\d\s*(MG|ML|MCG|UI|IU|G\/ML)\b|\d\s*%/i;
+
   const partes = composicao.split(',').map(p => p.trim()).filter(Boolean);
   const filtradas = partes.filter(parte => {
     const parteNorm = norm(parte);
     if (!parteNorm) return false;
+
     // Match exato com o nome reduzido
     if (parteNorm === formulaNorm) return false;
     // Match por contenção bidirecional
     if (formulaNorm.includes(parteNorm) && parteNorm.length > 8) return false;
     if (parteNorm.includes(formulaNorm) && formulaNorm.length > 8) return false;
-    // Match por sobreposição forte de tokens (>=2 tokens significativos compartilhados
-    // E a parte não tem números/percentuais — ativos reais quase sempre têm dose)
+
+    // DEFESA EM PROFUNDIDADE: Parte sem dose não é ativo real.
+    // Ativos legítimos SEMPRE têm dose (MG/ML/MCG/UI/%/G/ML). Se uma parte não
+    // tem dose, é nome de fórmula, observação de manuseio ou referência cruzada
+    // (ex: "ESTRIAS BRANCAS CHANELL", "MANTER EM GELADEIRA") — descarta.
+    if (!TEM_DOSE.test(parte)) return false;
+
+    // Match por sobreposição forte de tokens (>=2 tokens significativos compartilhados)
     if (formulaTokens.length >= 2) {
       const parteTokens = parteNorm.split(/[\s,/]+/).filter(t => t.length > 3);
       const compartilhados = formulaTokens.filter(t => parteTokens.includes(t));
-      const temDose = /\d+\s*(MG|ML|G|%|UI|MCG)/i.test(parte);
-      if (compartilhados.length >= 2 && !temDose) return false;
+      if (compartilhados.length >= 2) return false;
     }
     return true;
   });
