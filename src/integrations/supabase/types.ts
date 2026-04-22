@@ -4551,6 +4551,51 @@ export type Database = {
         }
         Relationships: []
       }
+      rv_historico_trimestre: {
+        Row: {
+          ano: number
+          created_at: string
+          dfc_meta: number
+          dfc_real: number
+          dre_meta: number
+          dre_real: number
+          id: number
+          observacao: string | null
+          pool_codigo: string | null
+          store_id: number | null
+          trimestre: number
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          dfc_meta?: number
+          dfc_real?: number
+          dre_meta?: number
+          dre_real?: number
+          id?: number
+          observacao?: string | null
+          pool_codigo?: string | null
+          store_id?: number | null
+          trimestre: number
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          dfc_meta?: number
+          dfc_real?: number
+          dre_meta?: number
+          dre_real?: number
+          id?: number
+          observacao?: string | null
+          pool_codigo?: string | null
+          store_id?: number | null
+          trimestre?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rv_lab_deducoes: {
         Row: {
           colaborador_id: number
