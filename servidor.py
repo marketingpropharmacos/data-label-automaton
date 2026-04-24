@@ -5881,6 +5881,139 @@ def update_servidor():
     return jsonify({"success": True, "message": "Atualizado! Reiniciando em 3 segundos...", "updated": True})
 
 
+# =====================================================
+# ROTAS: BUSCA DE CLIENTES E PRODUTOS (e-commerce-vitae)
+# =====================================================
+
+@app.route('/api/clientes/buscar', methods=['GET', 'OPTIONS'])
+def buscar_clientes():
+    """Busca clientes no FC07000 por nome ou CPF/CNPJ."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'clientes': [], 'erro': None})
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Normaliza entrada removendo formatação de CPF/CNPJ
+        q_digits = re.sub(r'[\.\-/]', '', q)
+        busca_cpf = q_digits.isdigit()
+
+        if busca_cpf:
+            cursor.execute("""
+                SELECT FIRST 20
+                    c.CDCLI,
+                    c.NOMECLI,
+                    c.NRCNPJ,
+                    c.EMAIL,
+                    e.NRDDD,
+                    e.NRTEL
+                FROM FC07000 c
+                LEFT JOIN FC07200 e ON e.CDCLI = c.CDCLI AND e.OCENDER = '1'
+                WHERE c.NRCNPJ STARTING WITH ?
+                ORDER BY c.NOMECLI
+            """, (q_digits,))
+        else:
+            cursor.execute("""
+                SELECT FIRST 20
+                    c.CDCLI,
+                    c.NOMECLI,
+                    c.NRCNPJ,
+                    c.EMAIL,
+                    e.NRDDD,
+                    e.NRTEL
+                FROM FC07000 c
+                LEFT JOIN FC07200 e ON e.CDCLI = c.CDCLI AND e.OCENDER = '1'
+                WHERE UPPER(c.NOMECLI) CONTAINING UPPER(?)
+                ORDER BY c.NOMECLI
+            """, (q.upper(),))
+
+        clientes = []
+        for row in cursor.fetchall():
+            cdcli, nomecli, nrcnpj, email, nrddd, nrtel = row
+            telefone = ''
+            if nrddd and nrtel:
+                telefone = f'({nrddd.strip()}) {nrtel.strip()}'
+            clientes.append({
+                'id': cdcli,
+                'nome': (nomecli or '').strip(),
+                'documento': (nrcnpj or '').strip(),
+                'email': (email or '').strip(),
+                'telefone': telefone,
+                'formulaCode': f'FC-{cdcli:05d}',
+            })
+
+        cursor.close()
+        conn.close()
+        return jsonify({'clientes': clientes, 'erro': None})
+
+    except Exception as e:
+        print(f'[BUSCAR_CLIENTES] Erro: {e}')
+        traceback.print_exc()
+        return jsonify({'clientes': [], 'erro': str(e)}), 500
+
+
+@app.route('/api/produtos/buscar', methods=['GET', 'OPTIONS'])
+def buscar_produtos():
+    """Busca produtos ativos no FC03000 por nome."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'produtos': [], 'erro': None})
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT FIRST 30
+                CDPRO,
+                DESCR,
+                DESCRPRD,
+                SITUA,
+                INDDEL,
+                PRVEN,
+                GRUPO,
+                SETOR,
+                DIASVAL
+            FROM FC03000
+            WHERE UPPER(DESCR) CONTAINING UPPER(?)
+              AND SITUA = 'A'
+              AND INDDEL = 'N'
+            ORDER BY DESCR
+        """, (q.upper(),))
+
+        produtos = []
+        for row in cursor.fetchall():
+            cdpro, descr, descrprd, situa, inddel, prven, grupo, setor, diasval = row
+            # PRVEN armazenado em centésimos de centavo (dividir por 10000)
+            preco = round((prven or 0) / 10000, 2)
+            produtos.append({
+                'id': cdpro,
+                'nome': (descr or '').strip(),
+                'nomeReduzido': (descrprd or '').strip(),
+                'preco': preco,
+                'grupo': (grupo or '').strip(),
+                'setor': (setor or '').strip(),
+                'diasValidade': diasval or 0,
+            })
+
+        cursor.close()
+        conn.close()
+        return jsonify({'produtos': produtos, 'erro': None})
+
+    except Exception as e:
+        print(f'[BUSCAR_PRODUTOS] Erro: {e}')
+        traceback.print_exc()
+        return jsonify({'produtos': [], 'erro': str(e)}), 500
+
+
 if __name__ == '__main__':
     print("=" * 50)
     print("Servidor iniciando na porta 5000...")
