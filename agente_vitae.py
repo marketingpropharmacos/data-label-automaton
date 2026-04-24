@@ -465,6 +465,147 @@ def query_livre():
         return jsonify({'erro': str(e)}), 500
 
 
+# ── REQUISIÇÕES (MANIPULADOS) ────────────────────────────────────────────────
+#
+# ATENÇÃO: os nomes das tabelas abaixo (FC01000, FC01100) são suposições
+# baseadas na convenção do FormulaCerta. Se retornar erro 500, use
+# GET /api/tabelas para listar as tabelas reais e ajuste aqui.
+#
+@app.route('/api/requisicoes/buscar', methods=['GET', 'OPTIONS'])
+def buscar_requisicoes():
+    """
+    Busca requisições no FC.
+    ?q=<número>      — busca pelo número exato da REQ
+    ?cdcli=<código>  — busca pelo código do cliente
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    q     = (request.args.get('q') or '').strip()
+    cdcli = (request.args.get('cdcli') or '').strip()
+
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        where  = []
+        params = []
+
+        if q and q.isdigit():
+            where.append('r.NRREQ = ?')
+            params.append(int(q))
+        elif q:
+            where.append('UPPER(c.NOMECLI) CONTAINING UPPER(?)')
+            params.append(q)
+
+        if cdcli and cdcli.isdigit():
+            where.append('r.CDCLI = ?')
+            params.append(int(cdcli))
+
+        if not where:
+            return jsonify({'requisicoes': [], 'total': 0})
+
+        sql = f"""
+            SELECT FIRST 20
+                r.NRREQ, r.CDCLI, r.DTREQ, r.SITUA, c.NOMECLI
+            FROM FC01000 r
+            LEFT JOIN FC07000 c ON c.CDCLI = r.CDCLI
+            WHERE {' AND '.join(where)}
+            ORDER BY r.NRREQ DESC
+        """
+        cursor.execute(sql, params)
+
+        requisicoes = []
+        for row in cursor.fetchall():
+            nrreq, cdcli_v, dtreq, situa, nomecli = row
+            requisicoes.append({
+                'nrreq':    nrreq,
+                'cdcli':    cdcli_v,
+                'cliente':  strip(nomecli) or '',
+                'data':     str(dtreq) if dtreq else '',
+                'situacao': strip(situa) or '',
+            })
+
+        cursor.close()
+        conn.close()
+        return jsonify({'requisicoes': requisicoes, 'total': len(requisicoes)})
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'requisicoes': [], 'total': 0, 'erro': str(e)}), 500
+
+
+@app.route('/api/requisicoes/<nrreq>', methods=['GET'])
+def get_requisicao(nrreq):
+    """
+    Retorna dados completos de uma requisição pelo número.
+    Cabeçalho: FC01000 | Itens: FC01100
+
+    Campos de preço (VLVEND, VLSUB) são divididos por 10000 para chegar ao R$.
+    Se os valores saírem errados, verificar o divisor — pode ser 100 ou 1.
+    """
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        # ── Cabeçalho ──
+        cursor.execute("""
+            SELECT FIRST 1
+                r.NRREQ, r.CDCLI, r.DTREQ, r.SITUA,
+                c.NOMECLI, r.NRATEND
+            FROM FC01000 r
+            LEFT JOIN FC07000 c ON c.CDCLI = r.CDCLI
+            WHERE r.NRREQ = ?
+        """, (int(nrreq),))
+
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return jsonify({'erro': f'Requisição {nrreq} não encontrada'}), 404
+
+        nrreq_v, cdcli, dtreq, situa, nomecli, nratend = row
+
+        # ── Itens ──
+        cursor.execute("""
+            SELECT
+                i.NRITEM, i.CDPRO, i.DESCR,
+                i.QTPRD, i.VLVEND, i.VLSUB
+            FROM FC01100 i
+            WHERE i.NRREQ = ?
+            ORDER BY i.NRITEM
+        """, (int(nrreq),))
+
+        itens = []
+        for r in cursor.fetchall():
+            nritem, cdpro, descr, qtprd, vlvend, vlsub = r
+            itens.append({
+                'item':       nritem,
+                'cdpro':      cdpro,
+                'descricao':  strip(descr) or '',
+                'quantidade': float(qtprd or 0),
+                'precoUnit':  round(float(vlvend or 0) / 10000, 2),
+                'subtotal':   round(float(vlsub or 0) / 10000, 2),
+            })
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            'nrreq':     nrreq_v,
+            'cdcli':     cdcli,
+            'cliente':   strip(nomecli) or '',
+            'data':      str(dtreq) if dtreq else '',
+            'situacao':  strip(situa) or '',
+            'atendente': strip(nratend) or '',
+            'itens':     itens,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 # ── START ────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     print('=' * 55)
@@ -478,6 +619,8 @@ if __name__ == '__main__':
     print('  GET  /api/produtos/buscar?q=<texto>')
     print('  GET  /api/produtos/<cdpro>')
     print('  GET  /api/prescritores/buscar?q=<nome_ou_crm>')
+    print('  GET  /api/requisicoes/buscar?q=<nrreq>')
+    print('  GET  /api/requisicoes/<nrreq>')
     print('  GET  /api/tabelas')
     print('  GET  /api/tabelas/<nome>/colunas')
     print('  POST /api/query  { sql, params }')
