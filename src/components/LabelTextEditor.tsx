@@ -332,7 +332,7 @@ function generateTextPacPeq(rotulo: RotuloItem, layoutConfig: LayoutConfig): str
   const tipo = tiposPrescritores[codigo] || { conselho: 'CRM' };
   const conselhoNome = tipo.conselho || 'CRM';
   const conselhoStr = rotulo.numeroCRM
-    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`.substring(0, 15)
+    ? `${conselhoNome}-${rotulo.ufCRM || '??'}-${rotulo.numeroCRM}`
     : "";
   // Espaço disponível para o nome do médico (descontando "DR(A)" e conselho)
   const medicoMax = conselhoStr ? maxCols - 5 - conselhoStr.length - 1 : maxCols - 5;
