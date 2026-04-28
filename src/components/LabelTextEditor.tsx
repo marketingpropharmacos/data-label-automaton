@@ -768,7 +768,7 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   lines.push(metaParts.join(' ').substring(0, maxCols));
 
   // ── LINE uso + AP ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const usoLine = aplicacaoStr ? padLine(usoText, aplicacaoStr, maxCols) : usoText;
