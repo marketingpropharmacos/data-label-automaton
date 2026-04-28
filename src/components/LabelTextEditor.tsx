@@ -929,7 +929,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (vis('contem') && rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
     if (infoLine.length > 0) lines.push(infoLine.join('  '));
   }
-  if (vis('tipoUso')) { const t = extrairTipoUso(rotulo.posologia, rotulo.tipoUso); if (t && !/^\d+$/.test(t)) lines.push(t); }
+  if (vis('tipoUso')) { const t = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula); if (t && !/^\d+$/.test(t)) lines.push(t); }
   // posologia removida do rótulo
   if (vis('observacoes')) {
     const obs = rotulo.observacoes?.replace(/APLIC(?:AÇÃO|ACAO)?[:\s]+[^\n,;]+[,;\s]*/gi, "").trim();
