@@ -16,11 +16,20 @@ const TIPOS_USO_VALIDOS = [
   'USO NASAL', 'USO ORAL'
 ];
 
-function extrairTipoUso(posologia: string | undefined, tipoUso: string | undefined): string {
+function extrairTipoUso(posologia: string | undefined, tipoUso: string | undefined, formula?: string): string {
   const pos = posologia?.toUpperCase().trim() || "";
   if (TIPOS_USO_VALIDOS.includes(pos)) return pos;
-  return tipoUso?.toUpperCase() || "";
+  
+  const uso = tipoUso?.toUpperCase() || "";
+  
+  // Regra de segurança para Tirzepatida: nunca deixar sair como NASAL
+  if (uso === "USO NASAL" && formula?.toUpperCase().includes("TIRZEPATIDA")) {
+    return "USO EM CONSULTORIO";
+  }
+  
+  return uso;
 }
+
 
 // ---- Word-wrap utility ----
 function wrapText(text: string, maxCols: number, maxLines: number): string {
@@ -452,7 +461,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   lines.push(metaParts.join('  ').substring(0, W));
 
   // ── LINE 6: Uso (left) | Aplicação (right) — compact gap ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
   lines.push(compactLine(usoText, aplicacaoStr, 4));
@@ -694,7 +703,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   lines.push(indentLine(metaParts.join(' ')));
 
   // ── USO | AP:... (full line, no REG here) ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const leftPart = usoText + (aplicacaoStr ? '  ' + aplicacaoStr : '');
@@ -759,7 +768,7 @@ function generateTextTirz(rotulo: RotuloItem, layoutConfig: LayoutConfig): strin
   lines.push(metaParts.join(' ').substring(0, maxCols));
 
   // ── LINE uso + AP ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const usoLine = aplicacaoStr ? padLine(usoText, aplicacaoStr, maxCols) : usoText;
@@ -920,7 +929,7 @@ function generateText(rotulo: RotuloItem, layoutConfig: LayoutConfig, layoutType
     if (vis('contem') && rotulo.contem) infoLine.push(`CONT: ${rotulo.contem}`);
     if (infoLine.length > 0) lines.push(infoLine.join('  '));
   }
-  if (vis('tipoUso')) { const t = extrairTipoUso(rotulo.posologia, rotulo.tipoUso); if (t && !/^\d+$/.test(t)) lines.push(t); }
+  if (vis('tipoUso')) { const t = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula); if (t && !/^\d+$/.test(t)) lines.push(t); }
   // posologia removida do rótulo
   if (vis('observacoes')) {
     const obs = rotulo.observacoes?.replace(/APLIC(?:AÇÃO|ACAO)?[:\s]+[^\n,;]+[,;\s]*/gi, "").trim();

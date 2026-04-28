@@ -3338,6 +3338,19 @@ def buscar_requisicao(nr_requisicao):
         
         itens = cursor.fetchall()
         
+        # --- CORREÇÃO DE SEGURANÇA: TIRZEPATIDA ---
+        # Se for Tirzepatide e estiver como USO NASAL, corrige para USO EM CONSULTORIO.
+        # Evita erro comum de cadastro/digitação onde injetáveis saem como nasal.
+        if dados_base["tipoUso"] == "USO NASAL":
+            for item in itens:
+                descr_item = (item[1] or "").upper()
+                descr_p = (item[8] or "").upper()
+                if "TIRZEPATIDA" in descr_item or "TIRZEPATIDA" in descr_p:
+                    print(f"  [FIX] Corrigindo tipoUso de 'USO NASAL' para 'USO EM CONSULTORIO' para Tirzepatida")
+                    dados_base["tipoUso"] = "USO EM CONSULTORIO"
+                    break
+
+        
         # Lista de materiais a excluir da composição (embalagens, veículos, conservantes)
         materiais_excluir = [
             'TAMPA', 'SELO', 'FR AMBAR', 'FRASCO', 'AMPOLA',
