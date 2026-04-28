@@ -461,7 +461,7 @@ function generateTextAmpCx(rotulo: RotuloItem, layoutConfig: LayoutConfig): stri
   lines.push(metaParts.join('  ').substring(0, W));
 
   // ── LINE 6: Uso (left) | Aplicação (right) — compact gap ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `APLICACAO:${aplicacao}` : "";
   lines.push(compactLine(usoText, aplicacaoStr, 4));
