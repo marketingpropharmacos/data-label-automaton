@@ -703,7 +703,7 @@ function generateTextAmp10(rotulo: RotuloItem, layoutConfig: LayoutConfig, optio
   lines.push(indentLine(metaParts.join(' ')));
 
   // ── USO | AP:... (full line, no REG here) ──
-  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso);
+  const usoText = extrairTipoUso(rotulo.posologia, rotulo.tipoUso, rotulo.formula);
   const aplicacao = rotulo.aplicacao?.trim().toUpperCase() || "";
   const aplicacaoStr = aplicacao ? `AP:${aplicacao}` : "";
   const leftPart = usoText + (aplicacaoStr ? '  ' + aplicacaoStr : '');
