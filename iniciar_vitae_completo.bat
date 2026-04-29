@@ -9,7 +9,7 @@ echo =========================================
 echo.
 
 echo [1/4] Baixando agente_vitae.py do GitHub...
-powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/marketingpropharmacos/data-label-automaton/main/agente_vitae.py' -OutFile 'C:\ServidorRotulos\agente_vitae.py'"
+python -c "import urllib.request,json,base64;req=urllib.request.Request('https://api.github.com/repos/marketingpropharmacos/data-label-automaton/contents/agente_vitae.py',headers={'User-Agent':'Mozilla/5.0'});r=urllib.request.urlopen(req);d=json.loads(r.read());open('C:/ServidorRotulos/agente_vitae.py','wb').write(base64.b64decode(d['content'].replace('\n','')))"
 echo Feito.
 echo.
 
