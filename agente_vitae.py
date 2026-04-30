@@ -241,13 +241,22 @@ def buscar_produtos():
         conn = get_db()
         cursor = conn.cursor()
 
-        # Busca por código numérico (CDPRO) ou por nome (DESCR)
+        # Busca por código numérico (CDPRO) ou por nome (DESCR + DESCRPRD)
         if q.isdigit():
             where  = ["CDPRO = ?"]
             params = [int(q)]
         else:
-            where  = ["UPPER(DESCR) CONTAINING UPPER(?)"]
-            params = [q]
+            # Quebra em palavras e exige que cada palavra apareça em DESCR ou DESCRPRD
+            palavras = [p for p in q.split() if len(p) >= 2]
+            word_clauses = []
+            for p in palavras:
+                word_clauses.append(
+                    "(UPPER(DESCR) CONTAINING UPPER(?) OR UPPER(DESCRPRD) CONTAINING UPPER(?))"
+                )
+                params += [p, p]
+            where = word_clauses if word_clauses else ["UPPER(DESCR) CONTAINING UPPER(?)"]
+            if not word_clauses:
+                params = [q]
 
         if ativos_apenas:
             where.append("SITUA = 'A'")
