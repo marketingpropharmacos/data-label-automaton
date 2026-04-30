@@ -216,6 +216,40 @@ def get_cliente(cdcli):
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/api/clientes/<int:cdcli>/enderecos', methods=['GET', 'OPTIONS'])
+def get_enderecos_cliente(cdcli):
+    """Retorna todos os endereços cadastrados para um cliente."""
+    if request.method == 'OPTIONS':
+        return '', 204
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT OCENDER, ENDER, ENDNR, ENDCP, BAIRR, MUNIC, UNFED, NRCEP, OBSENTREGA
+            FROM FC07200
+            WHERE CDCLI = ?
+            ORDER BY OCENDER
+        """, (cdcli,))
+        enderecos = []
+        for row in cursor.fetchall():
+            ocender, ender, endnr, endcp, bairr, munic, unfed, nrcep, obsent = row
+            partes = [p for p in [
+                strip(ender), strip(endnr), strip(endcp),
+                strip(bairr), strip(munic), strip(unfed),
+            ] if p]
+            endereco_str = ', '.join(partes)
+            if nrcep: endereco_str += f' — CEP {strip(nrcep)}'
+            if obsent: endereco_str += f' ({strip(obsent)})'
+            if endereco_str:
+                enderecos.append({'ocender': str(ocender).strip(), 'endereco': endereco_str})
+        cursor.close()
+        conn.close()
+        return jsonify({'enderecos': enderecos})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'enderecos': [], 'erro': str(e)}), 500
+
+
 # ── PRODUTOS / ATIVOS ────────────────────────────────────────────────────────
 @app.route('/api/produtos/buscar', methods=['GET', 'OPTIONS'])
 def buscar_produtos():
