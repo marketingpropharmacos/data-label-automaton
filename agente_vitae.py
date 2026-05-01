@@ -951,7 +951,6 @@ def criar_orcamento():
                 'FLAGFIC':     'N',
                 'FLAGROT':     'N',
                 'FLAGRQU':     'N',
-                'CDFUN':       cdfun,
             })
 
             cols   = list(row.keys())
