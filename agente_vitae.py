@@ -829,6 +829,133 @@ def get_composicao_produto(cdpro):
         return jsonify({'ativos': [], 'composicao': '', 'erro': str(e)}), 500
 
 
+@app.route('/api/orcamentos/criar', methods=['POST', 'OPTIONS'])
+def criar_orcamento():
+    """
+    Cria uma requisição/orçamento no FormulaCerta.
+    Body JSON:
+      cdfil     int   (padrão 392)
+      cdcli     int   (obrigatório)
+      cdfun     int   (código do funcionário)
+      vrtotal   float
+      vrdsc     float (padrão 0)
+      pfcrm     str   ('1'=CRM, '2'=CRO, '3'=CRMV)
+      nrcrm     int
+      ufcrm     str   (ex: 'SP')
+      posol     str   (posologia padrão de todos os itens)
+      itens     list de:
+        nomepa  str
+        volume  int
+        univol  str   (padrão 'ML')
+        qtfor   int
+        prcobr  float
+        tpforma int   (padrão 14)
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    data = request.get_json(force=True) or {}
+
+    try:
+        cdfil   = int(data.get('cdfil', 392))
+        cdcli   = int(data['cdcli'])
+        cdfun   = int(data.get('cdfun', 0))
+        vrtotal = float(data.get('vrtotal', 0.0))
+        vrdsc   = float(data.get('vrdsc', 0.0))
+        pfcrm   = str(data.get('pfcrm', '1'))
+        nrcrm   = int(data.get('nrcrm', 0))
+        ufcrm   = str(data.get('ufcrm', 'SP'))[:2]
+        posol   = str(data.get('posol', 'uso em consultório'))[:100]
+        itens   = data.get('itens', [])
+    except (KeyError, ValueError, TypeError) as e:
+        return jsonify({'erro': f'Parâmetro inválido: {e}', 'sucesso': False}), 400
+
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        # Próximo NRRQU pelo generator da filial
+        gen_name = f'GN_REQUISICAO{cdfil:04d}'
+        cursor.execute(f'SELECT GEN_ID({gen_name}, 1) FROM RDB$DATABASE')
+        nrrqu = cursor.fetchone()[0]
+
+        hoje = datetime.date.today()
+        dtval = hoje + datetime.timedelta(days=180)  # validade padrão 6 meses
+
+        # ── Cabeçalho FC12000 ──────────────────────────────────────────────
+        cursor.execute("""
+            INSERT INTO FC12000 (
+                CDFIL, NRRQU, CDCLI, CDFILD,
+                DTENTR, VRRQU, VRDSC, VRTXA,
+                FLAGENV, CDFUN
+            ) VALUES (
+                ?, ?, ?, ?,
+                ?, ?, ?, 0.0,
+                'N', ?
+            )
+        """, (cdfil, nrrqu, cdcli, cdfil,
+              hoje, vrtotal, vrdsc,
+              cdfun))
+
+        # ── Itens FC12100 (um por produto do carrinho) ─────────────────────
+        for item in itens:
+            nomepa  = str(item.get('nomepa', ''))[:50]
+            volume  = int(item.get('volume', 0))
+            univol  = str(item.get('univol', 'ML'))[:3]
+            qtfor   = int(item.get('qtfor', 1))
+            prcobr  = float(item.get('prcobr', 0.0))
+            tpforma = int(item.get('tpforma', 14))
+
+            cursor.execute("""
+                INSERT INTO FC12100 (
+                    CDFIL, NRRQU, SERIER, NRORC, SERIEO,
+                    CDCLI, DTENTR, DTCAD, DTVAL,
+                    NOMEPA, PFCRM, NRCRM, UFCRM,
+                    POSOL, TPUSO,
+                    VOLUME, UNIVOL,
+                    QTFOR, QTCONT,
+                    PRCOBR, PRREAL, PRCUSTO,
+                    TPFORMAFARMA,
+                    VRDSC, PTDSC,
+                    FLAGENV, FLAGFIC, FLAGROT, FLAGRQU
+                ) VALUES (
+                    ?, ?, 'A', ?, 'A',
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, 'I',
+                    ?, ?,
+                    ?, 1,
+                    ?, ?, 0.0,
+                    ?,
+                    0.0, 0,
+                    'N', 'N', 'N', 'N'
+                )
+            """, (
+                cdfil, nrrqu, nrrqu,
+                cdcli, hoje, hoje, dtval,
+                nomepa, pfcrm, nrcrm, ufcrm,
+                posol,
+                volume, univol,
+                qtfor,
+                prcobr, prcobr,
+                tpforma,
+            ))
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+        return jsonify({'nrrqu': nrrqu, 'sucesso': True})
+
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        traceback.print_exc()
+        cursor.close()
+        conn.close()
+        return jsonify({'erro': str(e), 'sucesso': False}), 500
+
+
 @app.route('/api/produtos/kits_composicoes', methods=['GET', 'OPTIONS'])
 def get_kits_composicoes():
     """
