@@ -973,7 +973,7 @@ def get_kits_composicoes():
             FROM FC03000 p
             LEFT JOIN FC05000 f ON CAST(p.CDPRO AS VARCHAR(10)) = f.CDSAC
             LEFT JOIN FC05100 k ON k.CDFRM = f.CDFRM AND k.TPCMP = 'C'
-            WHERE p.STPRO = 'A'
+            WHERE p.SITUA = 'A' AND p.INDDEL = 'N'
             AND (
                 UPPER(p.DESCR) CONTAINING 'KIT'      OR
                 UPPER(p.DESCR) CONTAINING 'MESCLA'   OR
