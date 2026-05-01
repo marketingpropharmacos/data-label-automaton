@@ -881,13 +881,15 @@ def criar_orcamento():
         hoje = datetime.date.today()
         dtval = hoje + datetime.timedelta(days=180)  # validade padrão 6 meses
 
-        # GRUPOTERAP é NOT NULL em FC12100 — busca valor existente na filial como default
-        cursor.execute(
-            "SELECT FIRST 1 GRUPOTERAP FROM FC12100 WHERE CDFIL = ? AND GRUPOTERAP IS NOT NULL",
-            (cdfil,)
-        )
-        row_gtp = cursor.fetchone()
-        grupoterap = row_gtp[0] if row_gtp else 0
+        # ── Template FC12100: busca linha existente para copiar valores NOT NULL ──
+        cursor.execute("SELECT FIRST 1 * FROM FC12100 WHERE CDFIL = ?", (cdfil,))
+        tmpl_row = cursor.fetchone()
+        if tmpl_row is None:
+            # fallback: qualquer linha do banco
+            cursor.execute("SELECT FIRST 1 * FROM FC12100")
+            tmpl_row = cursor.fetchone()
+        tmpl_cols = [d[0] for d in cursor.description]
+        tmpl = dict(zip(tmpl_cols, tmpl_row)) if tmpl_row else {}
 
         # ── Cabeçalho FC12000 ──────────────────────────────────────────────
         cursor.execute("""
@@ -905,7 +907,11 @@ def criar_orcamento():
               cdfun))
 
         # ── Itens FC12100 (um por produto do carrinho) ─────────────────────
-        for item in itens:
+        # Colunas a inserir: todas do template + as nossas sobreposições
+        # Estratégia: monta dict com valores do template, sobrescreve os nossos
+        skip_cols = {'NRRQU', 'SERIER', 'NRORC', 'SERIEO'}  # gerados por nós
+
+        for seq, item in enumerate(itens, start=1):
             nomepa  = str(item.get('nomepa', ''))[:50]
             volume  = int(item.get('volume', 0))
             univol  = str(item.get('univol', 'ML'))[:3]
@@ -913,43 +919,49 @@ def criar_orcamento():
             prcobr  = float(item.get('prcobr', 0.0))
             tpforma = int(item.get('tpforma', 14))
 
-            cursor.execute("""
-                INSERT INTO FC12100 (
-                    CDFIL, NRRQU, SERIER, NRORC, SERIEO,
-                    CDCLI, DTENTR, DTCAD, DTVAL,
-                    NOMEPA, PFCRM, NRCRM, UFCRM,
-                    POSOL, TPUSO,
-                    VOLUME, UNIVOL,
-                    QTFOR, QTCONT,
-                    PRCOBR, PRREAL, PRCUSTO,
-                    TPFORMAFARMA,
-                    VRDSC, PTDSC,
-                    GRUPOTERAP,
-                    FLAGENV, FLAGFIC, FLAGROT, FLAGRQU
-                ) VALUES (
-                    ?, ?, 'A', ?, 'A',
-                    ?, ?, ?, ?,
-                    ?, ?, ?, ?,
-                    ?, 'I',
-                    ?, ?,
-                    ?, 1,
-                    ?, ?, 0.0,
-                    ?,
-                    0.0, 0,
-                    ?,
-                    'N', 'N', 'N', 'N'
-                )
-            """, (
-                cdfil, nrrqu, nrrqu,
-                cdcli, hoje, hoje, dtval,
-                nomepa, pfcrm, nrcrm, ufcrm,
-                posol,
-                volume, univol,
-                qtfor,
-                prcobr, prcobr,
-                tpforma,
-                grupoterap,
-            ))
+            # Começa com o template e sobrescreve campo a campo
+            row = dict(tmpl)
+            row.update({
+                'CDFIL':       cdfil,
+                'NRRQU':       nrrqu,
+                'SERIER':      'A',
+                'NRORC':       nrrqu,
+                'SERIEO':      'A',
+                'CDCLI':       cdcli,
+                'DTENTR':      hoje,
+                'DTCAD':       hoje,
+                'DTVAL':       dtval,
+                'NOMEPA':      nomepa,
+                'PFCRM':       pfcrm,
+                'NRCRM':       nrcrm,
+                'UFCRM':       ufcrm,
+                'POSOL':       posol,
+                'TPUSO':       'I',
+                'VOLUME':      volume,
+                'UNIVOL':      univol,
+                'QTFOR':       qtfor,
+                'QTCONT':      1,
+                'PRCOBR':      prcobr,
+                'PRREAL':      prcobr,
+                'PRCUSTO':     0.0,
+                'TPFORMAFARMA': tpforma,
+                'VRDSC':       0.0,
+                'PTDSC':       0,
+                'FLAGENV':     'N',
+                'FLAGFIC':     'N',
+                'FLAGROT':     'N',
+                'FLAGRQU':     'N',
+                'CDFUN':       cdfun,
+            })
+
+            cols   = list(row.keys())
+            vals   = [row[c] for c in cols]
+            marks  = ', '.join(['?'] * len(cols))
+            col_sql = ', '.join(cols)
+            cursor.execute(
+                f"INSERT INTO FC12100 ({col_sql}) VALUES ({marks})",
+                vals
+            )
 
         conn.commit()
         cursor.close()
