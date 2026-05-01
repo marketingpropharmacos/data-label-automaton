@@ -881,15 +881,27 @@ def criar_orcamento():
         hoje = datetime.date.today()
         dtval = hoje + datetime.timedelta(days=180)  # validade padrão 6 meses
 
-        # ── Template FC12100: busca linha existente para copiar valores NOT NULL ──
-        cursor.execute("SELECT FIRST 1 * FROM FC12100 WHERE CDFIL = ?", (cdfil,))
+        # ── Colunas inseríveis de FC12100 (exclui computadas via schema Firebird) ──
+        cursor.execute("""
+            SELECT TRIM(rf.RDB$FIELD_NAME)
+            FROM RDB$RELATION_FIELDS rf
+            LEFT JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE
+            WHERE rf.RDB$RELATION_NAME = 'FC12100'
+              AND (f.RDB$COMPUTED_BLR IS NULL)
+            ORDER BY rf.RDB$FIELD_POSITION
+        """)
+        insertable_cols = [r[0].strip() for r in cursor.fetchall()]
+
+        # Busca linha existente como template para NOT NULL sem default
+        col_list = ', '.join(insertable_cols)
+        cursor.execute(
+            f"SELECT FIRST 1 {col_list} FROM FC12100 WHERE CDFIL = ?", (cdfil,)
+        )
         tmpl_row = cursor.fetchone()
         if tmpl_row is None:
-            # fallback: qualquer linha do banco
-            cursor.execute("SELECT FIRST 1 * FROM FC12100")
+            cursor.execute(f"SELECT FIRST 1 {col_list} FROM FC12100")
             tmpl_row = cursor.fetchone()
-        tmpl_cols = [d[0] for d in cursor.description]
-        tmpl = dict(zip(tmpl_cols, tmpl_row)) if tmpl_row else {}
+        tmpl = dict(zip(insertable_cols, tmpl_row)) if tmpl_row else {}
 
         # ── Cabeçalho FC12000 ──────────────────────────────────────────────
         cursor.execute("""
