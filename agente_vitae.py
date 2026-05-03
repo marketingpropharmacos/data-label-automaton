@@ -1060,6 +1060,8 @@ def criar_orcamento():
                     'DTENTR':       hoje,
                     'DTCAD':        hoje,
                     'DTVAL':        dtval,
+                    'DTPRE':        hoje,
+                    'DTRETI':       None,
                     'NOMEPA':       nomepa,
                     'PFCRM':        pfcrm,
                     'NRCRM':        nrcrm,
@@ -1133,28 +1135,33 @@ def criar_orcamento():
                             v110
                         )
                 else:
-                    # Sem fórmula no FC: insere componente único 'C'
-                    r110 = dict(tmpl110)
-                    r110.update({
-                        'CDFIL':   cdfil,
-                        'NRRQU':   nrrqu,
-                        'SERIER':  serier_str,
-                        'ITEMID':  1,
-                        'TPCMP':   'C',
-                        'CDPRO':   cdpro,
-                        'DESCR':   descr_item[:50],
-                        'QUANT':   float(vol_ser),
-                        'UNIDA':   univol,
-                        'CTLOT':   0,
-                        'QUANTHP': 0.0,
+                    # Sem fórmula no FC: linha 'C' (produto) + linha 'E' (caixa)
+                    def _ins110(upd):
+                        r = dict(tmpl110)
+                        r.update(upd)
+                        r = {k: v for k, v in r.items() if k in ins_cols_110}
+                        cursor.execute(
+                            f"INSERT INTO FC12110 ({', '.join(r.keys())}) VALUES ({', '.join(['?']*len(r))})",
+                            list(r.values())
+                        )
+
+                    _ins110({
+                        'CDFIL': cdfil, 'NRRQU': nrrqu, 'SERIER': serier_str,
+                        'ITEMID': 1, 'TPCMP': 'C',
+                        'CDPRO': cdpro, 'DESCR': descr_item[:50],
+                        'QUANT': float(vol_ser), 'UNIDA': univol,
+                        'CTLOT': 0, 'QUANTHP': 0.0,
                     })
-                    r110 = {k: v for k, v in r110.items() if k in ins_cols_110}
-                    c110 = list(r110.keys())
-                    v110 = [r110[c] for c in c110]
-                    cursor.execute(
-                        f"INSERT INTO FC12110 ({', '.join(c110)}) VALUES ({', '.join(['?']*len(c110))})",
-                        v110
-                    )
+                    if box_cdpro is not None:
+                        _ins110({
+                            'CDFIL': cdfil, 'NRRQU': nrrqu, 'SERIER': serier_str,
+                            'ITEMID': 2, 'TPCMP': 'E',
+                            'CDPRO': box_cdpro,
+                            'DESCR': (_BOX_DESCR.get(box_cdpro, '') or '')[:50],
+                            'QUANT': 2.0 if box_cdpro == 91073 else 1.0,
+                            'UNIDA': 'UN',
+                            'CTLOT': 0, 'QUANTHP': 0.0,
+                        })
 
         conn.commit()
         cursor.close()
