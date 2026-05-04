@@ -33,6 +33,19 @@ DB_USER     = 'SYSDBA'
 DB_PASSWORD = 'masterkey'
 DB_CHARSET  = 'WIN1252'
 
+# Carregar biblioteca Firebird no macOS (resolve @rpath via pré-carga)
+import ctypes as _ctypes
+import sys as _sys
+_FB_LIB_DIR = '/private/tmp/fbpayload/Versions/A/Resources/lib'
+_FB_CLIENT  = f'{_FB_LIB_DIR}/libfbclient.dylib'
+if _sys.platform == 'darwin':
+    try:
+        _ctypes.CDLL(f'{_FB_LIB_DIR}/libtommath.dylib', mode=_ctypes.RTLD_GLOBAL)
+        _ctypes.CDLL(_FB_CLIENT, mode=_ctypes.RTLD_GLOBAL)
+        fdb.load_api(_FB_CLIENT)
+    except Exception as _e:
+        print(f'[WARN] Firebird lib load: {_e}')
+
 def get_db():
     return fdb.connect(
         dsn=DB_PATH,
@@ -883,24 +896,26 @@ def get_composicao_produto(cdpro):
 @app.route('/api/orcamentos/criar', methods=['POST', 'OPTIONS'])
 def criar_orcamento():
     """
-    Cria uma requisição/orçamento no FormulaCerta.
+    Cria um orçamento no módulo Orçamentos do FormulaCerta (FC15000/FC15100/FC15110).
     Body JSON:
       cdfil     int   (padrão 392)
       cdcli     int   (obrigatório)
       cdfun     int   (código do funcionário)
       vrtotal   float
       vrdsc     float (padrão 0)
-      pfcrm     str   ('1'=CRM, '2'=CRO, '3'=CRMV)
+      pfcrm     str   ('1'=CRM, '4'=CRF, etc.)
       nrcrm     int
       ufcrm     str   (ex: 'SP')
       posol     str   (posologia padrão de todos os itens)
       itens     list de:
         nomepa  str
         volume  int
-        univol  str   (padrão 'ML')
-        qtfor   int
+        univol  str   (padrão 'AMP')
         prcobr  float
         tpforma int   (padrão 14)
+        cdpro   int   (opcional — para lookup de fórmula)
+        descr   str
+        ativos  list[str]
     """
     if request.method == 'OPTIONS':
         return '', 204
@@ -916,7 +931,7 @@ def criar_orcamento():
         pfcrm   = str(data.get('pfcrm', '1'))
         nrcrm   = int(data.get('nrcrm', 0))
         ufcrm   = str(data.get('ufcrm', 'SP'))[:2]
-        posol   = str(data.get('posol', 'uso em consultório'))[:100]
+        posol   = str(data.get('posol', 'uso em consultório'))[:100].upper()
         itens   = data.get('itens', [])
     except (KeyError, ValueError, TypeError) as e:
         return jsonify({'erro': f'Parâmetro inválido: {e}', 'sucesso': False}), 400
@@ -924,10 +939,21 @@ def criar_orcamento():
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # ── Nome do cliente para NOMEPA padrão ────────────────────────────
+        # ── Nome do cliente ───────────────────────────────────────────────
         cursor.execute("SELECT FIRST 1 NOMECLI FROM FC07000 WHERE CDCLI = ?", (cdcli,))
         row_cli = cursor.fetchone()
         nomecli = strip(row_cli[0]) if row_cli else ''
+
+        # ── Endereço do cliente (FC07200) ─────────────────────────────────
+        cursor.execute("""
+            SELECT FIRST 1 ENDER, ENDNR FROM FC07200
+            WHERE CDCLI = ? ORDER BY OCENDER
+        """, (cdcli,))
+        row_end = cursor.fetchone()
+        endepa = ''
+        if row_end:
+            partes = [p for p in [strip(row_end[0]), strip(row_end[1])] if p]
+            endepa = ' '.join(partes)[:50]
 
         # ── Prescritor: se não informado, tenta pelo nome do cliente ──────
         if nrcrm == 0 and nomecli:
@@ -943,65 +969,53 @@ def criar_orcamento():
                 pfcrm = str(row_med[1] or '1').strip()
                 ufcrm = str(row_med[2] or 'SP').strip()[:2]
 
-        # ── Próximo NRRQU pelo generator da filial ────────────────────────
+        # ── Próximo número pelo generator da filial (NRORC) ───────────────
         gen_name = f'GN_REQUISICAO{cdfil:04d}'
         cursor.execute(f'SELECT GEN_ID({gen_name}, 1) FROM RDB$DATABASE')
-        nrrqu = cursor.fetchone()[0]
+        nrorc = cursor.fetchone()[0]
 
         hoje = datetime.date.today()
-        dtval = hoje + datetime.timedelta(days=180)
+        dtval = hoje + datetime.timedelta(days=365)  # validade 1 ano
 
-        # ── Template FC12100: colunas inseríveis (sem computadas) ─────────
-        cursor.execute("""
-            SELECT TRIM(rf.RDB$FIELD_NAME)
-            FROM RDB$RELATION_FIELDS rf
-            LEFT JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE
-            WHERE rf.RDB$RELATION_NAME = 'FC12100'
-              AND (f.RDB$COMPUTED_BLR IS NULL)
-            ORDER BY rf.RDB$FIELD_POSITION
-        """)
-        insertable_cols = [r[0].strip() for r in cursor.fetchall()]
-        col_list = ', '.join(insertable_cols)
-        cursor.execute(f"SELECT FIRST 1 {col_list} FROM FC12100 WHERE CDFIL = ?", (cdfil,))
-        tmpl_row = cursor.fetchone()
-        if tmpl_row is None:
-            cursor.execute(f"SELECT FIRST 1 {col_list} FROM FC12100")
-            tmpl_row = cursor.fetchone()
-        tmpl = dict(zip(insertable_cols, tmpl_row)) if tmpl_row else {}
+        # ── Templates FC15100 e FC15110 (colunas inseríveis sem computadas) ─
+        def _get_template(tabela):
+            cursor.execute(f"""
+                SELECT TRIM(rf.RDB$FIELD_NAME)
+                FROM RDB$RELATION_FIELDS rf
+                LEFT JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE
+                WHERE rf.RDB$RELATION_NAME = '{tabela}'
+                  AND f.RDB$COMPUTED_BLR IS NULL
+                ORDER BY rf.RDB$FIELD_POSITION
+            """)
+            cols = [r[0].strip() for r in cursor.fetchall()]
+            col_list = ', '.join(cols)
+            cursor.execute(f"SELECT FIRST 1 {col_list} FROM {tabela} WHERE CDFIL = ?", (cdfil,))
+            row = cursor.fetchone()
+            if row is None:
+                cursor.execute(f"SELECT FIRST 1 {col_list} FROM {tabela}")
+                row = cursor.fetchone()
+            return cols, (dict(zip(cols, row)) if row else {})
 
-        # ── Template FC12110: colunas inseríveis ──────────────────────────
-        cursor.execute("""
-            SELECT TRIM(rf.RDB$FIELD_NAME)
-            FROM RDB$RELATION_FIELDS rf
-            LEFT JOIN RDB$FIELDS f ON f.RDB$FIELD_NAME = rf.RDB$FIELD_SOURCE
-            WHERE rf.RDB$RELATION_NAME = 'FC12110'
-              AND (f.RDB$COMPUTED_BLR IS NULL)
-            ORDER BY rf.RDB$FIELD_POSITION
-        """)
-        ins_cols_110 = [r[0].strip() for r in cursor.fetchall()]
-        col_list_110 = ', '.join(ins_cols_110)
-        cursor.execute(f"SELECT FIRST 1 {col_list_110} FROM FC12110 WHERE CDFIL = ?", (cdfil,))
-        tmpl_row_110 = cursor.fetchone()
-        if tmpl_row_110 is None:
-            cursor.execute(f"SELECT FIRST 1 {col_list_110} FROM FC12110")
-            tmpl_row_110 = cursor.fetchone()
-        tmpl110 = dict(zip(ins_cols_110, tmpl_row_110)) if tmpl_row_110 else {}
+        ins_cols_100, tmpl100 = _get_template('FC15100')
+        ins_cols_110, tmpl110 = _get_template('FC15110')
 
-        # ── Cabeçalho FC12000 ─────────────────────────────────────────────
+        # ── Cabeçalho FC15000 ─────────────────────────────────────────────
         cursor.execute("""
-            INSERT INTO FC12000 (
-                CDFIL, NRRQU, CDCLI, CDFILD,
+            INSERT INTO FC15000 (
+                CDFIL, NRORC, CDCLI, CDFILD,
                 DTENTR, VRRQU, VRDSC, VRTXA,
-                FLAGENV, CDFUN
+                FLAGENV, NOMEPA, ENDEPA, NRCPMN, CDFUN
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?, ?, 0.0,
-                'N', ?
+                'N', ?, ?, 0, ?
             )
-        """, (cdfil, nrrqu, cdcli, cdfil, hoje, vrtotal, vrdsc, cdfun))
+        """, (cdfil, nrorc, cdcli, cdfil,
+              hoje, vrtotal, vrdsc,
+              nomecli[:50], endepa, cdfun or None))
 
-        # ── Itens FC12100 + componentes FC12110 ──────────────────────────
-        serier_counter = 0
+        # ── Itens FC15100 + componentes FC15110 ───────────────────────────
+        serieo_counter = 0
         for item in itens:
             raw_nomepa = str(item.get('nomepa', '')).strip()
             nomepa     = (raw_nomepa or nomecli)[:50]
@@ -1009,14 +1023,11 @@ def criar_orcamento():
             univol     = str(item.get('univol', 'AMP'))[:3]
             prcobr     = float(item.get('prcobr', 0.0))
             tpforma    = int(item.get('tpforma', 14))
-            cdpro      = item.get('cdpro')  # int ou None
+            cdpro      = item.get('cdpro')
             descr_item = str(item.get('descr', nomepa))[:50]
-            tpuso      = '7' if tpforma == 14 else 'I'
 
-            # Busca fórmula no FC para determinar tipo/estrutura/componentes
             is_10ml, is_kit, formula_comps = _buscar_formula(cursor, cdpro)
 
-            # Monta lista de séries: (volume_série, qtfor, cdpro_caixa ou None)
             if is_kit:
                 box = 89751 if 'HIDROXI' in descr_item.upper() else 85104
                 series_list = [(1, volume, box)]
@@ -1043,57 +1054,108 @@ def criar_orcamento():
             total_vol_ser = sum(s[0] for s in series_list)
 
             for vol_ser, qtfor_ser, box_cdpro in series_list:
-                serier_str = _format_serier(serier_counter)
-                serier_counter += 1
-
+                serieo_str = _format_serier(serieo_counter)
+                serieo_counter += 1
                 prcobr_ser = round(prcobr * vol_ser / total_vol_ser, 4) if total_vol_ser > 0 else prcobr
 
-                # ── FC12100 ────────────────────────────────────────────────
-                row = dict(tmpl)
+                # ── FC15100 ────────────────────────────────────────────────
+                row = dict(tmpl100)
                 row.update({
-                    'CDFIL':        cdfil,
-                    'NRRQU':        nrrqu,
-                    'SERIER':       serier_str,
-                    'NRORC':        nrrqu,
-                    'SERIEO':       'A',
-                    'CDCLI':        cdcli,
-                    'DTENTR':       hoje,
-                    'DTCAD':        hoje,
-                    'DTVAL':        dtval,
-                    'DTPRESCR':     None,   # Data Prescrição em branco (nova req)
-                    'DTRET':        None,   # Retirada em branco (nova req)
-                    'NOMEPA':       nomepa,
-                    'PFCRM':        pfcrm,
-                    'NRCRM':        nrcrm,
-                    'UFCRM':        ufcrm,
-                    'POSOL':        posol,
-                    'TPUSO':        tpuso,
-                    'VOLUME':       vol_ser,
-                    'UNIVOL':       univol,
-                    'QTFOR':        qtfor_ser,
-                    'QTCONT':       1,
-                    'PRCOBR':       prcobr_ser,
-                    'PRREAL':       prcobr_ser,
-                    'PRCUSTO':      0.0,
-                    'TPFORMAFARMA': tpforma,
-                    'VRDSC':        0.0,
-                    'PTDSC':        0,
-                    'FLAGENV':      'N',
-                    'FLAGFIC':      'N',
-                    'FLAGROT':      'N',
-                    'FLAGRQU':      'N',
+                    'CDFIL':           cdfil,
+                    'NRORC':           nrorc,
+                    'SERIEO':          serieo_str,
+                    'CDCLI':           cdcli,
+                    'NOMEPA':          nomepa,
+                    'ENDEPA':          endepa,
+                    'PFCRM':           pfcrm,
+                    'NRCRM':           nrcrm,
+                    'UFCRM':           ufcrm,
+                    'VOLUME':          vol_ser,
+                    'UNIVOL':          univol,
+                    'QTFOR':           qtfor_ser,
+                    'QTCONT':          0,
+                    'PRCOBR':          prcobr_ser,
+                    'PRREAL':          prcobr_ser,
+                    'PRCUSTO':         0.0,
+                    'PRCOMPRA':        0.0,
+                    'PTDSC':           0,
+                    'VRDSC':           0.0,
+                    'PTTXA':           0,
+                    'VRTXA':           0.0,
+                    'PTDSCPROG':       0,
+                    'TPFORMAFARMA':    tpforma,
+                    'POSOL':           posol,
+                    'DTENTR':          hoje,
+                    'DTCAD':           hoje,
+                    'DTVAL':           dtval,
+                    'DTRET':           hoje,
+                    'DTPRESCR':        None,
+                    'CDEMB':           box_cdpro,
+                    'CDCONRE':         cdfil,
+                    'CDFUNRE':         cdfun or 0,
+                    'QTPRESCR':        vol_ser,
+                    'VOLUMEORI':       0,
+                    'GRUPOTERAP':      1,
+                    'TPCAP':           '1',
+                    'TPPA':            '1',
+                    'FTENCHCAP':       1,
+                    'FTENCHFOR':       1,
+                    'FTCOMPRESSAO':    1,
+                    'FTSOBRECARGA':    1,
+                    'FTCOMPREXCIP':    1,
+                    'INDBLISTER':      'N',
+                    'INDCALCVOL':      'N',
+                    'INDLIBLENTA':     'N',
+                    'INDLIBLENTAINT':  'N',
+                    'INDPREAPROV':     'N',
+                    'INDQSP':          'N',
+                    'INDREPET':        'N',
+                    'INDREVENTERICO':  'N',
+                    'INDUSOCONT':      'N',
+                    'ID':              None,
+                    'HRRET':           None,
+                    'HRCAD':           None,
+                    'HRLAB':           None,
+                    'HRPRESCR':        None,
+                    'OBSERFIC':        None,
                 })
-                if box_cdpro is not None:
-                    row['CDEMB'] = box_cdpro   # nome correto da coluna de embalagem
-                row = {k: v for k, v in row.items() if k in insertable_cols}
-                cols = list(row.keys())
-                vals = [row[c] for c in cols]
+                row = {k: v for k, v in row.items() if k in ins_cols_100}
+                cols100 = list(row.keys())
                 cursor.execute(
-                    f"INSERT INTO FC12100 ({', '.join(cols)}) VALUES ({', '.join(['?']*len(cols))})",
-                    vals
+                    f"INSERT INTO FC15100 ({', '.join(cols100)}) VALUES ({', '.join(['?']*len(cols100))})",
+                    [row[c] for c in cols100]
                 )
 
-                # ── FC12110 ────────────────────────────────────────────────
+                # ── FC15110 ────────────────────────────────────────────────
+                def _ins110(item_id, tpcmp, c_cdpro, c_descr, c_quant, c_unida):
+                    r = dict(tmpl110)
+                    r.update({
+                        'CDFIL':        cdfil,
+                        'NRORC':        nrorc,
+                        'SERIEO':       serieo_str,
+                        'ITEMID':       item_id,
+                        'TPCMP':        tpcmp,
+                        'CDPRO':        c_cdpro,
+                        'CDPRIN':       c_cdpro,
+                        'DESCR':        (c_descr or '')[:50],
+                        'QUANT':        float(c_quant),
+                        'UNIDA':        c_unida,
+                        'QUANTHP':      0.0,
+                        'TPFORMAFARMA': tpforma,
+                        'DTENTR':       hoje,
+                        'INDASSOC':     'N',
+                        'INDDILUI':     'N',
+                        'INDELICMP':    'N',
+                        'INDVEICULO':   'N',
+                        'INDQSP':       'N',
+                    })
+                    r = {k: v for k, v in r.items() if k in ins_cols_110}
+                    c110 = list(r.keys())
+                    cursor.execute(
+                        f"INSERT INTO FC15110 ({', '.join(c110)}) VALUES ({', '.join(['?']*len(c110))})",
+                        [r[c] for c in c110]
+                    )
+
                 if formula_comps:
                     for item_id, comp in enumerate(formula_comps, start=1):
                         t       = comp['tpcmp']
@@ -1101,7 +1163,6 @@ def criar_orcamento():
                         c_descr = comp['descr']
                         c_quant = comp['quant']
                         c_unida = comp['unida']
-
                         if t in ('C', 'S'):
                             c_quant = float(vol_ser)
                         elif t == 'R':
@@ -1112,61 +1173,18 @@ def criar_orcamento():
                             c_quant = 2.0 if box_cdpro == 91073 else 1.0
                         elif t == 'F':
                             c_quant = 2.0 if box_cdpro == 91073 else 1.0
-
-                        r110 = dict(tmpl110)
-                        r110.update({
-                            'CDFIL':   cdfil,
-                            'NRRQU':   nrrqu,
-                            'SERIER':  serier_str,
-                            'ITEMID':  item_id,
-                            'TPCMP':   t,
-                            'CDPRO':   c_cdpro,
-                            'DESCR':   (c_descr or '')[:50],
-                            'QUANT':   float(c_quant),
-                            'UNIDA':   c_unida,
-                            'CTLOT':   0,
-                            'QUANTHP': 0.0,
-                        })
-                        r110 = {k: v for k, v in r110.items() if k in ins_cols_110}
-                        c110 = list(r110.keys())
-                        v110 = [r110[c] for c in c110]
-                        cursor.execute(
-                            f"INSERT INTO FC12110 ({', '.join(c110)}) VALUES ({', '.join(['?']*len(c110))})",
-                            v110
-                        )
+                        _ins110(item_id, t, c_cdpro, c_descr, c_quant, c_unida)
                 else:
-                    # Sem fórmula no FC: linha 'C' (produto) + linha 'E' (caixa)
-                    def _ins110(upd):
-                        r = dict(tmpl110)
-                        r.update(upd)
-                        r = {k: v for k, v in r.items() if k in ins_cols_110}
-                        cursor.execute(
-                            f"INSERT INTO FC12110 ({', '.join(r.keys())}) VALUES ({', '.join(['?']*len(r))})",
-                            list(r.values())
-                        )
-
-                    _ins110({
-                        'CDFIL': cdfil, 'NRRQU': nrrqu, 'SERIER': serier_str,
-                        'ITEMID': 1, 'TPCMP': 'C',
-                        'CDPRO': cdpro, 'DESCR': descr_item[:50],
-                        'QUANT': float(vol_ser), 'UNIDA': univol,
-                        'CTLOT': 0, 'QUANTHP': 0.0,
-                    })
+                    _ins110(1, 'C', cdpro, descr_item, float(vol_ser), univol)
                     if box_cdpro is not None:
-                        _ins110({
-                            'CDFIL': cdfil, 'NRRQU': nrrqu, 'SERIER': serier_str,
-                            'ITEMID': 2, 'TPCMP': 'E',
-                            'CDPRO': box_cdpro,
-                            'DESCR': (_BOX_DESCR.get(box_cdpro, '') or '')[:50],
-                            'QUANT': 2.0 if box_cdpro == 91073 else 1.0,
-                            'UNIDA': 'UN',
-                            'CTLOT': 0, 'QUANTHP': 0.0,
-                        })
+                        _ins110(2, 'E', box_cdpro,
+                                (_BOX_DESCR.get(box_cdpro, '') or '')[:50],
+                                2.0 if box_cdpro == 91073 else 1.0, 'UN')
 
         conn.commit()
         cursor.close()
         conn.close()
-        return jsonify({'nrrqu': nrrqu, 'sucesso': True})
+        return jsonify({'nrrqu': nrorc, 'sucesso': True})
 
     except Exception as e:
         try:
