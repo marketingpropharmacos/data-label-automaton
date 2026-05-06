@@ -829,6 +829,100 @@ def get_requisicao(nrreq):
         return jsonify({'erro': str(e)}), 500
 
 
+@app.route('/api/orcamentos/<nrorc>', methods=['GET'])
+def get_orcamento(nrorc):
+    """
+    Retorna dados completos de um orçamento pelo número.
+    Cabeçalho: FC15000 | Itens: FC15100
+    """
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT FIRST 1
+                o.NRORC, o.CDCLI, o.DTENTR, o.VRRQU, o.VRDSC,
+                o.CDFUN, o.FLAGENV,
+                c.NOMECLI, f.NOMEFUN
+            FROM FC15000 o
+            LEFT JOIN FC07000 c ON c.CDCLI = o.CDCLI
+            LEFT JOIN FC08000 f ON f.CDFUN = o.CDFUN
+            WHERE o.NRORC = ?
+        """, (int(nrorc),))
+
+        row = cursor.fetchone()
+        if not row:
+            cursor.close(); conn.close()
+            return jsonify({'erro': f'Orçamento {nrorc} não encontrado'}), 404
+
+        nrorc_v, cdcli, dtentr, vrrqu, vrdsc, cdfun, flagenv, nomecli, nomefun = row
+
+        # ── Itens FC15100 + nome do produto via FC03000 ──
+        cursor.execute("""
+            SELECT i.SERIEO, i.CDPRO, i.NOMEPA, i.PRCOBR, i.QTFOR,
+                   i.PFCRM, i.NRCRM, i.UFCRM, i.POSOL,
+                   p.NOMEPRO
+            FROM FC15100 i
+            LEFT JOIN FC03000 p ON p.CDPRO = i.CDPRO
+            WHERE i.NRORC = ?
+            ORDER BY i.SERIEO
+        """, (int(nrorc),))
+        rows_itens = cursor.fetchall()
+
+        # Agrupa por CDPRO para deduplicar séries do mesmo produto
+        por_cdpro: dict = {}
+        sem_cdpro = []
+        for r in rows_itens:
+            serieo, cdpro, nomepa_i, prcobr, qtfor, pfcrm, nrcrm, ufcrm, posol, nomepro = r
+            preco = round(float(prcobr or 0), 2)
+            qtd   = float(qtfor or 1)
+            if cdpro:
+                key = int(cdpro)
+                if key not in por_cdpro:
+                    por_cdpro[key] = {
+                        'cdpro':    key,
+                        'nome':     strip(nomepro) or strip(nomepa_i) or f'Produto {key}',
+                        'preco':    preco,
+                        'qtd':      qtd,
+                        'posol':    strip(posol) or '',
+                        'pfcrm':    strip(pfcrm) or '',
+                        'nrcrm':    str(strip(nrcrm) or ''),
+                        'ufcrm':    strip(ufcrm) or '',
+                    }
+                else:
+                    por_cdpro[key]['qtd'] += qtd
+            else:
+                sem_cdpro.append({
+                    'cdpro':    None,
+                    'nome':     strip(nomepa_i) or strip(posol) or 'Item',
+                    'preco':    preco,
+                    'qtd':      qtd,
+                    'posol':    strip(posol) or '',
+                    'pfcrm':    strip(pfcrm) or '',
+                    'nrcrm':    str(strip(nrcrm) or ''),
+                    'ufcrm':    strip(ufcrm) or '',
+                })
+
+        itens = list(por_cdpro.values()) + sem_cdpro
+
+        cursor.close(); conn.close()
+        return jsonify({
+            'nrorc':      nrorc_v,
+            'cdcli':      cdcli,
+            'cliente':    strip(nomecli) or '',
+            'data':       str(dtentr)[:10] if dtentr else '',
+            'valorTotal': round(float(vrrqu or 0), 2),
+            'desconto':   round(float(vrdsc or 0), 2),
+            'atendente':  strip(nomefun) or '',
+            'flagEnv':    strip(flagenv) or 'N',
+            'itens':      itens,
+        })
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 # ── ATENDENTES ───────────────────────────────────────────────────────────────
 @app.route('/api/atendentes', methods=['GET', 'OPTIONS'])
 def listar_atendentes():
@@ -838,12 +932,11 @@ def listar_atendentes():
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        # Apenas funcionários com login ativo (USERID preenchido)
+        # Todos funcionários com login — admins podem ter FUNATIVO diferente de 'S'
         cursor.execute("""
             SELECT CDFUN, NOMEFUN, USERID
             FROM FC08000
-            WHERE FUNATIVO = 'S'
-              AND USERID IS NOT NULL
+            WHERE USERID IS NOT NULL
               AND TRIM(USERID) <> ''
               AND NOMEFUN IS NOT NULL
             ORDER BY NOMEFUN
@@ -1444,6 +1537,7 @@ if __name__ == '__main__':
     print('  GET  /api/prescritores/buscar?q=<nome_ou_crm>')
     print('  GET  /api/requisicoes/buscar?q=<nrreq>')
     print('  GET  /api/requisicoes/<nrreq>')
+    print('  GET  /api/orcamentos/<nrorc>')
     print('  GET  /api/historico?tipo=todos&cdfil=392&de=&ate=&cliente=&atendente=')
     print('  GET  /api/atendentes')
     print('  GET  /api/tabelas')
