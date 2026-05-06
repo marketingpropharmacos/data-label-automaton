@@ -932,13 +932,12 @@ def listar_atendentes():
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        # Todos funcionários com login — admins podem ter FUNATIVO diferente de 'S'
+        # Sem filtro de USERID/FUNATIVO — admins FC podem não ter USERID
         cursor.execute("""
             SELECT CDFUN, NOMEFUN, USERID
             FROM FC08000
-            WHERE USERID IS NOT NULL
-              AND TRIM(USERID) <> ''
-              AND NOMEFUN IS NOT NULL
+            WHERE NOMEFUN IS NOT NULL
+              AND TRIM(NOMEFUN) <> ''
             ORDER BY NOMEFUN
         """)
         # Deduplica por CDFUN: mantém o registro com nome mais longo (mais completo)
