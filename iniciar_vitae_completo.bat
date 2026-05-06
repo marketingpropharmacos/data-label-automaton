@@ -4,7 +4,8 @@ color 0A
 cd /d C:\ServidorRotulos
 
 :: ─── TOKEN GITHUB (repositorio privado) ───────────────────────────────────
-set GH_TOKEN=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
+:: Cole seu token aqui (Settings > Developer Settings > Personal Access Tokens)
+set GH_TOKEN=SEU_TOKEN_AQUI
 
 :: ─── CAMINHOS ──────────────────────────────────────────────────────────────
 set NGROK_EXE=C:\Users\Administrador.PROCARAIBAS\Desktop\ngrok.exe
