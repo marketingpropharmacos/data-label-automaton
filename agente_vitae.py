@@ -936,8 +936,12 @@ def listar_atendentes():
         # Nomes confirmados pelo usuário — evita colisão de CDFUN entre filiais
         NOME_OVERRIDES = {
             1:   ('KATIA FERREIRA FEITOSA', 'KATIA'),
+            345: ('BIANCA FREIRE',          ''),
+            500: ('THAIS COSTA',            ''),
             535: ('BRUNO PERUZETTO',        'BRUNOPERUZETTO'),
+            568: ('WELLINGTON',             ''),
             593: ('BRUNA SILVA',            'BRUNASILVA'),
+            610: ('VALERIA',               ''),
         }
 
         resultado = []
