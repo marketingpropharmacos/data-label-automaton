@@ -932,39 +932,41 @@ def listar_atendentes():
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        # Tenta filtrar por CDFIL das filiais ativas para evitar colisão
-        # de CDFUN entre filiais diferentes. Se FC08000 não tiver CDFIL, usa fallback.
-        try:
-            cursor.execute("""
-                SELECT CDFUN, NOMEFUN, USERID
-                FROM FC08000
-                WHERE CDFIL IN (392, 279)
-                  AND ((NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
-                       OR (USERID IS NOT NULL AND TRIM(USERID) <> ''))
-                ORDER BY NOMEFUN NULLS LAST, USERID
-            """)
-            todas = list(cursor.fetchall())
-            # Admins podem estar em CDFIL diferente — inclui pela USERID
-            cursor.execute("""
-                SELECT CDFUN, NOMEFUN, USERID
-                FROM FC08000
-                WHERE USERID IS NOT NULL AND TRIM(USERID) <> ''
-                  AND CDFIL NOT IN (392, 279)
-                  AND ((NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
-                       OR (USERID IS NOT NULL AND TRIM(USERID) <> ''))
-                ORDER BY NOMEFUN NULLS LAST
-            """)
-            todas += list(cursor.fetchall())
-        except Exception:
-            # FC08000 sem coluna CDFIL — sem filtro de filial
-            cursor.execute("""
-                SELECT CDFUN, NOMEFUN, USERID
-                FROM FC08000
-                WHERE (NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
-                   OR (USERID IS NOT NULL AND TRIM(USERID) <> '')
-                ORDER BY NOMEFUN NULLS LAST, USERID
-            """)
-            todas = list(cursor.fetchall())
+        # ── Estratégia: usa atividade real nas filiais 392/279 como filtro ────
+        # FC08000 é compartilhado entre todas as filiais do grupo (sem CDFIL).
+        # O mesmo CDFUN pode pertencer a pessoas diferentes em filiais distintas.
+        # Solução: pega apenas CDFUNs que criaram orçamentos ou requisições nas
+        # filiais 392/279 — esses são os funcionários reais dessas unidades.
+        cursor.execute("""
+            SELECT DISTINCT f.CDFUN, f.NOMEFUN, f.USERID
+            FROM FC08000 f
+            WHERE f.CDFUN IN (
+                SELECT DISTINCT CDFUN FROM FC15000
+                WHERE CDFIL IN (392, 279) AND CDFUN IS NOT NULL
+                UNION
+                SELECT DISTINCT CDFUN FROM FC12000
+                WHERE CDFIL IN (392, 279) AND CDFUN IS NOT NULL
+            )
+            AND ((f.NOMEFUN IS NOT NULL AND TRIM(f.NOMEFUN) <> '')
+                 OR (f.USERID IS NOT NULL AND TRIM(f.USERID) <> ''))
+            ORDER BY f.NOMEFUN NULLS LAST, f.USERID
+        """)
+        todas = list(cursor.fetchall())
+
+        # Admins com USERID que ainda não criaram orçamentos: inclui separado
+        cdfuns_filial = {r[0] for r in todas}
+        cursor.execute("""
+            SELECT DISTINCT CDFUN, NOMEFUN, USERID
+            FROM FC08000
+            WHERE USERID IS NOT NULL AND TRIM(USERID) <> ''
+              AND ((NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
+                   OR (USERID IS NOT NULL AND TRIM(USERID) <> ''))
+            ORDER BY NOMEFUN NULLS LAST
+        """)
+        for row in cursor.fetchall():
+            if row[0] not in cdfuns_filial:
+                todas.append(row)
+                cdfuns_filial.add(row[0])
 
         def _limpa(s):
             n = strip(s) or ''
