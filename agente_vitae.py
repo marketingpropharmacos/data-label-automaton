@@ -932,7 +932,7 @@ def listar_atendentes():
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        # ── Passo 1: CDFUNs ativos nas filiais 392/279 (queries rápidas) ────────
+        # ── Passo 1: CDFUNs ativos nas filiais 392/279 ───────────────────────────
         cursor.execute("SELECT DISTINCT CDFUN FROM FC15000 WHERE CDFIL = 392 AND CDFUN IS NOT NULL")
         cdfuns = {r[0] for r in cursor.fetchall()}
         cursor.execute("SELECT DISTINCT CDFUN FROM FC15000 WHERE CDFIL = 279 AND CDFUN IS NOT NULL")
@@ -942,84 +942,39 @@ def listar_atendentes():
         cursor.execute("SELECT DISTINCT CDFUN FROM FC12000 WHERE CDFIL = 279 AND CDFUN IS NOT NULL")
         cdfuns.update(r[0] for r in cursor.fetchall())
 
-        # ── Passo 2: dados dos funcionários dessas filiais ────────────────────
-        todas = []
-        if cdfuns:
-            ph = ','.join('?' * len(cdfuns))
-            cursor.execute(f"""
-                SELECT CDFUN, NOMEFUN, USERID
-                FROM FC08000
-                WHERE CDFUN IN ({ph})
-                  AND ((NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
-                       OR (USERID IS NOT NULL AND TRIM(USERID) <> ''))
-                ORDER BY NOMEFUN NULLS LAST, USERID
-            """, list(cdfuns))
-            todas = list(cursor.fetchall())
+        # ── Passo 2: para cada CDFUN, busca o nome mais longo e o USERID ──────
+        # Uma query por CDFUN evita deduplicação em memória e garante o nome certo.
+        resultado = []
+        for cdfun in cdfuns:
+            # Nome mais longo para este CDFUN
+            cursor.execute("""
+                SELECT FIRST 1 NOMEFUN FROM FC08000
+                WHERE CDFUN = ? AND NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> ''
+                ORDER BY CHAR_LENGTH(NOMEFUN) DESC
+            """, (cdfun,))
+            nome_row = cursor.fetchone()
+            nome = strip(nome_row[0]) if nome_row else ''
+            if nome in ('.', '..'):
+                nome = ''
 
-        # ── Passo 3: admins com USERID que não têm orçamento registrado ──────
-        cursor.execute("""
-            SELECT CDFUN, NOMEFUN, USERID
-            FROM FC08000
-            WHERE USERID IS NOT NULL AND TRIM(USERID) <> ''
-              AND ((NOMEFUN IS NOT NULL AND TRIM(NOMEFUN) <> '')
-                   OR (USERID IS NOT NULL AND TRIM(USERID) <> ''))
-            ORDER BY NOMEFUN NULLS LAST
-        """)
-        for row in cursor.fetchall():
-            if row[0] not in cdfuns:
-                todas.append(row)
+            # USERID para este CDFUN (qualquer row que tenha)
+            cursor.execute("""
+                SELECT FIRST 1 USERID FROM FC08000
+                WHERE CDFUN = ? AND USERID IS NOT NULL AND TRIM(USERID) <> ''
+            """, (cdfun,))
+            uid_row = cursor.fetchone()
+            uid = strip(uid_row[0]) if uid_row else ''
 
-        def _limpa(s):
-            n = strip(s) or ''
-            return '' if n in ('.', '..') else n
-
-        # ── Passo 1: agrupa por USERID (chave primária para usuários com login) ──
-        por_userid: dict = {}
-        for cdfun, nomefun, userid in todas:
-            nome = _limpa(nomefun)
-            uid  = _limpa(userid)
             display = nome or uid
-            if not display or not uid:
+            if not display:
                 continue
-            e = por_userid.get(uid)
-            if e is None:
-                por_userid[uid] = {'id': cdfun, 'nome': display, 'userid': uid}
-            else:
-                if len(display) > len(e['nome']):
-                    e['nome'] = display
-
-        # ── Passo 2: melhora nomes buscando rows sem USERID do mesmo CDFUN ──
-        cdfun_para_uid = {v['id']: k for k, v in por_userid.items()}
-        for cdfun, nomefun, userid in todas:
-            if _limpa(userid):
-                continue
-            nome = _limpa(nomefun)
-            if not nome or cdfun not in cdfun_para_uid:
-                continue
-            uid_key = cdfun_para_uid[cdfun]
-            e = por_userid[uid_key]
-            if len(nome) > len(e['nome']):
-                e['nome'] = nome
-
-        # ── Passo 3: inclui entradas SEM USERID cujo CDFUN não está mapeado ──
-        cdfuns_uid = {v['id'] for v in por_userid.values()}
-        por_cdfun_nome: dict = {}
-        for cdfun, nomefun, userid in todas:
-            if _limpa(userid) or cdfun in cdfuns_uid:
-                continue
-            nome = _limpa(nomefun)
-            if not nome:
-                continue
-            key = (cdfun, nome)
-            if key not in por_cdfun_nome:
-                por_cdfun_nome[key] = {'id': cdfun, 'nome': nome, 'userid': ''}
+            resultado.append({'id': cdfun, 'nome': display, 'userid': uid})
 
         def _title(s: str) -> str:
             stops = {'da', 'de', 'do', 'das', 'dos', 'e'}
             parts = s.title().split()
             return ' '.join(p if p.lower() not in stops else p.lower() for p in parts)
 
-        resultado = list(por_userid.values()) + list(por_cdfun_nome.values())
         for v in resultado:
             v['nome'] = _title(v['nome'])
 
