@@ -933,10 +933,11 @@ def listar_atendentes():
         conn   = get_db()
         cursor = conn.cursor()
 
-        # Admins que estão em filial diferente de 392 — nomes confirmados
+        # Nomes confirmados pelo usuário — evita colisão de CDFUN entre filiais
         NOME_OVERRIDES = {
             1:   ('KATIA FERREIRA FEITOSA', 'KATIA'),
             535: ('BRUNO PERUZETTO',        'BRUNOPERUZETTO'),
+            593: ('BRUNA SILVA',            'BRUNASILVA'),
         }
 
         resultado = []
