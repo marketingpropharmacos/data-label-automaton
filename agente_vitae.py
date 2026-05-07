@@ -932,63 +932,80 @@ def listar_atendentes():
     try:
         conn   = get_db()
         cursor = conn.cursor()
-        # ── Passo 1: CDFUNs que criaram orçamentos/requisições na filial 392 ────
-        cursor.execute("SELECT DISTINCT CDFUN FROM FC15000 WHERE CDFIL = 392 AND CDFUN IS NOT NULL")
-        cdfuns = {r[0] for r in cursor.fetchall()}
-        cursor.execute("SELECT DISTINCT CDFUN FROM FC12000 WHERE CDFIL = 392 AND CDFUN IS NOT NULL")
-        cdfuns.update(r[0] for r in cursor.fetchall())
-        # Katia (1) e Bruno (535) sempre presentes independente de atividade
-        cdfuns.update([1, 535])
 
-        # Overrides para admins FC cujos dados variam entre filiais
+        # Admins que estão em filial diferente de 392 — nomes confirmados
         NOME_OVERRIDES = {
             1:   ('KATIA FERREIRA FEITOSA', 'KATIA'),
             535: ('BRUNO PERUZETTO',        'BRUNOPERUZETTO'),
         }
 
-        # ── Passo 2: para cada CDFUN resolve o nome correto ─────────────────
-        #    Âncora no USERID: múltiplos USERIDs no FC08000 para o mesmo CDFUN
-        #    indicam funcionários de filiais diferentes com o mesmo código.
-        #    Usamos o primeiro USERID encontrado como âncora e descartamos rows
-        #    com USERID diferente (seriam pessoas de outras filiais).
         resultado = []
-        for cdfun in cdfuns:
-            if cdfun in NOME_OVERRIDES:
-                nome_ovr, uid_ovr = NOME_OVERRIDES[cdfun]
-                resultado.append({'id': cdfun, 'nome': nome_ovr, 'userid': uid_ovr})
-                continue
 
-            cursor.execute(
-                "SELECT NOMEFUN, USERID FROM FC08000 WHERE CDFUN = ?",
-                (cdfun,)
-            )
-            rows_fc = cursor.fetchall()
+        # ── Passo 1: busca direta no FC08000 WHERE CDFIL=392 ────────────────
+        #    Evita colisão de CDFUN entre filiais — cada row pertence à filial 392
+        try:
+            cursor.execute("""
+                SELECT CDFUN, NOMEFUN, USERID FROM FC08000
+                WHERE CDFIL = 392
+                  AND CDFUN IS NOT NULL
+                  AND NOMEFUN IS NOT NULL
+                  AND TRIM(NOMEFUN) <> ''
+            """)
+            rows_392 = cursor.fetchall()
+        except Exception:
+            rows_392 = []
 
-            # Determina o USERID âncora (primeiro não-vazio encontrado)
-            uid_ancora = ''
-            for _, u_r in rows_fc:
-                u = (strip(u_r) or '').strip()
-                if u:
-                    uid_ancora = u
-                    break
-
-            melhor_nome = ''
-            melhor_uid  = uid_ancora
-            for nomefun_r, userid_r in rows_fc:
-                n = (strip(nomefun_r) or '').strip()
-                u = (strip(userid_r)  or '').strip()
+        if rows_392:
+            # Agrupa por CDFUN e escolhe o nome mais longo dentro da filial 392
+            from collections import defaultdict
+            por_cdfun: dict = defaultdict(lambda: ('', ''))
+            for cdfun_r, nome_r, uid_r in rows_392:
+                n = (strip(nome_r) or '').strip()
+                u = (strip(uid_r)  or '').strip()
                 if not n or n in ('.', '..'):
                     continue
-                # Descarta rows de outro funcionário (outra filial, mesmo CDFUN)
-                if uid_ancora and u and u != uid_ancora:
-                    continue
-                if len(n) > len(melhor_nome):
-                    melhor_nome = n
+                nome_atual, uid_atual = por_cdfun[cdfun_r]
+                if len(n) > len(nome_atual):
+                    por_cdfun[cdfun_r] = (n, u or uid_atual)
 
-            display = melhor_nome or melhor_uid
-            if not display:
-                continue
-            resultado.append({'id': cdfun, 'nome': display, 'userid': melhor_uid})
+            for cdfun, (nome, uid) in por_cdfun.items():
+                if cdfun in NOME_OVERRIDES:
+                    continue
+                if nome or uid:
+                    resultado.append({'id': cdfun, 'nome': nome or uid, 'userid': uid})
+        else:
+            # Fallback: CDFUNs via transações da filial 392 (caso CDFIL não exista)
+            cursor.execute("SELECT DISTINCT CDFUN FROM FC15000 WHERE CDFIL = 392 AND CDFUN IS NOT NULL")
+            cdfuns = {r[0] for r in cursor.fetchall()}
+            cursor.execute("SELECT DISTINCT CDFUN FROM FC12000 WHERE CDFIL = 392 AND CDFUN IS NOT NULL")
+            cdfuns.update(r[0] for r in cursor.fetchall())
+
+            for cdfun in cdfuns:
+                if cdfun in NOME_OVERRIDES:
+                    continue
+                cursor.execute("SELECT NOMEFUN, USERID FROM FC08000 WHERE CDFUN = ?", (cdfun,))
+                rows_fc = cursor.fetchall()
+                uid_ancora = next(
+                    ((strip(u) or '').strip() for _, u in rows_fc if (strip(u) or '').strip()),
+                    ''
+                )
+                melhor_nome = ''
+                for nome_r, uid_r in rows_fc:
+                    n = (strip(nome_r) or '').strip()
+                    u = (strip(uid_r)  or '').strip()
+                    if not n or n in ('.', '..'):
+                        continue
+                    if uid_ancora and u and u != uid_ancora:
+                        continue
+                    if len(n) > len(melhor_nome):
+                        melhor_nome = n
+                display = melhor_nome or uid_ancora
+                if display:
+                    resultado.append({'id': cdfun, 'nome': display, 'userid': uid_ancora})
+
+        # Admins sempre presentes
+        for cdfun, (nome_ovr, uid_ovr) in NOME_OVERRIDES.items():
+            resultado.append({'id': cdfun, 'nome': nome_ovr, 'userid': uid_ovr})
 
         def _title(s: str) -> str:
             stops = {'da', 'de', 'do', 'das', 'dos', 'e'}
