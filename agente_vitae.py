@@ -941,20 +941,37 @@ def listar_atendentes():
                OR (USERID  IS NOT NULL AND TRIM(USERID)  <> '')
             ORDER BY NOMEFUN NULLS LAST, USERID
         """)
-        # Deduplica por CDFUN: mantém o registro com nome mais longo
+        # Deduplica por CDFUN: mantém o registro com nome mais longo.
+        # Guarda também o melhor USERID visto para aquele CDFUN.
         por_cdfun = {}
         for row in cursor.fetchall():
             cdfun, nomefun, userid = row
             nome = strip(nomefun) or ''
             uid  = strip(userid)  or ''
-            if nome == '.':
+            if nome in ('.', '..'):
                 nome = ''
-            display = nome or uid   # fallback: usa USERID se NOMEFUN vazio
+            display = nome or uid
             if not display:
                 continue
             existente = por_cdfun.get(cdfun)
-            if existente is None or len(display) > len(existente['nome']):
+            if existente is None:
                 por_cdfun[cdfun] = {'id': cdfun, 'nome': display, 'userid': uid}
+            else:
+                # Atualiza nome se for mais longo
+                if len(display) > len(existente['nome']):
+                    existente['nome'] = display
+                # Atualiza USERID se o atual está vazio e este não está
+                if not existente['userid'] and uid:
+                    existente['userid'] = uid
+
+        # Converte para Title Case para exibição mais limpa
+        def _title(s: str) -> str:
+            stops = {'da', 'de', 'do', 'das', 'dos', 'e'}
+            parts = s.title().split()
+            return ' '.join(p if p.lower() not in stops else p.lower() for p in parts)
+
+        for v in por_cdfun.values():
+            v['nome'] = _title(v['nome'])
 
         atendentes = sorted(por_cdfun.values(), key=lambda x: x['nome'])
         cursor.close()
