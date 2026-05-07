@@ -999,6 +999,40 @@ def listar_atendentes():
         return jsonify({'atendentes': [], 'total': 0, 'erro': str(e)}), 500
 
 
+@app.route('/api/debug/fc08000_schema', methods=['GET'])
+def debug_fc08000_schema():
+    """Retorna todas as colunas do FC08000 + uma linha de exemplo para diagnóstico."""
+    try:
+        conn   = get_db()
+        cursor = conn.cursor()
+
+        # Todas as colunas
+        cursor.execute("""
+            SELECT TRIM(f.RDB$FIELD_NAME), TRIM(t.RDB$TYPE_NAME)
+            FROM RDB$RELATION_FIELDS f
+            LEFT JOIN RDB$TYPES t
+                ON t.RDB$FIELD_NAME = 'RDB$FIELD_TYPE'
+               AND t.RDB$TYPE = (
+                   SELECT ff.RDB$FIELD_TYPE FROM RDB$FIELDS ff
+                   WHERE ff.RDB$FIELD_NAME = f.RDB$FIELD_SOURCE
+               )
+            WHERE f.RDB$RELATION_NAME = 'FC08000'
+            ORDER BY f.RDB$FIELD_POSITION
+        """)
+        colunas = [r[0] for r in cursor.fetchall()]
+
+        # Uma linha de exemplo (CDFUN=593)
+        cursor.execute("SELECT FIRST 1 * FROM FC08000 WHERE CDFUN = 593")
+        row = cursor.fetchone()
+        exemplo = dict(zip(colunas, [strip(v) if isinstance(v, (str, bytes)) else v for v in row])) if row else {}
+
+        cursor.close(); conn.close()
+        return jsonify({'colunas': colunas, 'exemplo_cdfun593': exemplo})
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'erro': str(e)}), 500
+
+
 @app.route('/api/debug/funcionarios', methods=['GET'])
 def debug_funcionarios():
     """Diagnóstico: lista TODOS os registros de FC08000 sem filtro.
